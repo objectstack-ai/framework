@@ -4,10 +4,11 @@ import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: {
-    template: '%s | ObjectStack Protocol',
-    default: 'ObjectStack Protocol',
+    template: '%s | ObjectStack',
+    default: 'ObjectStack',
   },
-  description: 'Documentation for the ObjectStack Protocol and runtime.',
+  description:
+    'The open target format and runtime for AI-written business apps — agents write compact typed metadata, the runtime derives the database, API, UI, and MCP server.',
   icons: {
     icon: '/logo.svg',
   },
