@@ -84,7 +84,7 @@ const result = AdminScope.parse(data);
 | **allowRead** | `boolean` | ✅ | Read permission |
 | **allowEdit** | `boolean` | ✅ | Edit permission |
 | **allowDelete** | `boolean` | ✅ | Delete permission |
-| **allowTransfer** | `boolean` | ✅ | [RBAC-gated; operation pending M2] Change record ownership |
+| **allowTransfer** | `boolean` | ✅ | [RBAC-gated; ENFORCED now via insert/update owner_id guard, #3004] Change record ownership (assign/reassign/disown owner_id) |
 | **allowRestore** | `boolean` | ✅ | [RBAC-gated; operation pending M2] Restore from trash (Undelete) |
 | **allowPurge** | `boolean` | ✅ | [RBAC-gated; operation pending M2] Permanently delete (Hard Delete/GDPR) |
 | **viewAllRecords** | `boolean` | ✅ | View All Data (Bypass Sharing) |

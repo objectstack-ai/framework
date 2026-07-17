@@ -108,6 +108,7 @@ Dashboard header action
 | **values** | `string[]` | ✅ | Measure names — Y (at least one) |
 | **layout** | `Object` | optional | Grid layout position (auto-flowed when omitted) |
 | **options** | `any` | optional | Widget specific configuration |
+| **filterBindings** | `Record<string, string \| boolean>` | optional | Per-widget dashboard-filter bindings: filter name → this widget's field, or false to opt out |
 | **suppressWarnings** | `string[]` | optional | Build diagnostic rule ids suppressed on this widget |
 | **responsive** | `Object` | optional | Responsive layout configuration |
 | **aria** | `Object` | optional | ARIA accessibility attributes |
@@ -121,6 +122,7 @@ Dashboard header action
 
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
+| **name** | `string` | optional | Stable filter name (variable key); defaults to field |
 | **field** | `string` | ✅ | Field name to filter on |
 | **label** | `string` | optional | Display label for the filter |
 | **type** | `Enum<'text' \| 'select' \| 'date' \| 'number' \| 'lookup'>` | optional | Filter input type |

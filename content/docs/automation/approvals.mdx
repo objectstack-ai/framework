@@ -132,12 +132,10 @@ and the flow run parks until a decision arrives.
 Only `approvers` is required on the node; everything else has a default
 (`behavior: 'first_response'`, `lockRecord: true`, `maxRevisions: 3`).
 
-<Callout type="warn">
-**`type: 'role'` is not a position.** In an approver entry, `role` means the
-better-auth membership tier (`owner` / `admin` / `member`). Naming a business
-role like `sales_manager` there matches nobody and the request silently has no
-approvers — use `{ type: 'position', value: 'sales_manager' }`.
-</Callout>
+Approver entries resolve by kind — `position`, `user`, `field`, `manager`,
+`team`, `department`, `queue`, and the membership-tier kind described in the
+[callout above](#3-the-approval-node), which is the one that silently resolves
+to nobody when it's mistaken for a business hierarchy.
 
 ### The approver finds it in their queue
 
@@ -150,8 +148,9 @@ curl -b cookies.txt \
   "https://your-app.example.com/api/v1/approvals/requests?status=pending&approverId=usr_123"
 ```
 
-`approverId` accepts a user id, an email, or `role:<r>` — and takes several
-values (comma-separated or repeated) to cover a person's identities in one call.
+`approverId` accepts a user id, an email, or a membership-tier reference — and
+takes several values (comma-separated or repeated) to cover a person's
+identities in one call.
 Other filters: `status`, `object`, `recordId`, `submitterId`, `q`, `limit`,
 `offset`.
 
