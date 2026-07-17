@@ -3,3 +3,5 @@ dist
 .objectstack/
 *.log
 .DS_Store
+.env
+.env.*

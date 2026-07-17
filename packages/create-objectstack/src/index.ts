@@ -7,8 +7,9 @@
  *
  *   1. Bundled `blank` template
  *      Lives at `dist/templates/blank/` (copied from `src/templates/blank/`
- *      by tsup `onSuccess`). Cloned via recursive fs copy. Always available
- *      offline.
+ *      by tsup `onSuccess`). Cloned via recursive fs copy, which also restores
+ *      the placeholder names npm strips at publish (see TEMPLATE_FILE_ALIASES).
+ *      Always available offline.
  *
  *   2. Remote content templates (`todo`, `compliance`, `content`,
  *      `contracts`, `procurement`)
@@ -45,6 +46,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import * as tar from 'tar';
 
 import { syncObjectStackDeps } from './pkg-utils.js';
+import { copyDir } from './template-copy.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -147,21 +149,6 @@ function detectPackageManager(): string {
 }
 
 // ─── Loading: bundled (fs copy) ─────────────────────────────────────
-
-function copyDir(src: string, dest: string, collected: string[], rel = '') {
-  fs.mkdirSync(dest, { recursive: true });
-  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
-    const srcPath = path.join(src, entry.name);
-    const destPath = path.join(dest, entry.name);
-    const relPath = rel ? `${rel}/${entry.name}` : entry.name;
-    if (entry.isDirectory()) {
-      copyDir(srcPath, destPath, collected, relPath);
-    } else if (entry.isFile()) {
-      fs.copyFileSync(srcPath, destPath);
-      collected.push(relPath);
-    }
-  }
-}
 
 function loadBundled(templateDir: string, targetDir: string): string[] {
   const src = path.join(BUNDLED_TEMPLATES_DIR, templateDir);

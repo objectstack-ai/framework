@@ -5,12 +5,14 @@
 // `^6.0.0` while the registry was publishing 14.x, and the README advertised
 // a template set (`minimal-api`/`full-stack`/`plugin`) that never shipped.
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { syncObjectStackDeps } from './pkg-utils.js';
+import { copyDir, TEMPLATE_FILE_ALIASES } from './template-copy.js';
 
 const pkgRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const repoRoot = path.resolve(pkgRoot, '..', '..');
@@ -69,6 +71,121 @@ describe('blank template manifest engines.protocol (ADR-0087 D1)', () => {
       `template stamps engines.protocol '^${match![1]}' but create-objectstack is v${ownMajor} — ` +
         'scripts/sync-template-versions.mjs re-stamps this at version time; keep them in lockstep',
     ).toBe(ownMajor);
+  });
+});
+
+// Packing ratchet (#3120): every file the blank template ships must survive a
+// real `npm pack` and land in a scaffold under its intended name. `.gitignore`
+// did not — npm strips it from the tarball at every depth, so the file the
+// build had faithfully copied to dist/templates/blank/ was dropped at publish
+// and every scaffolded project came out with no `.gitignore`, leaving
+// node_modules/ and the secret-bearing .env from the template README
+// un-ignored for every new user.
+//
+// This bug is invisible to source-level assertions: the file is present in
+// src/templates/, present in a local build, and only vanishes at publish. So
+// pack for real and scaffold from the extracted tarball with the real copyDir.
+// Reading the repo's own dist/ instead would be doubly false green — turbo's
+// `test` task only dependsOn `^build` (not its own build) and excludes dist/**
+// from its inputs, so dist/ here is routinely absent or stale, and a pass on it
+// would be cached.
+describe('blank template survives npm packing', () => {
+  const blankSrc = path.join(pkgRoot, 'src', 'templates', 'blank');
+
+  const walkRel = (dir: string, rel = ''): string[] =>
+    fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+      const relPath = rel ? `${rel}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) return walkRel(path.join(dir, entry.name), relPath);
+      return entry.isFile() ? [relPath] : [];
+    });
+
+  // The name a template file is expected to land under, i.e. its alias applied
+  // to the basename.
+  const scaffoldedAs = (rel: string): string => {
+    const parts = rel.split('/');
+    const base = parts[parts.length - 1];
+    parts[parts.length - 1] = TEMPLATE_FILE_ALIASES.get(base) ?? base;
+    return parts.join('/');
+  };
+
+  let tmp: string;
+  let scaffolded: string[];
+  let collected: string[];
+
+  beforeAll(() => {
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'create-objectstack-pack-'));
+
+    // Stage exactly what a publish would: the *real* package.json (so the real
+    // `files` allowlist decides what ships) plus src/templates copied to
+    // dist/templates, which is what tsup.config.ts's onSuccess hook does. The
+    // test asserts that mirror below rather than assuming it.
+    fs.cpSync(path.join(pkgRoot, 'package.json'), path.join(tmp, 'package.json'));
+    fs.cpSync(path.join(pkgRoot, 'src', 'templates'), path.join(tmp, 'dist', 'templates'), {
+      recursive: true,
+    });
+
+    execFileSync('npm', ['pack', '--ignore-scripts'], { cwd: tmp, stdio: 'pipe' });
+    const tgz = fs.readdirSync(tmp).find((f) => f.endsWith('.tgz'));
+    if (!tgz) throw new Error(`npm pack produced no tarball in ${tmp}`);
+    execFileSync('tar', ['xzf', tgz], { cwd: tmp });
+
+    // Scaffold from the *packed* template with the real copy logic.
+    const out = path.join(tmp, 'scaffold');
+    collected = [];
+    copyDir(path.join(tmp, 'package', 'dist', 'templates', 'blank'), out, collected);
+    scaffolded = walkRel(out);
+  }, 120_000);
+
+  afterAll(() => {
+    if (tmp) fs.rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it('stages dist/templates the way this suite mirrors it', () => {
+    const tsupConfig = fs.readFileSync(path.join(pkgRoot, 'tsup.config.ts'), 'utf8');
+    expect(
+      tsupConfig.replace(/\s+/g, ' '),
+      'the packing ratchet stages dist/templates by hand because dist/ is not ' +
+        'built here; if the build stopped copying src/templates → dist/templates ' +
+        'that mirror is now a fiction — update both together',
+    ).toContain("cpSync('src/templates', 'dist/templates', { recursive: true })");
+  });
+
+  it('lands every template file — dotfiles included — in the scaffold', () => {
+    const expected = walkRel(blankSrc).map(scaffoldedAs).sort();
+    expect(
+      scaffolded.sort(),
+      'a file in src/templates/blank/ did not survive `npm pack` (npm strips ' +
+        '.gitignore and .npmrc from tarballs at every depth). Commit it under a ' +
+        'placeholder name and map it back in TEMPLATE_FILE_ALIASES, the way ' +
+        '_gitignore → .gitignore works.',
+    ).toEqual(expected);
+    // What the CLI prints as "Created files:" must match what it actually wrote.
+    expect(collected.sort()).toEqual(expected);
+  });
+
+  // Not redundant with the file-set check above: that one applies the alias map
+  // to both sides, so emptying TEMPLATE_FILE_ALIASES makes it agree with itself
+  // on `_gitignore` and pass. Naming the destination literally is what pins the
+  // mapping down.
+  it('ships a .gitignore that ignores node_modules and the README secrets', () => {
+    const gitignore = path.join(tmp, 'scaffold', '.gitignore');
+    expect(fs.existsSync(gitignore), 'scaffold has no .gitignore').toBe(true);
+
+    const rules = fs.readFileSync(gitignore, 'utf8').split('\n').map((l) => l.trim());
+    expect(rules).toContain('node_modules');
+    // The template README has users write OS_AUTH_SECRET / OS_SECRET_KEY into a
+    // .env, and docker-compose.yml calls it "never committed" — so the ignore
+    // file, not just the prose, has to enforce that.
+    expect(rules).toContain('.env');
+  });
+
+  it('leaves a literal template dotfile that packs fine alone', () => {
+    // .dockerignore is NOT stripped — verified against the published 15.1.1
+    // tarball, which ships it while .gitignore is absent. It stays literal, so
+    // the alias map covers only what is genuinely broken.
+    expect(fs.existsSync(path.join(blankSrc, '.dockerignore'))).toBe(true);
+    expect(TEMPLATE_FILE_ALIASES.has('.dockerignore')).toBe(false);
+    expect(scaffolded).toContain('.dockerignore');
   });
 });
 
