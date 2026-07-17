@@ -26,10 +26,10 @@ npm create objectstack@latest my-app
 **Existing projects — install the whole bundle:**
 
 ```bash
-npx skills add objectstack-ai/framework --all
+npx skills add objectstack-ai/framework/skills --all
 ```
 
-Run the same command again at any time to pull the latest versions — `--all` is idempotent, so updating is one command regardless of how many skills the bundle contains. To choose which skills to add instead of the full set, run `npx skills add objectstack-ai/framework` without `--all`.
+Run the same command again at any time to pull the latest versions — `--all` is idempotent, so updating is one command regardless of how many skills the bundle contains. To choose which skills to add instead of the full set, run `npx skills add objectstack-ai/framework/skills` without `--all`. (The `/skills` subpath scopes discovery to the published catalog — always keep it in the command.)
 
 <Callout type="info">
 Skills are versioned as **one bundle**. You do not track or update each skill individually — `--all` always installs the matching set for the `@objectstack/spec` version in your project.

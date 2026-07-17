@@ -115,6 +115,45 @@ jobs:
           curl -fsS http://localhost:8080/api/v1/ready
           kill "$SERVER_PID"
 
+      - name: 'Skills boundary: only the curated skills/ catalog installs'
+        # 15.1 third-party eval: the repo-internal dogfood-verification skill
+        # (.claude/skills/) leaked into scaffolded projects. Two leak paths,
+        # two assertions against THIS checkout:
+        #   1. The scaffolder/docs command is `skills add …/framework/skills
+        #      --all` — the /skills subpath is the hard boundary, because the
+        #      skills CLI's --all implies --skill '*' which INCLUDES
+        #      metadata.internal skills. Install from the subpath and assert
+        #      set-equality with the curated catalog.
+        #   2. Interactive `skills add …/framework` (no --all) relies on
+        #      metadata.internal hiding — assert repo-root discovery surfaces
+        #      exactly the curated set and nothing internal.
+        run: |
+          cd "$RUNNER_TEMP"
+          node "$GITHUB_WORKSPACE/packages/create-objectstack/bin/create-objectstack.js" skills-probe --skip-install --skip-skills
+          cd skills-probe
+          expected=$(cd "$GITHUB_WORKSPACE/skills" && ls -d objectstack-*/ | tr -d '/' | sort)
+          expected_count=$(echo "$expected" | wc -l | tr -d ' ')
+
+          npx -y skills add "$GITHUB_WORKSPACE/skills" --all --copy
+          installed=$(find . -name SKILL.md -not -path '*/node_modules/*' -exec dirname {} \; | xargs -rn1 basename | sort -u)
+          echo "installed skills:"; echo "$installed"
+          if [ "$installed" != "$expected" ]; then
+            echo "::error::scaffolded skill set != curated skills/ catalog (internal-skill leak or missing skill)"
+            printf 'expected:\n%s\n' "$expected"
+            exit 1
+          fi
+
+          listing=$(npx -y skills add "$GITHUB_WORKSPACE" --list 2>&1)
+          echo "$listing"
+          if echo "$listing" | grep -q 'dogfood-verification'; then
+            echo "::error::repo-root discovery surfaced an internal skill (metadata.internal marker missing?)"
+            exit 1
+          fi
+          if ! echo "$listing" | grep -q "Found $expected_count skill"; then
+            echo "::error::repo-root discovery does not match the curated catalog (expected $expected_count skills) — a SKILL.md outside skills/ is missing metadata.internal"
+            exit 1
+          fi
+
       - name: Build official runtime image from this checkout
         # examples/docker builds FROM ghcr.io/objectstack-ai/objectstack.
         # Build that base HERE from docker/Dockerfile instead of pulling, so

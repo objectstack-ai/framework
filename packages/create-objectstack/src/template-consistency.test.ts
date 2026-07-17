@@ -8,10 +8,12 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { syncObjectStackDeps } from './pkg-utils.js';
 
 const pkgRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const repoRoot = path.resolve(pkgRoot, '..', '..');
 const ownPkg = JSON.parse(fs.readFileSync(path.join(pkgRoot, 'package.json'), 'utf8'));
 const ownMajor = Number(ownPkg.version.split('.')[0]);
 
@@ -79,6 +81,96 @@ describe('README template table', () => {
       (m) => m[1],
     );
     expect(documented.sort()).toEqual([...registryTemplates].sort());
+  });
+});
+
+// Skills catalog boundary (15.1 third-party eval): scaffolded projects once
+// received the repo-internal `dogfood-verification` skill because the
+// scaffolder installed with a repo-wide `skills add … --all`, whose discovery
+// also walks `.claude/skills/`. The published catalog is exactly the root
+// `skills/` directory; everything else must stay repo-internal.
+describe('skills catalog boundary', () => {
+  const frontmatterOf = (file: string): string =>
+    /^---\n([\s\S]*?)\n---/.exec(fs.readFileSync(file, 'utf8'))?.[1] ?? '';
+  const isMarkedInternal = (fm: string): boolean =>
+    /^metadata:\s*$/m.test(fm) && /^ +internal:\s*true\s*(#.*)?$/m.test(fm);
+
+  const trackedSkillFiles = execFileSync('git', ['ls-files', '*SKILL.md'], {
+    cwd: repoRoot,
+    encoding: 'utf8',
+  })
+    .split('\n')
+    .filter(Boolean);
+
+  it('finds the curated skills/ catalog (sanity)', () => {
+    expect(
+      trackedSkillFiles.filter((f) => f.startsWith('skills/')).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it('marks every SKILL.md outside skills/ as metadata.internal', () => {
+    for (const rel of trackedSkillFiles) {
+      if (rel.startsWith('skills/')) continue;
+      expect(
+        isMarkedInternal(frontmatterOf(path.join(repoRoot, rel))),
+        `${rel} is outside the published skills/ catalog but is not hidden from ` +
+          'the skills CLI. Add to its frontmatter:\n' +
+          'metadata:\n  internal: true\n' +
+          'or move it into skills/ if it is meant for customers.',
+      ).toBe(true);
+    }
+  });
+
+  it('never marks a curated skills/ entry internal', () => {
+    for (const rel of trackedSkillFiles) {
+      if (!rel.startsWith('skills/')) continue;
+      expect(
+        isMarkedInternal(frontmatterOf(path.join(repoRoot, rel))),
+        `${rel} is in the published catalog but marked metadata.internal — ` +
+          'customers would silently stop receiving it.',
+      ).toBe(false);
+    }
+  });
+
+  it('scaffolder installs from the curated skills/ subpath, not the repo root', () => {
+    expect(REGISTRY_SOURCE).toContain(
+      'skills add objectstack-ai/framework/skills --all',
+    );
+    expect(REGISTRY_SOURCE).not.toMatch(
+      /skills add objectstack-ai\/framework(?!\/skills)/,
+    );
+  });
+
+  // The /skills subpath is the hard boundary: the skills CLI's `--all`
+  // implies `--skill '*'`, which INCLUDES metadata.internal skills — so any
+  // customer-facing surface advertising a repo-root install would leak
+  // internal skills again.
+  it('no customer-facing surface advertises a repo-root skills install', () => {
+    const surfaces = [
+      'content/docs',
+      'skills',
+      'packages/create-objectstack',
+      // this file mentions the bare form on purpose (needle + error message)
+      ':(exclude)packages/create-objectstack/src/template-consistency.test.ts',
+    ];
+    let candidates = '';
+    try {
+      candidates = execFileSync(
+        'git',
+        ['grep', '-nF', 'skills add objectstack-ai/framework', '--', ...surfaces],
+        { cwd: repoRoot, encoding: 'utf8' },
+      );
+    } catch {
+      // git grep exits 1 on no matches — nothing to check then.
+    }
+    const rootInstalls = candidates
+      .split('\n')
+      .filter((line) => /skills add objectstack-ai\/framework(?!\/skills)/.test(line));
+    expect(
+      rootInstalls,
+      'these lines advertise `skills add objectstack-ai/framework` without ' +
+        'the /skills subpath — repo-root + --all installs internal skills',
+    ).toEqual([]);
   });
 });
 

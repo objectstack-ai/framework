@@ -77,7 +77,7 @@ This project uses ObjectStack skills from `objectstack-ai/framework`.
 Install or update skills with the standard [skills CLI](https://skills.sh/):
 
 ```bash
-npx skills add objectstack-ai/framework
+npx skills add objectstack-ai/framework/skills
 ```
 
 Skills are triggered automatically based on task context:
