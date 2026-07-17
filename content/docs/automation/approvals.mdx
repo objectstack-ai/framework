@@ -114,6 +114,113 @@ export const opportunityApproval: Flow = {
 For multi-step approvals, chain multiple `approval` nodes. For parallel
 approvals, see the aggregating-node pattern in [Flow Metadata](/docs/automation/flows).
 
+## The full lifecycle — submit to field change
+
+What actually happens between "the flow hits the approval node" and "the record
+says approved":
+
+<Steps>
+
+### The request opens, the run pauses
+
+The node writes a `sys_approval_request` row: `status: 'pending'`,
+`pending_approvers` (the resolved approver list), and — if you declared
+`approvalStatusField` — it mirrors `'pending'` onto your record's field. The
+record is **locked** against edits while pending (`lockRecord`, default `true`),
+and the flow run parks until a decision arrives.
+
+Only `approvers` is required on the node; everything else has a default
+(`behavior: 'first_response'`, `lockRecord: true`, `maxRevisions: 3`).
+
+<Callout type="warn">
+**`type: 'role'` is not a position.** In an approver entry, `role` means the
+better-auth membership tier (`owner` / `admin` / `member`). Naming a business
+role like `sales_manager` there matches nobody and the request silently has no
+approvers — use `{ type: 'position', value: 'sales_manager' }`.
+</Callout>
+
+### The approver finds it in their queue
+
+Requests land in **Setup → Approvals → Requests**, whose `my_pending` view
+filters to `status = pending` and `pending_approvers` containing the current
+user. Programmatically:
+
+```bash
+curl -b cookies.txt \
+  "https://your-app.example.com/api/v1/approvals/requests?status=pending&approverId=usr_123"
+```
+
+`approverId` accepts a user id, an email, or `role:<r>` — and takes several
+values (comma-separated or repeated) to cover a person's identities in one call.
+Other filters: `status`, `object`, `recordId`, `submitterId`, `q`, `limit`,
+`offset`.
+
+<Callout type="warn">
+**Opening a request notifies nobody.** There is no built-in "you have an
+approval waiting" message today — an approver only discovers it by looking at
+the queue. If people need to be told, do one of: add a `notify` node next to
+the approval node in the flow (the practical answer), or install a messaging
+service and drive `remind()`. Reminder, escalation, return, and reassignment
+*do* publish notification topics — the initial request doesn't.
+</Callout>
+
+### The decision
+
+```bash
+curl -b cookies.txt -X POST \
+  https://your-app.example.com/api/v1/approvals/requests/req_456/approve \
+  -H "Content-Type: application/json" \
+  -d '{ "comment": "Within budget." }'
+# POST .../reject for the other direction; body: { actorId?, comment? }
+```
+
+`actorId` defaults to the caller. The actor **must** be in `pending_approvers`
+or the call returns 403 (`FORBIDDEN: actor '…' is not a pending approver`); a
+request that isn't pending returns 409 (`INVALID_STATE`). Always go through
+these endpoints — never resume the flow run directly.
+
+<Callout type="info">
+**With `behavior: 'unanimous'`, an approve is not the end.** Every approver but
+the last only trims `pending_approvers`; the request stays `pending`
+(`finalized: false`) and the flow stays parked. Only the final approval
+finalizes it.
+</Callout>
+
+### The record changes and the flow resumes
+
+On finalization the request row gets `status: 'approved'` (or `'rejected'`),
+`pending_approvers: null`, and `completed_at`; your `approvalStatusField` is
+mirrored to the same value, and the record unlocks. The parked run resumes down
+the `approve` or `reject` branch.
+
+Statuses in full: `pending`, `approved`, `rejected`, `recalled`, `returned`.
+
+</Steps>
+
+### Timeouts and escalation
+
+`escalation` is real, not decorative: set `enabled: true` and `timeoutHours`,
+and pick an `action` — `notify` (default), `reassign`, `auto_approve`, or
+`auto_reject`. Auto decisions run through the normal decide path, so the flow
+resumes exactly as if a human had clicked. Every escalation writes an audit row.
+
+<Callout type="warn">
+**Escalation needs the job service.** The plugin sweeps pending requests on an
+internal timer (~5 min). Without a `job` service registered, SLA timers are
+**display-only** and no escalation ever fires.
+</Callout>
+
+### Error codes
+
+| Code | HTTP | Meaning |
+|:---|:---|:---|
+| `VALIDATION_FAILED` | 400 | Malformed request |
+| `FORBIDDEN` | 403 | Actor isn't a pending approver |
+| `REQUEST_NOT_FOUND` | 404 | No such request |
+| `DUPLICATE_REQUEST` | 409 | A pending request already exists for this record |
+| `INVALID_STATE` | 409 | The request is no longer pending |
+| `THROTTLED` | 429 | Rate limited |
+
 ### Best practices
 
 ✅ **DO:**

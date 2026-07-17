@@ -31,9 +31,10 @@ const approvalFlow = {
       type: 'decision',
       label: 'Check Amount',
       config: {
+        // decision expressions use {braces} around variables — see Expressions in flows
         conditions: [
-          { label: 'High Value', expression: 'order_amount > 10000' },
-          { label: 'Standard', expression: 'order_amount <= 10000' },
+          { label: 'High Value', expression: '{order_amount} > 10000' },
+          { label: 'Standard', expression: '{order_amount} <= 10000' },
         ],
       },
     },
@@ -41,7 +42,7 @@ const approvalFlow = {
       id: 'auto_approve',
       type: 'update_record',
       label: 'Auto Approve',
-      config: { object: 'order', fields: { status: 'approved' } },
+      config: { objectName: 'order', fields: { status: 'approved' } },
     },
     {
       id: 'request_approval',
@@ -166,11 +167,11 @@ Each node performs a specific action in the flow.
   type: 'create_record',
   label: 'Create Follow-up Task',
   config: {
-    object: 'task',
+    objectName: 'task',
     fields: {
       title: 'Follow up on {record.name}',
       assignee: '{record.owner}',
-      due_date: 'TODAY() + 7',
+      due_date: '{TODAY() + 7}',   // braces required — without them this writes the literal text
     },
   },
 }
@@ -546,6 +547,84 @@ The plugin is a **soft dependency** on `metadata` — it tolerates running
 without `MetadataPlugin` and it logs (not throws) on per-flow registration
 failures so one broken flow does not abort startup.
 
+## Expressions in flows
+
+A flow mixes **three expression dialects**, and using the wrong one is the
+single most common way a flow silently misbehaves. Which dialect applies is
+decided by *where* the expression sits — not by what it looks like:
+
+| Where | Dialect | Write it like | Bindings |
+|:---|:---|:---|:---|
+| Start-node `condition` | **CEL** (bare, no braces) | `record.amount > 500` | `record.*`, `previous.*`, bare field names, `vars.*` |
+| Edge `condition` | **CEL** (bare, no braces) | `record.status == 'open'` | same as above |
+| Decision-node `conditions[].expression` | **Template compare** (braces required) | `{order_amount} > 10000` | flow variables by name, in `{…}` |
+| Field values in `create_record` / `update_record` | **Interpolation** (braces required) | `'Follow up on {record.name}'`, `'{TODAY() + 7}'` | `{var}`, `{var.path}`, `{$User.Id}`, `{$User.Email}`, `{NOW()}`, `{TODAY()}`, `{TODAY() + 90}` (whole days) |
+
+<Callout type="warn">
+**The two failure modes to memorize:**
+
+1. **Braces missing in a decision expression** — `'order_amount > 10000'` isn't
+   evaluated as a variable at all. It compares the *string* `"order_amount"`
+   against `"10000"`, which is **always true**, so the flow always takes the
+   first branch and never tells you. Write `'{order_amount} > 10000'`.
+2. **Braces missing in a field value** — `due_date: 'TODAY() + 7'` writes the
+   literal text `TODAY() + 7` into the field. Write `'{TODAY() + 7}'`.
+
+The mirror mistake is putting braces *into* a CEL condition
+(`'{record.amount} > 500'`) — CEL conditions fail loudly rather than silently,
+with an error that tells you to drop the braces.
+</Callout>
+
+CEL conditions that fail to evaluate raise an error and stop the run — they
+never quietly pass. See [Formulas](/docs/data-modeling/formulas) for the CEL
+language itself.
+
+<Callout type="info">
+**A boolean gotcha:** SQLite/libSQL store booleans as `0`/`1`, and CEL's `1 !=
+true`. Compare against the stored shape (`record.done == 1`) or normalize the
+value before the condition.
+</Callout>
+
+## Run a flow via API
+
+Flows of any type can be launched over HTTP — this is what an external system,
+a scheduled job outside the platform, or the Console's test runner uses:
+
+```bash
+curl -b cookies.txt -X POST \
+  https://your-app.example.com/api/v1/automation/order_approval/trigger \
+  -H "Content-Type: application/json" \
+  -d '{ "recordId": "ord_123", "objectName": "order", "params": { "priority": "high" } }'
+# → { "success": true, "data": { ... }, "meta": { ... } }
+```
+
+| Endpoint | Purpose |
+|:---|:---|
+| `POST /api/v1/automation/:name/trigger` | Start a flow (canonical) |
+| `GET /api/v1/automation/:name/runs` | List runs (`?limit`, `?cursor`) |
+| `GET /api/v1/automation/:name/runs/:runId` | One run's detail (404 `Execution not found`) |
+| `POST /api/v1/automation/:name/runs/:runId/resume` | Resume a paused run — body `{ inputs, output, branchLabel }` |
+| `GET /api/v1/automation/:name/runs/:runId/screen` | The pending screen of a screen-flow run |
+
+**Passing inputs.** Declare variables with `isInput: true`, then send them in
+`params` under the same names — only declared inputs are bound. `recordId` and
+`objectName` are lifted into `params` for you (plus an `<objectName>Id` alias),
+and `event` defaults to `'manual'`.
+
+**Identity.** The caller's identity (user, positions, permissions, tenant) is
+forwarded into the run, so a `runAs: 'user'` flow executes under that caller's
+row-level security. See [API Authentication](/docs/api#authentication) for
+credentials.
+
+<Callout type="warn">
+**`success: true` doesn't always mean "it ran".** If the start condition isn't
+met, the response is a *successful* skip:
+`{ "success": true, "data": { "skipped": true, "reason": "condition_not_met" } }`.
+A self-triggering flow caught by the loop guard reports
+`reason: "reentrancy_loop_guard"` the same way. Check `skipped` before assuming
+the work happened.
+</Callout>
+
 ## Console Flow Viewer & Test Runner
 
 Every flow can surface in the Console metadata browser under `/_console/`.
@@ -558,8 +637,9 @@ the flow viewer plugin is installed:
 | **Run** | `FlowTestRunner` | Auto-generates a form for every `isInput: true` variable (with type-aware coercion for `number` / `boolean` / `object` / `list`), executes the flow against the per-project kernel, and shows the returned outputs + run id |
 | **Runs** | `FlowRunsPanel` | Lists historical executions for the selected flow with status, duration, and a deep-link to the run record |
 
-The runner posts to the standard automation execute endpoint, scoped to
-the active project. All three components participate in the Studio
+The runner posts to the same
+[`POST /api/v1/automation/:name/trigger`](#run-a-flow-via-api) endpoint,
+scoped to the active project. All three components participate in the Studio
 authentication / project-scope context, so they work identically in
 single-project mode and in cloud mode.
 
