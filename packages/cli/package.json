@@ -32,6 +32,9 @@
       "target": "./dist/commands",
       "glob": "**/*.js"
     },
+    "hooks": {
+      "preparse": "./dist/hooks/preparse/strip-arg-separator.js"
+    },
     "plugins": [
       "@oclif/plugin-help",
       "@oclif/plugin-plugins"
