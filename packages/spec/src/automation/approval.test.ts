@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   ApproverType,
+  DEPRECATED_APPROVER_TYPES,
+  canonicalApproverType,
   APPROVAL_NODE_TYPE,
   ApprovalDecision,
   APPROVAL_BRANCH_LABELS,
@@ -11,13 +13,32 @@ import {
 
 describe('ApproverType', () => {
   it('should accept all valid approver types', () => {
-    ['user', 'role', 'position', 'team', 'department', 'manager', 'field', 'queue'].forEach(t => {
+    ['user', 'org_membership_level', 'position', 'team', 'department', 'manager', 'field', 'queue'].forEach(t => {
       expect(() => ApproverType.parse(t)).not.toThrow();
     });
   });
 
   it('should reject invalid approver type', () => {
     expect(() => ApproverType.parse('group')).toThrow();
+  });
+
+  // ADR-0090 D3: `role` is the pre-relabel spelling of `org_membership_level`.
+  // It stays parseable for one deprecation window so a stored 15.x flow keeps
+  // loading; the runtime warns and `os lint` prescribes the rewrite.
+  it('still accepts the deprecated `role` spelling during its window', () => {
+    expect(() => ApproverType.parse('role')).not.toThrow();
+  });
+
+  it('canonicalises the deprecated spelling, passes others through', () => {
+    expect(DEPRECATED_APPROVER_TYPES.role).toBe('org_membership_level');
+    expect(canonicalApproverType('role')).toBe('org_membership_level');
+    expect(canonicalApproverType('position')).toBe('position');
+    expect(canonicalApproverType('user')).toBe('user');
+    // Every canonical target must itself be a member of the enum, or the
+    // rewrite the lint prescribes would not parse.
+    for (const target of Object.values(DEPRECATED_APPROVER_TYPES)) {
+      expect(() => ApproverType.parse(target)).not.toThrow();
+    }
   });
 });
 
