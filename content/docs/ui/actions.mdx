@@ -1,0 +1,243 @@
+---
+title: Actions
+description: Declarative buttons with server-side behavior — define once, bind to lists, records, and navigation, permission-check on both surfaces, and optionally expose to AI.
+---
+
+# Actions
+
+An action is a **button declared as metadata**: where it appears
+(`locations`), when it's visible (`visible`), who may run it
+(`requiredPermissions`), and what it executes — an inline sandboxed script, a
+registered server handler, a flow, or a URL. The same declaration renders in
+the Console, executes over REST, and (with an explicit opt-in) becomes an AI
+tool over MCP.
+
+The types you'll actually use:
+
+| `type` | What it does | Server behavior |
+|:---|:---|:---|
+| `script` *(default)* | Run server-side logic | Inline `body` **or** a handler registered via `target` |
+| `flow` | Launch a flow (e.g. a screen-flow wizard) | `target` names the flow |
+| `url` | Navigate / open a link | `target` is the URL (`${ctx.record.id}` interpolation supported) |
+| `modal` | Open a modal page to collect input, then submit to a handler | `target` names the modal page |
+
+<Callout type="warn">
+The schema also accepts `api` and `form` types, but they have **no runtime
+executor / renderer today** — stick to the four above. Likewise prefer
+`confirmText`/`params` over schema properties that are not yet wired
+(`shortcut`, `bulkEnabled`, `timeout`).
+</Callout>
+
+## Define your first action
+
+From the bundled Todo example — a "Mark Complete" button on the task list and
+record header:
+
+```typescript title="src/actions/task.actions.ts"
+import { defineAction } from '@objectstack/spec/ui';
+
+export const CompleteTaskAction = defineAction({
+  name: 'complete_task',
+  label: 'Mark Complete',
+  objectName: 'todo_task',          // which object this action belongs to
+  icon: 'check-circle',
+  type: 'script',
+  target: 'completeTask',           // resolved to the handler registered below
+  locations: ['record_header', 'list_item'],
+  successMessage: 'Task marked as complete!',
+  refreshAfter: true,
+  ai: {
+    exposed: true,
+    description: 'Mark a todo task as complete. Use when the user says a task is done or finished.',
+  },
+});
+```
+
+Register it in your stack — top-level actions carrying an `objectName` are
+merged into that object automatically (and ordered by `order`):
+
+```typescript title="objectstack.config.ts"
+export default defineStack({
+  // ...
+  actions: Object.values(actions),
+});
+```
+
+## Give it server behavior — two paths
+
+### Path A: inline `body` (sandboxed)
+
+Self-contained logic ships inside the metadata and runs in the server sandbox
+— signature `(input, ctx)`, with `ctx.api.object(name)` for data access, a
+5-second default timeout, and declared `capabilities`:
+
+```typescript
+export const MarkDoneAction = defineAction({
+  name: 'showcase_mark_done',
+  label: 'Mark Done',
+  objectName: 'showcase_task',
+  type: 'script',
+  body: {
+    language: 'js',
+    source:
+      "var id = ctx.recordId || (ctx.record && ctx.record.id);" +
+      "if (!id) throw new Error('No record to mark done');" +
+      "await ctx.api.object('showcase_task').update({ id: id, done: true, progress: 100 });" +
+      "return { ok: true, id: id };",
+    capabilities: ['api.write'],
+  },
+  successMessage: 'Task marked done.',
+  visible: '!record.done',
+  locations: ['list_item', 'record_header', 'record_section'],
+  refreshAfter: true,
+});
+```
+
+Body-carrying actions are **registered automatically** at boot.
+
+### Path B: a registered handler (full TypeScript)
+
+For logic that belongs in real source files, point `target` at a handler name
+and register it in your config's `onEnable` lifecycle hook:
+
+```typescript title="src/actions/task.handlers.ts"
+export async function completeTask(ctx: ActionContext): Promise<void> {
+  const { record, engine } = ctx;   // ctx = { record, user, engine, params }
+  await engine.update('todo_task', record.id as string, {
+    status: 'completed',
+    completed_date: new Date().toISOString(),
+  });
+}
+```
+
+```typescript title="objectstack.config.ts"
+export const onEnable = async (ctx: { ql: { registerAction: (...args: unknown[]) => void } }) => {
+  ctx.ql.registerAction('todo_task', 'completeTask', completeTask);
+};
+```
+
+<Callout type="warn">
+**The "dead button" trap:** only actions with an inline `body` register
+themselves. A `script` action whose `target` names a handler that was never
+`registerAction`-ed compiles fine but throws `Action 'x' on object 'y' not
+found` at click time. (An action with *neither* `body` nor `target` is
+rejected at authoring time.) Also note the handler's `engine` facade is
+**trusted** — it bypasses row- and field-level security, so enforce any
+caller-specific rules yourself.
+</Callout>
+
+## Bind it to the UI
+
+`locations` is the primary binding — the action appears wherever it declares:
+
+| Location | Where the button renders |
+|:---|:---|
+| `list_toolbar` | List view toolbar (no record context) |
+| `list_item` | Per-row menu in list views |
+| `record_header` | Record page header |
+| `record_more` | Record page overflow ("…") menu |
+| `record_related` | Related-list sections |
+| `record_section` | Named action bars on record pages |
+| `global_nav` | App-level navigation |
+
+Surfaces can also reference actions **by name**:
+
+```typescript
+// List views — row and bulk menus
+defineView({
+  // ...
+  rowActions: ['complete_task'],
+  bulkActions: ['showcase_bulk_reassign'],
+});
+
+// Record pages — a quick-actions bar
+{ type: 'record:quick_actions',
+  properties: { location: 'record_section', actionNames: ['showcase_mark_done'] } }
+
+// App navigation — an action as a nav item
+{ type: 'action', actionDef: { actionName: 'crm_convert_lead' } }
+```
+
+<Callout type="info">
+Naming an action in a widget does **not** bypass location filtering — the
+engine still requires the action to declare the matching location (that's why
+`MarkDoneAction` above includes `record_section`).
+</Callout>
+
+## Collect input and shape the UX
+
+- **`params`** — prompt the user for input before execution. Prefer
+  field-backed params (`{ field: 'due_date' }`) which inherit the object
+  field's label, type, and validation; inline params
+  (`{ name, label, type, required, options }`) cover the rest.
+  `defaultFromRow` prefills from the current record.
+- **`confirmText`** — confirmation dialog before running.
+- **`successMessage` / `errorMessage` / `refreshAfter`** — post-run feedback
+  and an automatic data refresh.
+- **`resultDialog`** — a one-time reveal dialog for output the user must copy
+  (generated tokens, export links).
+- **`variant` / `icon` / `order`** — presentation and sort position.
+
+## Permissions and visibility
+
+- **`requiredPermissions: ['can_close_tickets']`** is a **dual-surface gate**
+  (one declaration, two enforcement points): the server rejects unauthorized
+  calls with 403, and the UI hides or disables the button for the same users.
+  Unset means no gate beyond object CRUD permissions. Referenced capabilities
+  must exist — `os lint` checks that.
+- **`visible`** is a CEL predicate evaluated **fail-closed**: an expression
+  that throws hides the action silently. Two rules save real debugging time:
+  always prefix record fields (`record.status != "closed"`, never a bare
+  `status`), and keep it to a single operand — see the
+  [formulas guide](/docs/data-modeling/formulas) for CEL syntax.
+- **`requiresFeature`** ties visibility to a feature flag (compiled into a
+  `visible` predicate).
+
+## Call it over REST
+
+Every action is also an endpoint — the Console button and the API call run
+the same gate and handler:
+
+```bash
+curl -b cookies.txt -X POST \
+  https://your-app.example.com/api/v1/actions/todo_task/complete_task \
+  -H "Content-Type: application/json" \
+  -d '{ "recordId": "rec_123", "params": {} }'
+# → { "success": true, "data": ... }   (errors: { "success": false, "error": ... })
+```
+
+Global (object-less) actions post to `/api/v1/actions/global/:action`. For
+credentials, see [API Authentication](/docs/api#authentication).
+
+## Expose it to AI (MCP)
+
+Actions are **not** AI-visible by default. Opting in takes two fields — and
+makes the action a governed MCP tool alongside the data tools:
+
+```typescript
+ai: {
+  exposed: true,
+  description: 'At least 40 characters explaining when an agent should use this action.',
+}
+```
+
+Only headless-callable types appear (`script` with body or handler, `flow`);
+`url`/`modal` never do. The caller's identity and `requiredPermissions` are
+enforced per invocation. Details: [Actions as Tools](/docs/ai/actions-as-tools)
+and [Connect an MCP Client](/docs/ai/connect-mcp).
+
+## Troubleshooting
+
+| Symptom | Cause → fix |
+|:---|:---|
+| Button doesn't appear | `locations` doesn't include the surface; or the `visible` CEL throws (bare field name, multiple operands) and fail-closed hides it; or the user fails `requiredPermissions` |
+| Click → `Action 'x' … not found` | `target`-style script with no registered handler — add the `registerAction` call in `onEnable` (Path B above) |
+| Appears in UI, missing from `list_actions` (MCP) | `ai.exposed` not `true`, `ai.description` under 40 characters, or the type isn't headless-callable |
+| Runs but the list looks stale | Add `refreshAfter: true` |
+
+## Related
+
+- [Actions as Tools](/docs/ai/actions-as-tools) — the AI exposure model in depth
+- [Views](/docs/ui/views) — `rowActions` / `bulkActions` binding
+- [Action protocol](/docs/protocol/objectui/actions) — the full spec narrative
+- [Action schema reference](/docs/references/ui/action) — every property, generated from the spec
