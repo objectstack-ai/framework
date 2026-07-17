@@ -189,6 +189,7 @@
     "gen:openapi": "tsx scripts/build-openapi.ts",
     "gen:docs": "tsx scripts/build-docs.ts",
     "gen:skill-refs": "tsx scripts/build-skill-references.ts",
+    "check:skill-refs": "tsx scripts/build-skill-references.ts --check",
     "gen:skill-docs": "tsx scripts/build-skill-docs.ts",
     "check:skill-docs": "tsx scripts/build-skill-docs.ts --check",
     "analyze": "tsx scripts/analyze-bundle-size.ts",
@@ -204,6 +205,7 @@
     "test:coverage": "vitest run --coverage",
     "check:liveness": "tsx scripts/liveness/check-liveness.mts",
     "gen:react-blocks": "tsx scripts/build-react-blocks-contract.ts",
+    "check:react-blocks": "tsx scripts/build-react-blocks-contract.ts --check",
     "check:react-conformance": "tsx scripts/check-react-blocks-conformance.ts"
   },
   "keywords": [

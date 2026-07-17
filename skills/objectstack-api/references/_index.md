@@ -29,8 +29,6 @@ from `node_modules` — there is no local copy in the skill bundle.
 - `node_modules/@objectstack/spec/src/shared/http.zod.ts` — Shared HTTP Schemas
 - `node_modules/@objectstack/spec/src/shared/identifiers.zod.ts` — System Identifier Schema
 - `node_modules/@objectstack/spec/src/shared/lazy-schema.ts` — Wrap a Zod schema constructor so its body is only evaluated on first use.
-- `node_modules/@objectstack/spec/src/system/encryption.zod.ts` — Field-level encryption protocol
-- `node_modules/@objectstack/spec/src/system/masking.zod.ts` — Data masking protocol for PII protection
 
 ## How to read these
 

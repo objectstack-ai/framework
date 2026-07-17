@@ -119,6 +119,30 @@ jobs:
       - name: Type check (@objectstack/spec)
         run: pnpm --filter @objectstack/spec exec tsc --noEmit
 
+      # Generated-skill gate: skills/*/references/_index.md and the objectstack-ui
+      # react-blocks contract are generated from packages/spec/src and committed.
+      # Nothing regenerated them in CI, so they drifted — and unlike the reference
+      # docs these ship to third parties via `npx skills add objectstack-ai/framework`,
+      # so the drift is served straight to consumers' agents.
+      #
+      # Deliberately here rather than in ci.yml's `check-generated` job: that job is
+      # paths-filtered on skills/** and the build-skill-docs.ts script, NOT on
+      # packages/spec/src/**, so it skips exactly the spec-only PRs that cause this
+      # drift — and it is not a required check either, so it could be merged past
+      # even when it does run. This job has no paths filter and IS required
+      # ("TypeScript Type Check"), so the gate can neither go dormant nor be bypassed.
+      #
+      # Both read packages/spec/src directly via tsx and need no build (verified with
+      # every workspace dist/ removed), so they run before the workspace build and
+      # fail in seconds. `check:skill-refs` also fails on a SKILL_MAP entry pointing
+      # at a file the spec no longer has — the silent skip that let the map keep
+      # naming data/dataset.zod.ts for a year after #1620 renamed it to data/seed.zod.ts.
+      - name: Check generated skill references are in sync with the spec
+        run: pnpm --filter @objectstack/spec check:skill-refs
+
+      - name: Check the react-blocks contract is in sync with the spec
+        run: pnpm --filter @objectstack/spec check:react-blocks
+
       # Example apps are AI-authoring reference templates; a red typecheck is a
       # bad signal to copy from. tsup transpiles them without a full typecheck,
       # so build alone will not catch type drift — typecheck them explicitly.

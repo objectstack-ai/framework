@@ -8,18 +8,23 @@
 //   - skills/objectstack-ui/contracts/react-blocks.contract.json  (machine)
 //   - skills/objectstack-ui/references/react-blocks.md            (AI-facing)
 //
-// Run: pnpm --filter @objectstack/spec gen:react-blocks
+// Run:
+//   pnpm --filter @objectstack/spec gen:react-blocks            # write
+//   pnpm --filter @objectstack/spec check:react-blocks          # verify in sync (CI)
 
 process.env.OS_EAGER_SCHEMAS = '1';
 
-import fs from 'fs';
 import path from 'path';
 import { z } from 'zod';
 import { REACT_BLOCKS, type ReactInteractionProp } from '../src/ui/react-blocks';
+import { createSink } from './lib/generated-output';
 
 const REPO = path.resolve(__dirname, '../../..');
 const OUT_JSON = path.join(REPO, 'skills/objectstack-ui/contracts/react-blocks.contract.json');
 const OUT_MD = path.join(REPO, 'skills/objectstack-ui/references/react-blocks.md');
+
+const CHECK = process.argv.includes('--check');
+const { emit, flush } = createSink({ check: CHECK, repoRoot: REPO });
 
 // ---- JSON-schema prop extraction -----------------------------------------
 function resolveRoot(js: any): any {
@@ -100,7 +105,7 @@ const contract = {
   note: "Props each component accepts in kind:'react' page source. Reference blocks by their PascalCase tag. kind: data=declarative config (from the spec schema) · binding=connects to data · controlled=React state · callback=React function. These blocks are for DATA. Live data: const adapter = useAdapter(); adapter.find/findOne/create/update. STYLING (ADR-0065) — a page's source is runtime metadata, so the console's build-time Tailwind NEVER scans it: utility classNAMES silently produce no CSS. Do NOT use Tailwind className in page source. (a) Layout/chrome: inline style={} with hsl(var(--token)) theme colors — e.g. color:'hsl(var(--foreground))', background:'hsl(var(--card))', border:'1px solid hsl(var(--border))', and px/flex for layout. (b) Overlays: render <ObjectForm formType='drawer'|'modal' open onOpenChange> (a pre-styled Sheet/Dialog) — never hand-roll a fixed inset-0 backdrop.",
   blocks,
 };
-fs.writeFileSync(OUT_JSON, JSON.stringify(contract, null, 2) + '\n');
+emit(OUT_JSON, JSON.stringify(contract, null, 2) + '\n');
 
 // markdown
 const esc = (s: string) => String(s).replace(/\|/g, '\\|');
@@ -134,7 +139,30 @@ L.push('## Injected scope (closure variables, reference directly — not props)'
 L.push('');
 L.push('`React` · `useAdapter` · `data` · `variables` · `page`. Kanban/calendar/gantt/timeline/map of an object = `<ListView navigation={…} />` with the matching visualization, or `<Block type="object-kanban" …/>`.');
 L.push('');
-fs.writeFileSync(OUT_MD, L.join('\n'));
+emit(OUT_MD, L.join('\n'));
 
-console.log(`✅ react-blocks contract: ${blocks.length} blocks → ${path.relative(REPO, OUT_JSON)} + ${path.relative(REPO, OUT_MD)}`);
+console.log(`react-blocks contract: ${blocks.length} blocks → ${path.relative(REPO, OUT_JSON)} + ${path.relative(REPO, OUT_MD)}`);
 for (const b of blocks) console.log(`   <${b.tag}> ${b.props.length} props`);
+
+flush({
+  surface: 'skills/objectstack-ui/ react-blocks contract',
+  regenerate: '  pnpm --filter @objectstack/spec gen:react-blocks\n  git add skills/objectstack-ui',
+  guard: () => {
+    // Guard the two ways this generator can emit a plausible-but-empty contract
+    // and have --check compare it against nothing meaningful.
+    if (blocks.length === 0) return 'REACT_BLOCKS is empty — nothing to generate from packages/spec/src/ui/react-blocks.ts.';
+    // `dataProps()` swallows a z.toJSONSchema failure and returns [], so schemas
+    // that fail to load degrade to a contract carrying only the hand-authored
+    // overlay props rather than crashing. Checking `props.length` would miss it
+    // (the overlay is still there) — the data props are what vanish.
+    const specBacked = blocks.filter((b) => b.specSchema);
+    const withData = specBacked.filter((b) => b.props.some((p) => p.kind === 'data'));
+    if (specBacked.length > 0 && withData.length === 0) {
+      return (
+        `All ${specBacked.length} spec-backed blocks resolved 0 data props — the spec schemas failed to load\n` +
+        `  (z.toJSONSchema errors are swallowed in dataProps()), so this is the overlay alone, not a real contract.`
+      );
+    }
+    return null;
+  },
+});
