@@ -11,6 +11,10 @@
 // Hand-written documentation lives in the module folders under content/docs/
 // (data-modeling/, automation/, permissions/, ui/, api/, ai/, plugins/, kernel/, ...).
 // See DX_ROADMAP.md and .cursorrules for details.
+//
+// Usage:
+//   tsx scripts/build-docs.ts            # write
+//   tsx scripts/build-docs.ts --check    # verify in sync (CI); exit 1 on drift
 
 import fs from 'fs';
 import path from 'path';
@@ -20,6 +24,107 @@ const SRC_DIR = path.resolve(__dirname, '../src');
 // Output directly to references folder (flattened)
 // ⚠️  Everything inside category sub-folders is auto-generated and disposable.
 const DOCS_ROOT = path.resolve(__dirname, '../../../content/docs/references');
+const REPO_ROOT = path.resolve(__dirname, '../../..');
+
+const CHECK = process.argv.includes('--check');
+
+// ── Output sink ──────────────────────────────────────────────────────────────
+// Every generated file goes through emit(), every wholesale-regenerated folder
+// through manageDir(). Nothing touches the output tree until flush(), so the
+// two modes run byte-for-byte identical generation logic and differ only in the
+// final disposition — write to disk, or compare against it. That shared path is
+// what makes --check trustworthy: it cannot pass on output a real run wouldn't
+// produce, because it *is* the real run minus the writes.
+
+/** Absolute path → intended content. */
+const emitted = new Map<string, string>();
+/** Absolute dirs regenerated wholesale — anything on disk here that we didn't
+ *  emit is stale, and a real run would delete it. */
+const managedDirs = new Set<string>();
+
+function emit(filePath: string, content: string): void {
+  emitted.set(path.resolve(filePath), content);
+}
+
+function manageDir(dir: string): void {
+  managedDirs.add(path.resolve(dir));
+}
+
+/** Files this run generated, for the read-after-write lookups below. */
+function wasEmitted(filePath: string): boolean {
+  return emitted.has(path.resolve(filePath));
+}
+
+function walk(dir: string): string[] {
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap(e => {
+    const full = path.join(dir, e.name);
+    return e.isDirectory() ? walk(full) : [full];
+  });
+}
+
+const rel = (p: string) => path.relative(REPO_ROOT, p);
+
+/** Write the emitted tree, or (in --check) report how it differs from disk. */
+function flush(): void {
+  if (!CHECK) {
+    for (const dir of managedDirs) {
+      if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
+    }
+    for (const [file, content] of emitted) {
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, content);
+      console.log(`✓ Generated ${rel(file)}`);
+    }
+    console.log(`\n✅ Generated ${emitted.size} files`);
+    return;
+  }
+
+  // A run with no schemas to read emits almost nothing, and "nothing differs"
+  // would read as success — the gate would pass while checking no pages at all.
+  // json-schema/ is gitignored, so this is one forgotten `gen:schema` away on a
+  // fresh checkout. Fail loudly instead of greenly.
+  if (managedDirs.size === 0) {
+    console.error(
+      `\n✗ No JSON schemas found under ${rel(SCHEMA_DIR)} — nothing to check against.\n` +
+        `  Run \`pnpm --filter @objectstack/spec gen:schema\` first (\`check:docs\` does this for you).\n`,
+    );
+    process.exit(1);
+  }
+
+  const changed: string[] = [];
+  const added: string[] = [];
+  for (const [file, content] of emitted) {
+    if (!fs.existsSync(file)) added.push(rel(file));
+    else if (fs.readFileSync(file, 'utf-8') !== content) changed.push(rel(file));
+  }
+  // A managed folder is regenerated in full, so an on-disk file we didn't emit
+  // is one a real run would delete — e.g. the page of a type removed from spec.
+  const stale = [...managedDirs]
+    .flatMap(walk)
+    .filter(f => !wasEmitted(f))
+    .map(rel);
+
+  const drift = [
+    ...added.map(f => `  + ${f} (missing — spec adds it)`),
+    ...changed.map(f => `  ~ ${f} (out of date)`),
+    ...stale.map(f => `  - ${f} (stale — spec no longer defines it)`),
+  ];
+
+  if (drift.length === 0) {
+    console.log(`✅ ${emitted.size} reference files in sync with packages/spec`);
+    return;
+  }
+
+  console.error(
+    `\n✗ content/docs/references/ is out of date with packages/spec:\n\n` +
+      drift.join('\n') +
+      `\n\nThese files are GENERATED — do not hand-edit them. Regenerate and commit:\n\n` +
+      `  pnpm --filter @objectstack/spec gen:schema && pnpm --filter @objectstack/spec gen:docs\n` +
+      `  git add content/docs/references\n`,
+  );
+  process.exit(1);
+}
 
 // Dynamically discover categories from src directory
 const getCategoryTitle = (dir: string) => {
@@ -329,9 +434,7 @@ Object.keys(CATEGORIES).forEach(category => {
     }
     return;
   }
-  if (fs.existsSync(dir)) {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
+  manageDir(dir);
 });
 
 const generatedFiles: string[] = [];
@@ -368,24 +471,21 @@ Object.keys(CATEGORIES).forEach(category => {
     zodFileSchemas.get(zodFile)!.push({ name: schemaName, content });
   });
   
-  // Create Category Directory
   const categoryDir = path.join(DOCS_ROOT, category);
-  if (!fs.existsSync(categoryDir)) fs.mkdirSync(categoryDir, { recursive: true });
 
   // Generate file
   zodFileSchemas.forEach((schemas, zodFile) => {
     const fileName = `${zodFile}.mdx`;
     const mdx = generateZodFileMarkdown(zodFile, schemas, category);
-    fs.writeFileSync(path.join(categoryDir, fileName), mdx);
-    console.log(`✓ Generated ${category}/${fileName}`);
+    emit(path.join(categoryDir, fileName), mdx);
   });
-  
+
   // Generate Category Meta
   const meta = {
     title: CATEGORIES[category],
     pages: Array.from(zodFileSchemas.keys()).sort()
   };
-  fs.writeFileSync(path.join(categoryDir, 'meta.json'), JSON.stringify(meta, null, 2));
+  emit(path.join(categoryDir, 'meta.json'), JSON.stringify(meta, null, 2));
 });
 
 // 2.5 Generate Category Overviews (index.mdx in each folder)
@@ -408,24 +508,21 @@ Object.entries(CATEGORIES).forEach(([category, title]) => {
       // Flow edge schema carry CEL-expression transforms) — generates no page,
       // so carding it would be a dangling 404 link. This aligns the index with
       // `meta.json`, which already lists only generated pages.
-      if (!fs.existsSync(path.join(DOCS_ROOT, category, `${zodFile}.mdx`))) return;
+      //
+      // Asks the sink, not the disk: this run's own output is the authority on
+      // what pages exist. (Equivalent on disk, since the folder was just wiped
+      // and rewritten — but it stays correct under --check, where nothing is
+      // written and the stale files are still lying around.)
+      if (!wasEmitted(path.join(DOCS_ROOT, category, `${zodFile}.mdx`))) return;
       const fileTitle = zodFile.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
       // Link relative to the category folder (where index.mdx lives)
       mdx += `  <Card href="/docs/references/${category}/${zodFile}" title="${fileTitle}" description="Source: packages/spec/src/${category}/${zodFile}.zod.ts" />\n`;
   });
   mdx += `</Cards>\n`;
 
-  // Write as index.mdx inside the category folder? 
-  // If we do that, accessing /docs/references/ai works.
-  // BUT 'index' must be in 'meta.json' pages? No, index is implicit usually.
-  
-  // However, Fumadocs often treats folder/index.mdx as the page for the folder.
-  // Ensure directory exists before writing
-  const categoryDir = path.join(DOCS_ROOT, category);
-  if (!fs.existsSync(categoryDir)) fs.mkdirSync(categoryDir, { recursive: true });
-  
-  fs.writeFileSync(path.join(categoryDir, 'index.mdx'), mdx);
-  console.log(`✓ Generated ${category}/index.mdx`);
+  // Fumadocs treats folder/index.mdx as the page for the folder, so this is what
+  // makes /docs/references/<category> resolve.
+  emit(path.join(DOCS_ROOT, category, 'index.mdx'), mdx);
 });
 
 // 3. Update root meta.json
@@ -437,7 +534,9 @@ const categoryDirs = Object.keys(CATEGORIES)
   })
   .sort();
 
-// Collect other root files (if any exist, like implementation-status.mdx)
+// Collect other root files (if any exist, like implementation-status.mdx).
+// Root-level .mdx is hand-written and never generated, so this reads the disk in
+// both modes — it is an input to the sidebar, not part of the emitted tree.
 const rootFiles = fs.readdirSync(DOCS_ROOT)
   .filter(f => f.endsWith('.mdx') && !f.startsWith('index')) // Exclude index.mdx if it exists?
   .map(f => f.replace('.mdx', ''))
@@ -455,7 +554,7 @@ const meta = {
   // NOT be a root tab — the whole docs tree renders as one sidebar.
   pages: pages
 };
-fs.writeFileSync(path.join(DOCS_ROOT, 'meta.json'), JSON.stringify(meta, null, 2));
-console.log(`✓ Updated root meta.json`);
+emit(path.join(DOCS_ROOT, 'meta.json'), JSON.stringify(meta, null, 2));
 
-console.log('Done!');
+// 4. Disposition: write the tree, or report drift against it.
+flush();

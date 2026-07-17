@@ -24,7 +24,7 @@ jobs:
     outputs:
       docs: ${{ steps.changes.outputs.docs }}
       core: ${{ steps.changes.outputs.core }}
-      skilldocs: ${{ steps.changes.outputs.skilldocs }}
+      generated: ${{ steps.changes.outputs.generated }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -38,10 +38,30 @@ jobs:
               - 'content/**'
               - 'pnpm-lock.yaml'
               - '.github/workflows/ci.yml'
-            skilldocs:
+            # Inputs AND outputs of every generated artifact checked by the
+            # `check-generated` job. A path missing here makes that gate dormant on
+            # exactly the PRs that can break it, so keep the two in lockstep.
+            generated:
+              # check:skill-docs — catalog source is skills/*/SKILL.md; the derived
+              # listings are skills/README.md + the reference page below. (That page
+              # was content/docs/guides/skills.mdx until #2584 moved it; this filter
+              # kept watching the old path, so hand-edits to the generated block went
+              # unchecked from then until now.)
               - 'skills/**'
-              - 'content/docs/guides/skills.mdx'
+              - 'content/docs/ai/skills-reference.mdx'
               - 'packages/spec/scripts/build-skill-docs.ts'
+              # check:spec-changes / check:upgrade-guide — derived from the ADR-0087
+              # registries and the protocol version, none of which the skills paths
+              # above cover. Both gates were dormant on spec-only PRs: a protocol bump
+              # or a new migration could not trigger the job that verifies them.
+              - 'packages/spec/scripts/build-spec-changes.ts'
+              - 'packages/spec/scripts/build-upgrade-guide.ts'
+              - 'packages/spec/src/migrations/**'
+              - 'packages/spec/src/conversions/**'
+              - 'packages/spec/src/kernel/protocol-version.ts'
+              - 'packages/spec/api-surface.json'
+              - 'packages/spec/spec-changes.json'
+              - 'docs/protocol-upgrade-guide.md'
               - '.github/workflows/ci.yml'
             core:
               - 'packages/**'
@@ -354,10 +374,18 @@ jobs:
       - name: Build Docs
         run: pnpm --filter @objectstack/docs build
 
-  check-skill-docs:
-    name: Check Skill Docs
+  # Generated artifacts that are committed to the tree: regenerate, fail on drift.
+  # Named for the class, not for skill docs alone — it has checked the ADR-0087
+  # protocol artifacts for a while, and a name that hid them is part of why their
+  # paths went missing from the filter above.
+  #
+  # The generated reference docs (content/docs/references/**) are deliberately NOT
+  # here: they need to gate spec-only PRs, and this whole job is filter-gated, so
+  # they live in lint.yml's required, unfiltered "TypeScript Type Check" job.
+  check-generated:
+    name: Check Generated Artifacts
     needs: filter
-    if: needs.filter.outputs.skilldocs == 'true'
+    if: needs.filter.outputs.generated == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
