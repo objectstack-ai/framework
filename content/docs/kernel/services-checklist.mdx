@@ -5,6 +5,14 @@ description: Complete inventory of ObjectStack kernel services with protocol met
 
 # Kernel Services Checklist
 
+<Callout type="warn">
+**This checklist is out of date.** It predates several packages that have since
+shipped — SQL and MongoDB drivers, automation, realtime, storage, and more (see
+[Plugins & Packages](/docs/plugins/packages) for the current catalog). Keep it
+for the protocol-method inventory; treat the per-service status columns as
+historical until this page is regenerated.
+</Callout>
+
 The ObjectStack protocol defines **17 kernel services** registered via the `CoreServiceName` enum. Each service maps to a set of protocol methods (57 total), governed by the `ObjectStackProtocol` interface.
 
 **Key architecture principle**: The kernel itself only provides **data** and **metadata** (framework). Everything else — including **auth** and **automation** — is delivered by **plugins**. The current `@objectstack/objectql` package is an example kernel implementation to get the basic API running; production kernels will be rebuilt as new plugins.

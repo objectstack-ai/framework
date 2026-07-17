@@ -57,10 +57,11 @@ sqlite3 /srv/data/app.db ".backup '/backups/app-$(date +%F).db'"
 The default location when `OS_DATABASE_URL` is unset is
 `<home>/data/objectstack.db` under the ObjectStack home directory.
 
-### Turso / libSQL and managed databases
+### Managed databases (hosted Postgres, MongoDB Atlas, …)
 
 Use the provider's snapshot, branching, or point-in-time-restore facilities.
-Nothing ObjectStack-specific applies.
+Nothing ObjectStack-specific applies. (Turso/libSQL applies only to ObjectStack
+Cloud-managed environments — the open framework does not ship that driver.)
 
 ## Backing up uploaded files
 

@@ -244,7 +244,7 @@ These properties apply to **all** field types and are validated by the base `Fie
 | Property | Type | Default | Validation Behavior |
 |:---|:---|:---|:---|
 | `reference` | `string` | — | **Required.** Target object name |
-| `referenceFilters` | `string[]` | — | Filter expressions for lookup dialogs |
+| `referenceFilters` | `string[]` | — | **Legacy** — schema-accepted but not read by the record-picker; use `lookupFilters` + `dependsOn` |
 | `deleteBehavior` | `enum` | `set_null` | `set_null`, `cascade`, or `restrict` |
 | `multiple` | `boolean` | `false` | Allow multiple references |
 

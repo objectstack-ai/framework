@@ -146,7 +146,7 @@ flowchart TD
 |:---|:---|:---|
 | `number` | Any numeric value (set `precision`/`scale` for decimals) | `price`, `weight`, `quantity` |
 | `currency` | Money amounts with currency code | `amount`, `total_price` |
-| `percent` | Percentage values (0–100 or 0–1) | `completion`, `discount` |
+| `percent` | Percentage values, stored as fractions 0–1 (`0.85` = 85%) | `completion`, `discount` |
 | `rating` | Star ratings (typically 1–5) | `satisfaction`, `difficulty` |
 | `slider` | Numeric value via slider UI | `volume`, `priority_level` |
 

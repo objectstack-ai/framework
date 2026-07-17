@@ -257,11 +257,12 @@ Validation proves the metadata is *well-formed*. It can't prove the app does wha
 *you* meant. That's the human half of the loop: **run it and look.**
 
 ```bash
-os dev --ui
+npx os dev --ui
 ```
 
-Open [http://localhost:3000/_console/](http://localhost:3000/_console/) and drive
-the app like a user:
+Open [http://localhost:3000/_console/](http://localhost:3000/_console/) and sign in
+as the dev admin the server seeds on an empty database
+(`admin@objectos.ai` / `admin123`). Then drive the app like a user:
 
 - Create a ticket. Confirm the fields, labels, and picklist colors match intent.
 - Check the **Resolve** action shows on an open ticket — and **disappears** once
@@ -316,7 +317,12 @@ its own OAuth 2.1 authorization server, so interactive clients just open a
 browser login (you connect as yourself, no admin-minted credentials):
 
 ```bash
+# the dev server you just booted in step 5
+claude mcp add --transport http support-desk http://localhost:3000/api/v1/mcp
+
+# or a deployed instance
 claude mcp add --transport http support-desk https://your-deployment.example.com/api/v1/mcp
+
 # first tool use opens a browser login — you're connected as yourself
 ```
 

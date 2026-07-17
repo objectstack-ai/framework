@@ -301,7 +301,7 @@ Reference to a record in another object (foreign key).
 | Property | Type | Default | Description |
 |:---|:---|:---|:---|
 | `reference` | `string` | **required** | Target object name (snake_case) |
-| `referenceFilters` | `string[]` | — | Filters applied to lookup dialogs (e.g. `"active = true"`) |
+| `referenceFilters` | `string[]` | — | **Legacy** — accepted by the schema but not read by the record-picker (filters nothing). Use structured `lookupFilters` + `dependsOn` instead; see [Relationships](/docs/data-modeling/relationships) |
 | `deleteBehavior` | `'restrict' \| 'cascade' \| 'set_null'` | `'set_null'` | Behavior when referenced record is deleted (a *required* lookup left at the default `set_null` is escalated to `restrict`, since a NOT NULL foreign key cannot be cleared) |
 
 ```typescript
@@ -323,7 +323,7 @@ Parent-child relationship (cascading delete by default).
 | Property | Type | Default | Description |
 |:---|:---|:---|:---|
 | `reference` | `string` | **required** | Target (master) object name |
-| `referenceFilters` | `string[]` | — | Filters applied to lookup dialogs (e.g. `"active = true"`) |
+| `referenceFilters` | `string[]` | — | **Legacy** — accepted by the schema but not read by the record-picker (filters nothing). Use structured `lookupFilters` + `dependsOn` instead; see [Relationships](/docs/data-modeling/relationships) |
 | `deleteBehavior` | `'restrict' \| 'cascade' \| 'set_null'` | `'cascade'` | Behavior when parent is deleted (master-detail cascades unless set to `restrict`) |
 | `inlineEdit` | `boolean \| 'grid' \| 'form'` | — | Edit child records inline on the parent create/edit form (`true` = auto-pick, `'grid'`, or `'form'`) |
 | `inlineColumns` | `array` | — | Optional explicit inline grid columns |
