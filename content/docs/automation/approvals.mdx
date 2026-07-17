@@ -54,10 +54,10 @@ defineFlow({
 
 <Callout type="warn">
 **`position` vs `role`.** `{ type: 'position', value: 'finance_manager' }` routes to the
-holders of a position (`sys_user_position`, ADR-0090 D3). The `role` approver type is the
-better-auth **org-membership tier** (`sys_member.role`: `owner`/`admin`/`member`) — a position
-name authored as `type: 'role'` matches nobody and the request stalls; `os lint` flags this
-(`approval-role-not-membership-tier`).
+holders of a position (`sys_user_position`, ADR-0090 D3). `type: 'role'` is a different thing
+entirely — the better-auth **org-membership tier** (`sys_member.role`: `owner`/`admin`/`member`)
+— so a business position name authored there matches nobody and the request stalls; `os lint`
+flags this (`approval-role-not-membership-tier`).
 </Callout>
 
 Approving is itself a gated action — model "may approve" as a capability (`approve_invoice`) the approver's permission set grants, and gate the approve action's `requiredPermissions` on it so the gate is enforced on **both** the UI and the server (ADR-0066 D4).
@@ -131,13 +131,6 @@ and the flow run parks until a decision arrives.
 
 Only `approvers` is required on the node; everything else has a default
 (`behavior: 'first_response'`, `lockRecord: true`, `maxRevisions: 3`).
-
-<Callout type="warn">
-**`type: 'role'` is not a position.** In an approver entry, `role` means the
-better-auth membership tier (`owner` / `admin` / `member`). Naming a business
-role like `sales_manager` there matches nobody and the request silently has no
-approvers — use `{ type: 'position', value: 'sales_manager' }`.
-</Callout>
 
 ### The approver finds it in their queue
 
