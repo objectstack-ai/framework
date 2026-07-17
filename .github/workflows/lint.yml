@@ -50,6 +50,16 @@ jobs:
       - name: ESLint
         run: pnpm lint
 
+      # Raw NUL guard (#3127): one literal U+0000 byte makes grep/ripgrep treat
+      # the whole file as binary and silently return ZERO matches — the file drops
+      # out of code search and out of every grep-based lint, with no error saying
+      # so. Nothing else catches it: git sniffs only the first 8000 bytes to decide
+      # binary-ness, and protocol.ts carried its NUL at offset 147230, so it kept
+      # diffing as ordinary text through review. That blind spot let six files
+      # accumulate the same defect. Authors must write the unicode escape instead.
+      - name: Raw NUL byte guard
+        run: pnpm check:nul-bytes
+
       # Docs/skills authoring guard (#2035 / ADR-0059): TS code blocks in
       # Markdown/MDX are not type-checked or ESLinted, so skills/ and
       # content/docs/ can drift back to teaching the bare `: Page = {}` literal
