@@ -737,7 +737,16 @@ search guide with `sys_user`/picker coverage and existing-row backfill notes
 
 ## New in Console (Studio) — bundled objectui 14.1
 
-The pinned Console picks up the objectui 14.1 line (94 commits). By area:
+The pinned Console picks up the objectui 14.1 line (94 commits), plus a
+handful of post-14.1 fixes carried by the final pin: cascading option fields
+receive the live form record so a dependent select actually unlocks when its
+parent is chosen — found during 15.1 release QA on the showcase B3 fixture
+(#2620); OIDC provider sign-in works against better-auth ≥ 1.7's
+`POST /sign-in/social` (#2621); inline-edit numeric fields enforce
+min/max/step (#2615); the approval-lock band renders from the host signal on
+request-tracked backends (#2619); built-in grid row Edit/Delete honor
+per-record CEL predicates (#2617); and the AI build canvas cold-starts into
+Studio with a primary CTA + artifact deep links (ADR-0080 D5, #2623). By area:
 
 ### Record detail & inline edit (ADR-0085 line)
 
