@@ -74,13 +74,12 @@ describe('blank template manifest engines.protocol (ADR-0087 D1)', () => {
   });
 });
 
-// Packing ratchet (#3120): every file the blank template ships must survive a
-// real `npm pack` and land in a scaffold under its intended name. `.gitignore`
-// did not — npm strips it from the tarball at every depth, so the file the
-// build had faithfully copied to dist/templates/blank/ was dropped at publish
-// and every scaffolded project came out with no `.gitignore`, leaving
-// node_modules/ and the secret-bearing .env from the template README
-// un-ignored for every new user.
+// Packing ratchet (#3120): every template file must survive a real `npm pack`
+// and land in a scaffold under its intended name. `.gitignore` did not — npm
+// strips it from the tarball at every depth, so the file the build had
+// faithfully copied to dist/templates/blank/ was dropped at publish and every
+// scaffolded project came out with no `.gitignore`, leaving node_modules/ and
+// the secret-bearing .env from the template README un-ignored for every user.
 //
 // This bug is invisible to source-level assertions: the file is present in
 // src/templates/, present in a local build, and only vanishes at publish. So
@@ -89,8 +88,9 @@ describe('blank template manifest engines.protocol (ADR-0087 D1)', () => {
 // `test` task only dependsOn `^build` (not its own build) and excludes dist/**
 // from its inputs, so dist/ here is routinely absent or stale, and a pass on it
 // would be cached.
-describe('blank template survives npm packing', () => {
-  const blankSrc = path.join(pkgRoot, 'src', 'templates', 'blank');
+describe('templates survive npm packing', () => {
+  const templatesSrc = path.join(pkgRoot, 'src', 'templates');
+  const blankSrc = path.join(templatesSrc, 'blank');
 
   const walkRel = (dir: string, rel = ''): string[] =>
     fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -109,6 +109,7 @@ describe('blank template survives npm packing', () => {
   };
 
   let tmp: string;
+  let packed: string[];
   let scaffolded: string[];
   let collected: string[];
 
@@ -120,14 +121,13 @@ describe('blank template survives npm packing', () => {
     // dist/templates, which is what tsup.config.ts's onSuccess hook does. The
     // test asserts that mirror below rather than assuming it.
     fs.cpSync(path.join(pkgRoot, 'package.json'), path.join(tmp, 'package.json'));
-    fs.cpSync(path.join(pkgRoot, 'src', 'templates'), path.join(tmp, 'dist', 'templates'), {
-      recursive: true,
-    });
+    fs.cpSync(templatesSrc, path.join(tmp, 'dist', 'templates'), { recursive: true });
 
     execFileSync('npm', ['pack', '--ignore-scripts'], { cwd: tmp, stdio: 'pipe' });
     const tgz = fs.readdirSync(tmp).find((f) => f.endsWith('.tgz'));
     if (!tgz) throw new Error(`npm pack produced no tarball in ${tmp}`);
     execFileSync('tar', ['xzf', tgz], { cwd: tmp });
+    packed = walkRel(path.join(tmp, 'package', 'dist', 'templates'));
 
     // Scaffold from the *packed* template with the real copy logic.
     const out = path.join(tmp, 'scaffold');
@@ -150,15 +150,21 @@ describe('blank template survives npm packing', () => {
     ).toContain("cpSync('src/templates', 'dist/templates', { recursive: true })");
   });
 
-  it('lands every template file — dotfiles included — in the scaffold', () => {
-    const expected = walkRel(blankSrc).map(scaffoldedAs).sort();
+  // Covers every bundled template, not just blank: the tarball must carry
+  // src/templates/** verbatim (aliases are a scaffold-time concern).
+  it('carries every src/templates file into the tarball', () => {
     expect(
-      scaffolded.sort(),
-      'a file in src/templates/blank/ did not survive `npm pack` (npm strips ' +
-        '.gitignore and .npmrc from tarballs at every depth). Commit it under a ' +
+      packed.sort(),
+      'a file under src/templates/ did not survive `npm pack`. npm strips ' +
+        '.gitignore and .npmrc from tarballs at every depth — commit it under a ' +
         'placeholder name and map it back in TEMPLATE_FILE_ALIASES, the way ' +
         '_gitignore → .gitignore works.',
-    ).toEqual(expected);
+    ).toEqual(walkRel(templatesSrc).sort());
+  });
+
+  it('restores the aliased names when scaffolding', () => {
+    const expected = walkRel(blankSrc).map(scaffoldedAs).sort();
+    expect(scaffolded.sort()).toEqual(expected);
     // What the CLI prints as "Created files:" must match what it actually wrote.
     expect(collected.sort()).toEqual(expected);
   });
