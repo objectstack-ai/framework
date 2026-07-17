@@ -527,17 +527,33 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
             });
 
             // ── Discovery (versioned API path) ──────────────────────────
-            server.get(`${prefix}/discovery`, async (_req: any, res: any) => {
-                if (securityHeaders) {
-                    for (const [k, v] of Object.entries(securityHeaders)) {
-                        res.header(k, v);
+            // Single owner (ADR-0076 D11 / OQ#9): when the REST plugin is
+            // mounted on the same kernel it registers `${prefix}/discovery`
+            // itself (rest-server registerDiscoveryEndpoints), and which
+            // payload a client saw used to depend on plugin start order
+            // (first-registration-wins on Hono). Cede the route to REST
+            // deterministically; this bridge registers it only as the
+            // fallback owner in REST-less compositions. `/.well-known/
+            // objectstack` above stays dispatcher-owned unconditionally —
+            // no other plugin registers it.
+            const restRegistered =
+                typeof (kernel as { hasPlugin?: (n: string) => boolean }).hasPlugin === 'function' &&
+                (kernel as { hasPlugin: (n: string) => boolean }).hasPlugin('com.objectstack.rest.api');
+            if (!restRegistered) {
+                server.get(`${prefix}/discovery`, async (_req: any, res: any) => {
+                    if (securityHeaders) {
+                        for (const [k, v] of Object.entries(securityHeaders)) {
+                            res.header(k, v);
+                        }
                     }
-                }
-                // See the .well-known handler above: discovery must not be cached
-                // (mutable runtime config; cloud#152 stale `routes.mcp`).
-                res.header('Cache-Control', 'no-store');
-                res.json({ data: await dispatcher.getDiscoveryInfo(prefix) });
-            });
+                    // See the .well-known handler above: discovery must not be cached
+                    // (mutable runtime config; cloud#152 stale `routes.mcp`).
+                    res.header('Cache-Control', 'no-store');
+                    res.json({ data: await dispatcher.getDiscoveryInfo(prefix) });
+                });
+            } else {
+                ctx.logger.info(`[Dispatcher] ${prefix}/discovery ceded to com.objectstack.rest.api (single owner)`);
+            }
 
             // ── Health ──────────────────────────────────────────────────
             server.get(`${prefix}/health`, async (_req: any, res: any) => {
@@ -676,178 +692,61 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
             });
 
             // ── Packages ────────────────────────────────────────────────
-            server.get(`${prefix}/packages`, async (req: any, res: any) => {
-                try {
-                    const result = await dispatcher.handlePackages('', 'GET', {}, req.query, { request: req });
-                    sendResult(result, res);
-                } catch (err: any) {
-                    errorResponse(err, res);
-                }
-            });
+            // Single pipeline (ADR-0076 D11 / OQ#9): every package route flows
+            // through dispatch() — like analytics / i18n / automation / AI —
+            // so both HTTP entries into this domain (these explicit mounts and
+            // the @objectstack/hono catch-all the cloud hosts mount underneath)
+            // run the SAME per-request pipeline: kernel resolution, identity
+            // resolution, auth gate. These used to call handlePackages()
+            // directly, which skipped that pipeline entirely and dropped
+            // req.query on several routes (so the documented `?overwrite=true`
+            // install flag never reached the handler).
+            const mountPackagesRoute = (
+                verb: 'get' | 'post' | 'patch' | 'delete',
+                routePath: string,
+                toSubPath: (req: any) => string,
+            ) => {
+                (server as any)[verb](`${prefix}/packages${routePath}`, async (req: any, res: any) => {
+                    try {
+                        const result = await dispatcher.dispatch(
+                            verb.toUpperCase(),
+                            `/packages${toSubPath(req)}`,
+                            req.body,
+                            req.query ?? {},
+                            { request: req },
+                        );
+                        sendResult(result, res);
+                    } catch (err: any) {
+                        errorResponse(err, res);
+                    }
+                });
+            };
 
-            server.post(`${prefix}/packages`, async (req: any, res: any) => {
-                try {
-                    const result = await dispatcher.handlePackages('', 'POST', req.body, {}, { request: req });
-                    sendResult(result, res);
-                } catch (err: any) {
-                    errorResponse(err, res);
-                }
-            });
-
-            server.get(`${prefix}/packages/:id/export`, async (req: any, res: any) => {
-                try {
-                    const result = await dispatcher.handlePackages(`/${req.params.id}/export`, 'GET', {}, req.query, { request: req });
-                    sendResult(result, res);
-                } catch (err: any) {
-                    errorResponse(err, res);
-                }
-            });
-
-            server.get(`${prefix}/packages/:id`, async (req: any, res: any) => {
-                try {
-                    const result = await dispatcher.handlePackages(`/${req.params.id}`, 'GET', {}, req.query, { request: req });
-                    sendResult(result, res);
-                } catch (err: any) {
-                    errorResponse(err, res);
-                }
-            });
-
-            server.delete(`${prefix}/packages/:id`, async (req: any, res: any) => {
-                try {
-                    const result = await dispatcher.handlePackages(`/${req.params.id}`, 'DELETE', {}, {}, { request: req });
-                    sendResult(result, res);
-                } catch (err: any) {
-                    errorResponse(err, res);
-                }
-            });
-
-            // Edit a package's manifest (name / description / version). The
-            // handler for this has existed in handlePackages all along, but the
-            // route was never registered, so PATCH /packages/:id 405'd and the
-            // Studio "edit package" form silently failed. `/:id` is a single
-            // segment, so this does not shadow the `/:id/enable|disable` routes.
-            server.patch(`${prefix}/packages/:id`, async (req: any, res: any) => {
-                try {
-                    const result = await dispatcher.handlePackages(`/${req.params.id}`, 'PATCH', req.body, req.query, { request: req });
-                    sendResult(result, res);
-                } catch (err: any) {
-                    errorResponse(err, res);
-                }
-            });
-
-            server.patch(`${prefix}/packages/:id/enable`, async (req: any, res: any) => {
-                try {
-                    const result = await dispatcher.handlePackages(`/${req.params.id}/enable`, 'PATCH', {}, {}, { request: req });
-                    sendResult(result, res);
-                } catch (err: any) {
-                    errorResponse(err, res);
-                }
-            });
-
-            server.patch(`${prefix}/packages/:id/disable`, async (req: any, res: any) => {
-                try {
-                    const result = await dispatcher.handlePackages(`/${req.params.id}/disable`, 'PATCH', {}, {}, { request: req });
-                    sendResult(result, res);
-                } catch (err: any) {
-                    errorResponse(err, res);
-                }
-            });
-
-            server.post(`${prefix}/packages/:id/publish`, async (req: any, res: any) => {
-                try {
-                    const result = await dispatcher.handlePackages(`/${req.params.id}/publish`, 'POST', req.body, {}, { request: req });
-                    sendResult(result, res);
-                } catch (err: any) {
-                    errorResponse(err, res);
-                }
-            });
-
+            mountPackagesRoute('get', '', () => '');
+            mountPackagesRoute('post', '', () => '');
+            mountPackagesRoute('get', '/:id/export', (req) => `/${req.params.id}/export`);
+            mountPackagesRoute('get', '/:id', (req) => `/${req.params.id}`);
+            mountPackagesRoute('delete', '/:id', (req) => `/${req.params.id}`);
+            // Edit a package's manifest (name / description / version). `/:id`
+            // is a single segment, so this does not shadow the
+            // `/:id/enable|disable` routes below.
+            mountPackagesRoute('patch', '/:id', (req) => `/${req.params.id}`);
+            mountPackagesRoute('patch', '/:id/enable', (req) => `/${req.params.id}/enable`);
+            mountPackagesRoute('patch', '/:id/disable', (req) => `/${req.params.id}/disable`);
+            mountPackagesRoute('post', '/:id/publish', (req) => `/${req.params.id}/publish`);
             // ADR-0033 — publish every pending draft bound to a package ("publish
             // whole app"). Distinct from /publish (which needs the metadata
             // service): this promotes sys_metadata draft rows via the protocol.
-            server.post(`${prefix}/packages/:id/publish-drafts`, async (req: any, res: any) => {
-                try {
-                    const result = await dispatcher.handlePackages(`/${req.params.id}/publish-drafts`, 'POST', req.body, {}, { request: req });
-                    sendResult(result, res);
-                } catch (err: any) {
-                    errorResponse(err, res);
-                }
-            });
-
-            server.post(`${prefix}/packages/:id/revert`, async (req: any, res: any) => {
-                try {
-                    const result = await dispatcher.handlePackages(`/${req.params.id}/revert`, 'POST', req.body, {}, { request: req });
-                    sendResult(result, res);
-                } catch (err: any) {
-                    errorResponse(err, res);
-                }
-            });
-
-            // The dispatcher's handlePackages grew branches that were never
-            // mounted here, so they 404'd at the HTTP layer on every serve
-            // stack (hono notFound) despite working handler code: duplicate
-            // (ADR-0070 D4), adopt-orphans (D5), discard-drafts, and the
-            // ADR-0067 commit-history / rollback family. Mount them all —
-            // the handlers already exist; this is routing only.
-            server.post(`${prefix}/packages/:id/duplicate`, async (req: any, res: any) => {
-                try {
-                    const result = await dispatcher.handlePackages(`/${req.params.id}/duplicate`, 'POST', req.body, {}, { request: req });
-                    sendResult(result, res);
-                } catch (err: any) {
-                    errorResponse(err, res);
-                }
-            });
-
-            server.post(`${prefix}/packages/:id/adopt-orphans`, async (req: any, res: any) => {
-                try {
-                    const result = await dispatcher.handlePackages(`/${req.params.id}/adopt-orphans`, 'POST', req.body, {}, { request: req });
-                    sendResult(result, res);
-                } catch (err: any) {
-                    errorResponse(err, res);
-                }
-            });
-
-            server.post(`${prefix}/packages/:id/discard-drafts`, async (req: any, res: any) => {
-                try {
-                    const result = await dispatcher.handlePackages(`/${req.params.id}/discard-drafts`, 'POST', req.body, {}, { request: req });
-                    sendResult(result, res);
-                } catch (err: any) {
-                    errorResponse(err, res);
-                }
-            });
-
-            server.get(`${prefix}/packages/:id/commits`, async (req: any, res: any) => {
-                try {
-                    const result = await dispatcher.handlePackages(`/${req.params.id}/commits`, 'GET', undefined, req.query ?? {}, { request: req });
-                    sendResult(result, res);
-                } catch (err: any) {
-                    errorResponse(err, res);
-                }
-            });
-
-            server.post(`${prefix}/packages/:id/commits/:commitId/revert`, async (req: any, res: any) => {
-                try {
-                    const result = await dispatcher.handlePackages(
-                        `/${req.params.id}/commits/${req.params.commitId}/revert`,
-                        'POST',
-                        req.body,
-                        {},
-                        { request: req },
-                    );
-                    sendResult(result, res);
-                } catch (err: any) {
-                    errorResponse(err, res);
-                }
-            });
-
-            server.post(`${prefix}/packages/:id/rollback`, async (req: any, res: any) => {
-                try {
-                    const result = await dispatcher.handlePackages(`/${req.params.id}/rollback`, 'POST', req.body, {}, { request: req });
-                    sendResult(result, res);
-                } catch (err: any) {
-                    errorResponse(err, res);
-                }
-            });
+            mountPackagesRoute('post', '/:id/publish-drafts', (req) => `/${req.params.id}/publish-drafts`);
+            mountPackagesRoute('post', '/:id/revert', (req) => `/${req.params.id}/revert`);
+            // duplicate (ADR-0070 D4), adopt-orphans (D5), discard-drafts, and
+            // the ADR-0067 commit-history / rollback family.
+            mountPackagesRoute('post', '/:id/duplicate', (req) => `/${req.params.id}/duplicate`);
+            mountPackagesRoute('post', '/:id/adopt-orphans', (req) => `/${req.params.id}/adopt-orphans`);
+            mountPackagesRoute('post', '/:id/discard-drafts', (req) => `/${req.params.id}/discard-drafts`);
+            mountPackagesRoute('get', '/:id/commits', (req) => `/${req.params.id}/commits`);
+            mountPackagesRoute('post', '/:id/commits/:commitId/revert', (req) => `/${req.params.id}/commits/${req.params.commitId}/revert`);
+            mountPackagesRoute('post', '/:id/rollback', (req) => `/${req.params.id}/rollback`);
 
             // ── Storage ─────────────────────────────────────────────────
             server.post(`${prefix}/storage/upload`, async (req: any, res: any) => {

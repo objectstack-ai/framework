@@ -462,6 +462,20 @@ export class ObjectKernel {
     }
 
     /**
+     * Whether a plugin with the given name has been registered on this kernel.
+     *
+     * Registration happens synchronously in `use()` before any plugin's
+     * `start()` runs, so a plugin may use this during its own start() to make
+     * composition-dependent decisions deterministically — e.g. the dispatcher
+     * bridge cedes `${prefix}/discovery` to `com.objectstack.rest.api` when
+     * both are mounted (ADR-0076 D11: single owner per route, not
+     * first-registration-wins).
+     */
+    hasPlugin(name: string): boolean {
+        return this.plugins.has(name);
+    }
+
+    /**
      * Get a service (sync helper)
      */
     getService<T>(name: string): T {

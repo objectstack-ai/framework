@@ -126,4 +126,22 @@ describe('createDispatcherPlugin — HTTP route registration', () => {
       expect(headers['Cache-Control'], `${route} Cache-Control`).toBe('no-store');
     }
   });
+
+  // ADR-0076 D11 / OQ#9 — single owner for ${prefix}/discovery. When the REST
+  // plugin is registered on the same kernel it serves /api/v1/discovery itself;
+  // which payload a client saw used to depend on plugin start order
+  // (first-registration-wins). The bridge must cede the route deterministically
+  // and keep /.well-known/objectstack (dispatcher-owned, no other registrant).
+  it('cedes /api/v1/discovery to the REST plugin when it is registered', async () => {
+    const { server, routes } = makeFakeServer();
+    const ctx = makeCtx(server);
+    ctx.getKernel().hasPlugin = (name: string) => name === 'com.objectstack.rest.api';
+    const plugin = createDispatcherPlugin({ prefix: '/api/v1', securityHeaders: false });
+    await plugin.start?.(ctx);
+
+    expect(routes).not.toContain('GET /api/v1/discovery');
+    expect(routes).toContain('GET /.well-known/objectstack');
+    // Non-discovery routes are unaffected by the cession.
+    expect(routes).toContain('GET /api/v1/packages');
+  });
 });
