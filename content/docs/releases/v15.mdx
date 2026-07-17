@@ -1,122 +1,69 @@
 ---
 title: v15.0.0
-description: The v15 line — authorization kernel chain (ADR-0095), strict view/page schemas (ADR-0089), attachments v1, declarative connectors (ADR-0096/0097), dashboard-level filters, pinyin search, and a broad write-path security hardening sweep. Covers backend and Console for 15.0.0 and 15.1.0.
+description: Record-level access explanation, a docked AI workspace in the Console, attachments that follow record permissions, no-code third-party connectors, dashboard-wide filters, and Chinese pinyin search — with materially safer multi-tenant defaults. Backend and Console notes for 15.0.0 and 15.1.0.
 ---
 
-**The v15 line.** 15.0.0 restructures the authorization hot path (ADR-0095):
-tenant isolation moves out of the business-RLS pass into an independent,
-always-first **Layer 0**; principal tiering becomes an explicit,
-capability-derived **posture ladder**; and the tenant write wall is closed on
-the update path. It also makes view/page schemas **strict** (ADR-0089 D3a) and
-bundles the **objectui 14.0 Console major**. 15.1.0 is a fast-follow minor with
-three themes: a **write-path security hardening sweep** (every hole below was
-verified exploitable on 15.0.0 and is now closed), **attachments v1**, and
-**declarative connectors** (ADR-0096/0097) — bundling the objectui 14.1 Console
-line.
+**The v15 line** makes the platform explain itself and lets you build more
+without code: administrators can ask *why* a specific user sees a specific
+record and get a layer-by-layer answer; the Console gains a docked AI
+workspace; attachments, third-party connectors, dashboard-wide filters, and
+Chinese pinyin search all become configuration instead of custom work — while
+multi-tenant isolation and the write path get materially safer by default.
 
-Read this before upgrading a multi-org or enterprise-hierarchy deployment, and
-before recompiling metadata authored against spec 14.x.
+## Highlights — 15.0.0
 
-## Breaking changes (15.0.0)
+- **Answer "why can this user see this record?" in one click.** Access
+  explanation now reaches individual records: pick a user, an object, and a
+  record, and the panel walks every layer (permission set → position → sharing
+  → row rules) to a final verdict with the deciding layer named. Permission
+  debugging turns from guesswork into reading the answer.
+- **Multi-tenant data stays in its lane — by construction.** Tenant isolation
+  now always runs first, before any business rule. A permissive sharing policy
+  can no longer accidentally expose another organization's records, forged
+  cross-tenant writes are blocked, and org admins no longer cross the wall on
+  private objects.
+- **An AI workspace built into the Console.** The assistant docks on the right
+  and works side-by-side with your page instead of covering it — ask questions
+  in any app, hand off to the builder with one click (your conversation
+  follows), see your usage at a glance, and get the same experience as a bottom
+  sheet on mobile.
+- **Gantt charts ready for real project management.** Connect external API
+  data sources with full write-back, drag to reschedule with per-scale
+  snapping, dependency lines that refuse cycles and locked rows, and per-task
+  overdue/due-soon warning strokes.
+- **Configuration mistakes surface immediately.** A mistyped or misplaced key
+  in view/page metadata now fails loudly at build time with a pointer to the
+  correct spelling — instead of silently doing nothing in production.
+- **Sign in with a phone number**, and sharing-rule forms become pick-not-type
+  (searchable object pickers, visual condition builders, recipient pickers).
 
-### Strict view/page schemas — mis-layered visibility keys are loud errors (ADR-0089 D3a, #2943)
+## Highlights — 15.1.0
 
-`FormFieldSchema`, `FormSectionSchema` (view) and `PageComponentSchema` (page)
-are now `.strict()`. A key these schemas do not declare — a `visibleWhen` typo,
-a page-only `visibility` on a view field (or vice-versa), or a stale key past
-its deprecation window — used to be silently dropped by zod's default strip
-mode, shipping inert metadata with no diagnostic (the ADR-0049
-enforce-or-remove / ADR-0078 no-silently-inert principle). It is now a **loud
-parse error**. A new `strictVisibilityError` error map names the offending
-key(s) and, when one looks like a visibility predicate, points at the canonical
-`visibleWhen`. **Migration:** recompile your metadata; fix any flagged keys —
-deprecated `visibleOn` / `visibility` aliases are still declared keys and keep
-normalizing to `visibleWhen`, so correctly-authored metadata parses unchanged.
-The companion lint rule (`visibility-root-mislayered`) is now bidirectional
-(#2931): it flags a `data.`-rooted predicate on a runtime view/page *and* a
-`record.`-rooted predicate on a metadata-editing form.
+- **Attachments that follow your permissions.** Files attached to a record are
+  visible exactly to the people who can see the record; downloads use
+  short-lived signed links; and inline line-item grids upload files directly —
+  drop a receipt image onto an invoice line.
+- **Connect third-party systems with pure configuration.** Declare a REST,
+  OpenAPI, or MCP connector in metadata and call it from flows — no plugin
+  code. Unreachable upstreams degrade gracefully and retry themselves back to
+  health.
+- **One filter bar drives the whole dashboard.** Date and field filters at the
+  top of a dashboard re-scope every chart at once; each widget can remap the
+  filter to its own field or opt out (a KPI can stay "all time").
+- **Search Chinese names by pinyin.** Typing `zhangwei` or just `zw` finds
+  张伟 — in list search, lookup pickers, and ⌘K — with no per-object setup.
+- **Edit a whole record inline.** Double-click any field on a detail page,
+  change several (header highlights included), and save once atomically.
+  Formula fields get a real editor that validates as you type and infers the
+  result type; row-security policies can be test-run against a live record
+  before you save them.
+- **Everyday quality:** GBK-encoded CSVs from zh-CN Excel import cleanly,
+  imports run automations per row, exports use localized filenames, and the
+  Studio guards you against losing unsaved permission-matrix edits.
 
-### Multi-org deployments only (ADR-0095)
+---
 
-- **Cross-tenant read leak closed (Layer 0).** A permissive business RLS policy
-  (e.g. `status == 'public'`) can no longer OR-widen tenant scope. Tenant isolation
-  is now AND-composed as the outermost filter (`Layer0(tenant) AND Layer1(business RLS)`);
-  a foreign-org row a business policy matched is now invisible.
-- **Member by-id writes narrow to owner-only.** The previous OR-merge silently
-  widened `owner_only_writes` back to org-wide, so a member could by-id update/delete
-  *any* record in their org. Writes are now owner-scoped as authored. **Migration:**
-  if your deployment intentionally relied on members editing each other's records
-  org-wide, grant an explicit per-object edit permission set (position-distributed)
-  where that is wanted — the baseline `member_default` no longer permits it.
-- **Cross-tenant writes via `organization_id` blocked (insert + update).** A user
-  could previously plant a row into another tenant by supplying a forged
-  `organization_id` on insert, or by reassigning it on update. Both are now denied
-  for user contexts (Layer 0 post-image check, symmetric across insert/update/bulk);
-  `organization_id` is effectively immutable outside system context. Default writes
-  (no `organization_id`) and system-context writes (import, migration, per-org seed
-  replay) are unaffected.
-- **Org admins no longer cross the tenant wall on `private` objects.** The Layer 0
-  cross-tenant exemption is now gated on a genuine platform-admin capability
-  (`manage_metadata` / `manage_platform_settings` / `studio.access` / `manage_users`),
-  not on the `viewAllRecords` / `modifyAllRecords` super-bits that `organization_admin`
-  also holds. On `access.default: 'private'` tenant objects an org admin is now walled
-  to their own organization (previously unfiltered). Genuine platform admins are
-  unaffected; the super-bits continue to drive only the in-org Layer 1 business-RLS
-  short-circuit (TENANT_ADMIN semantics unchanged).
-- **No-active-org writes fail closed.** A write by a principal with no active
-  organization on a tenant object is now denied.
-- **Seeded `tenant_isolation` policy retired.** The wildcard `tenant_isolation`
-  RLS policy is removed from the `organization_admin` / `member_default` /
-  `viewer_readonly` sets (isolation is enforced by Layer 0 instead). The
-  `_self` / `_org` identity-table carve-outs and `owner_only_writes/deletes` are
-  unchanged; customized seeded sets keep their overlays (ADR-0094).
-
-### Enterprise hierarchy RLS (`@objectstack/security-enterprise`)
-
-- **`unit` scope anchors to the position's business unit.** `unit` / `unit_and_below`
-  now prefer `sys_user_position.business_unit_id` (the position's BU) over
-  `sys_business_unit_member` membership. **Deployments that do not populate
-  `sys_user_position.business_unit_id` see no change** (every user falls back to
-  membership). Once anchors are populated, a user's `unit` visibility narrows to
-  their position BU; multiple positions union; expired/inactive positions fall back
-  to membership.
-
-## Behavior changes (15.0.0)
-
-- **Import runs the automation chain per row (#2922).** `engine.insert` now
-  triggers `beforeInsert`/`afterInsert` once per row with single-record hook
-  contexts — flat-input proxies, declarative hook conditions, audit writers,
-  and record-change triggers see real records instead of arrays. A new
-  `ExecutionContext.skipAutomations` (mirrored into `HookContext.session`)
-  suppresses metadata-bound automation hooks and implies `skipTriggers` for
-  flow dispatch — making the import wizard's "run automations & triggers"
-  checkbox and import-undo actually effective; code-registered system hooks
-  (audit, security, sharing) still run. REST import defaults `runAutomations`
-  to **true** unless the request explicitly opts out.
-- **System-row write guardrail on `sys_position` / `sys_capability` (#2930).**
-  Platform/application-published rows (`managed_by: system/config` positions,
-  `managed_by: platform/package` capabilities) could previously be deleted or
-  rewritten directly by a customer admin, silently breaking an app's
-  authorization baseline. A new `assertSystemRowWriteGate` in the data-write
-  hook now guards both — the same two-doors model `sys_permission_set` already
-  had.
-- **Explain posture labels align with enforcement (#2949).** `security.explain`
-  derives its posture evidence from the same enforcement path, eliminating
-  label drift between what the panel says and what the kernel does.
-
-## Non-breaking hardening in 15.0.0 (same effective visibility)
-
-- **RLS safety nets recognize canonical `==` (#2936).** The field-existence /
-  tenancy-disabled nets were inert for `==`-form policies; now recognized. Only
-  visible effect: on column-less system tables a member's by-id write is now an
-  explicit fail-closed deny rather than a phantom-column filter — same result.
-- **Self-delegation position anchors are subtree-constrained (#2945).** A delegated
-  position's `business_unit_id` must fall within the delegator's own effective
-  anchor — closing a lateral-visibility escalation the position-anchor change
-  would otherwise have opened.
-- **Hierarchy resolver queries are org-scoped (defense in depth).** Owner-id resolution
-  now filters by organization directly, and private hierarchy-scoped objects that lack
-  an `organization_id` column fail closed at boot.
+# 15.0.0 in detail
 
 ## New features in 15.0.0 (additive)
 
@@ -287,6 +234,111 @@ cleanup below.
 
 ---
 
+## Breaking changes & migration (15.0.0)
+
+Strict-semver edges and behavior changes in 15.0.0, with migrations — read
+before upgrading a multi-org or enterprise-hierarchy deployment, and before
+recompiling metadata authored against spec 14.x.
+
+### Strict view/page schemas — mis-layered visibility keys are loud errors (ADR-0089 D3a, #2943)
+
+`FormFieldSchema`, `FormSectionSchema` (view) and `PageComponentSchema` (page)
+are now `.strict()`. A key these schemas do not declare — a `visibleWhen` typo,
+a page-only `visibility` on a view field (or vice-versa), or a stale key past
+its deprecation window — used to be silently dropped by zod's default strip
+mode, shipping inert metadata with no diagnostic (the ADR-0049
+enforce-or-remove / ADR-0078 no-silently-inert principle). It is now a **loud
+parse error**. A new `strictVisibilityError` error map names the offending
+key(s) and, when one looks like a visibility predicate, points at the canonical
+`visibleWhen`. **Migration:** recompile your metadata; fix any flagged keys —
+deprecated `visibleOn` / `visibility` aliases are still declared keys and keep
+normalizing to `visibleWhen`, so correctly-authored metadata parses unchanged.
+The companion lint rule (`visibility-root-mislayered`) is now bidirectional
+(#2931): it flags a `data.`-rooted predicate on a runtime view/page *and* a
+`record.`-rooted predicate on a metadata-editing form.
+
+### Multi-org deployments only (ADR-0095)
+
+- **Cross-tenant read leak closed (Layer 0).** A permissive business RLS policy
+  (e.g. `status == 'public'`) can no longer OR-widen tenant scope. Tenant isolation
+  is now AND-composed as the outermost filter (`Layer0(tenant) AND Layer1(business RLS)`);
+  a foreign-org row a business policy matched is now invisible.
+- **Member by-id writes narrow to owner-only.** The previous OR-merge silently
+  widened `owner_only_writes` back to org-wide, so a member could by-id update/delete
+  *any* record in their org. Writes are now owner-scoped as authored. **Migration:**
+  if your deployment intentionally relied on members editing each other's records
+  org-wide, grant an explicit per-object edit permission set (position-distributed)
+  where that is wanted — the baseline `member_default` no longer permits it.
+- **Cross-tenant writes via `organization_id` blocked (insert + update).** A user
+  could previously plant a row into another tenant by supplying a forged
+  `organization_id` on insert, or by reassigning it on update. Both are now denied
+  for user contexts (Layer 0 post-image check, symmetric across insert/update/bulk);
+  `organization_id` is effectively immutable outside system context. Default writes
+  (no `organization_id`) and system-context writes (import, migration, per-org seed
+  replay) are unaffected.
+- **Org admins no longer cross the tenant wall on `private` objects.** The Layer 0
+  cross-tenant exemption is now gated on a genuine platform-admin capability
+  (`manage_metadata` / `manage_platform_settings` / `studio.access` / `manage_users`),
+  not on the `viewAllRecords` / `modifyAllRecords` super-bits that `organization_admin`
+  also holds. On `access.default: 'private'` tenant objects an org admin is now walled
+  to their own organization (previously unfiltered). Genuine platform admins are
+  unaffected; the super-bits continue to drive only the in-org Layer 1 business-RLS
+  short-circuit (TENANT_ADMIN semantics unchanged).
+- **No-active-org writes fail closed.** A write by a principal with no active
+  organization on a tenant object is now denied.
+- **Seeded `tenant_isolation` policy retired.** The wildcard `tenant_isolation`
+  RLS policy is removed from the `organization_admin` / `member_default` /
+  `viewer_readonly` sets (isolation is enforced by Layer 0 instead). The
+  `_self` / `_org` identity-table carve-outs and `owner_only_writes/deletes` are
+  unchanged; customized seeded sets keep their overlays (ADR-0094).
+
+### Enterprise hierarchy RLS (`@objectstack/security-enterprise`)
+
+- **`unit` scope anchors to the position's business unit.** `unit` / `unit_and_below`
+  now prefer `sys_user_position.business_unit_id` (the position's BU) over
+  `sys_business_unit_member` membership. **Deployments that do not populate
+  `sys_user_position.business_unit_id` see no change** (every user falls back to
+  membership). Once anchors are populated, a user's `unit` visibility narrows to
+  their position BU; multiple positions union; expired/inactive positions fall back
+  to membership.
+
+## Behavior changes (15.0.0)
+
+- **Import runs the automation chain per row (#2922).** `engine.insert` now
+  triggers `beforeInsert`/`afterInsert` once per row with single-record hook
+  contexts — flat-input proxies, declarative hook conditions, audit writers,
+  and record-change triggers see real records instead of arrays. A new
+  `ExecutionContext.skipAutomations` (mirrored into `HookContext.session`)
+  suppresses metadata-bound automation hooks and implies `skipTriggers` for
+  flow dispatch — making the import wizard's "run automations & triggers"
+  checkbox and import-undo actually effective; code-registered system hooks
+  (audit, security, sharing) still run. REST import defaults `runAutomations`
+  to **true** unless the request explicitly opts out.
+- **System-row write guardrail on `sys_position` / `sys_capability` (#2930).**
+  Platform/application-published rows (`managed_by: system/config` positions,
+  `managed_by: platform/package` capabilities) could previously be deleted or
+  rewritten directly by a customer admin, silently breaking an app's
+  authorization baseline. A new `assertSystemRowWriteGate` in the data-write
+  hook now guards both — the same two-doors model `sys_permission_set` already
+  had.
+- **Explain posture labels align with enforcement (#2949).** `security.explain`
+  derives its posture evidence from the same enforcement path, eliminating
+  label drift between what the panel says and what the kernel does.
+
+## Non-breaking hardening in 15.0.0 (same effective visibility)
+
+- **RLS safety nets recognize canonical `==` (#2936).** The field-existence /
+  tenancy-disabled nets were inert for `==`-form policies; now recognized. Only
+  visible effect: on column-less system tables a member's by-id write is now an
+  explicit fail-closed deny rather than a phantom-column filter — same result.
+- **Self-delegation position anchors are subtree-constrained (#2945).** A delegated
+  position's `business_unit_id` must fall within the delegator's own effective
+  anchor — closing a lateral-visibility escalation the position-anchor change
+  would otherwise have opened.
+- **Hierarchy resolver queries are org-scoped (defense in depth).** Owner-id resolution
+  now filters by organization directly, and private hierarchy-scoped objects that lack
+  an `organization_id` column fail closed at boot.
+
 # What's new in 15.1.0
 
 15.1 is a fast-follow minor (87 commits, 65 changesets — 60 minor + 62 patch,
@@ -297,222 +349,6 @@ and **declarative connectors** (ADR-0096/0097 — REST/OpenAPI/MCP integrations
 wired purely from metadata). Strict-semver edges are listed under *Behavior
 changes* with their migrations. The bundled Console picks up the objectui 14.1
 line (94 commits) — see its own section below.
-
-## Behavior changes (15.1.0)
-
-### Spec: `tenancy.strategy` and `tenancy.crossTenantAccess` removed (#2962)
-
-Strict-semver breaking, shipped in a minor under the launch-window policy: both
-fields had **zero consumers** and no runtime behavior. The `tenancy` block is now
-`.strict()` — unknown keys are a loud parse error with tombstone guidance instead
-of being silently stripped. **Migration:**
-
-- `tenancy: { enabled: false, strategy: 'shared' }` → `tenancy: { enabled: false }`
-- `tenancy: { enabled: true, strategy: '…', tenantField: 'x', crossTenantAccess: false }`
-  → `tenancy: { enabled: true, tenantField: 'x' }`
-- Per-tenant databases are a deployment concern (environment-per-database, ADR-0002),
-  not object metadata. Cross-tenant visibility is expressed via sharing rules / OWD
-  (`externalSharingModel`).
-
-### 'ObjectOS' retired from the spec's public surface (#2963, #2960)
-
-Layer vocabulary converges on **ObjectQL (data) / Kernel (control) / ObjectUI (view)**;
-"ObjectOS" now refers exclusively to the commercial runtime environment. Three
-public identifiers renamed, with deprecated aliases kept for one release:
-`ObjectOSCapabilitiesSchema` → `KernelCapabilitiesSchema`, `ObjectOSCapabilities` →
-`KernelCapabilities`, `ObjectOSKernel` → `IKernel` (`PluginContext.os` is now typed
-`IKernel`). Find/replace is the whole migration; schema shapes and JSON output are
-unchanged. Docs moved from `protocol/objectos` to `protocol/kernel`.
-
-### Anonymous access denied uniformly across HTTP surfaces (#2567)
-
-Under `requireAuth` (the secure default), anonymous `POST /graphql` and the raw
-`/data` routes now return 401 — previously they bypassed the gate and reached
-ObjectQL directly, so the same object data an authenticated route protected
-could be read anonymously through a different door. The dispatcher's
-`requireAuth` default aligns with the REST plugin (`?? true`). **Migration:**
-deployments that genuinely serve these surfaces publicly must opt out
-explicitly with `requireAuth: false` (boot warns). All anonymous-deny seams
-converge on one shared `shouldDenyAnonymous` in `@objectstack/core`, the
-`/security/suggested-bindings` admin surface hardcodes `requireAuth: true`, 401
-bodies unify on `code: 'unauthenticated'`, and the authz-conformance matrix
-ratchets newly added `/data`/`/meta`/`/graphql` routes — an unclassified new
-route fails CI.
-
-### Server-enforced `readonly` / `readonlyWhen` on UPDATE (#2948, #3042, #3003)
-
-`readonly: true` was documented as a server contract but only enforced in the
-UI — issue #3003 confirmed approval/status/amount columns could be forged via a
-plain REST `PATCH` on 15.0.0 (e.g. self-approving by patching an
-approval-status column).
-Non-system UPDATEs now **strip** caller-supplied writes to static `readonly`
-fields, and `readonlyWhen` predicates are enforced on the multi-row UPDATE path
-too. Server stamps (audit hooks' `updated_by`/`updated_at`), write middleware,
-and `isSystem` writes (import/seed/approvals/lifecycle) are unaffected.
-Multi-row semantics are fail-safe: if **any** matched row locks a field, that
-field is dropped for the whole batch — narrow the `where` to unlocked rows to
-write it. The docs now describe `readonly` as a server contract, not "read-only
-in UI".
-
-### Ownership anchor (`owner_id`) is guarded (#3004, #2982, #3018)
-
-Unprivileged writers can no longer forge another user's `owner_id` on insert or
-reassign it on update; transfers require a transfer grant (`allowTransfer`, or
-`modifyAllRecords` which implies it). Non-scalar `owner_id` payloads are
-rejected outright (prototype-pollution safe, own-property semantics). Empty
-`owner_id` on insert is stamped to the current user — now on bulk rows too
-(previously bulk-inserted rows were NULL-owned and invisible even to their
-creator). Bulk writes (`update({multi:true})`, bulk delete) are now scoped by
-the caller's owner/RLS **write** filter and fail closed if the scoping AST is
-missing; a non-system bulk write with no userId on an owner-scoped object now
-affects 0 rows instead of all of them. Engine-internal referential cascades
-(`set_null` on user deletion) are exempted via a server-side
-`__referentialFieldClear` marker that cannot be forged from a client (#3048) —
-without it, deleting a user tripped the guard mid-cascade and left partial
-state. **Note:** REST import runs as the importing user — a non-privileged user
-importing a CSV with someone else's `owner_id` column is now correctly
-rejected unless they hold a transfer grant; admins with `modifyAllRecords` are
-unaffected.
-
-### MCP action surface gated on `ai.exposed`, fail-closed (#2964)
-
-Action bodies execute as trusted code (the engine facade carries no
-ExecutionContext, so internal reads/writes bypass RLS/FLS/CRUD/tenant scoping),
-yet MCP `run_action` could invoke any headless action. Actions that should
-remain invocable by AI agents must now declare
-`ai: { exposed: true, description: '…' }` (description ≥ 40 chars). Other
-surfaces (UI, REST `/actions/...`) are unchanged. Flow-type actions now receive
-the caller's identity as a real `AutomationContext` (`runAs: 'user'` flows
-evaluate RLS as the caller), and trusted-body invocations are audit-logged on
-both the MCP and REST paths.
-
-### Declarative stdio MCP transports are deny-by-default (#3055)
-
-A declarative `stdio` transport spawns a local child process from metadata — and
-Studio runtime publish can introduce such metadata. Previously-materializing
-declarative stdio instances are now treated as a **configuration error** (boot
-fatal / reload skip), never retried as "upstream unavailable" (a security
-refusal must not be resurrected by the retry loop). **Migration:** hosts opt in
-explicitly — `new ConnectorMcpPlugin({ declarativeStdio: ['my-mcp-server'] })`
-(command allowlist) or `{ declarativeStdio: true }` (full trust). `http`
-transports and hand-wired connectors are unaffected. This gate is the security
-precondition for shipping connector-mcp in the default preset (#3056).
-
-### OWD posture enforced at metadata-save time (#3050)
-
-A new `registerAuthoringGate(type, gate)` seam in `metadata-protocol` runs
-pre-persistence for draft and publish saves (environment writes only).
-`plugin-security` registers the object posture gate on it: an environment
-overlay over a packaged object can only **tighten**
-`sharingModel` / `externalSharingModel` (ADR-0086 D1 — closing the
-`OS_METADATA_WRITABLE=object` unvalidated-widening hole), and
-`externalSharingModel ≤ sharingModel` (ADR-0090 D11) is now rejected at save
-time rather than only flagged by CLI lint. Already-stored metadata loads
-unchanged.
-
-### Attachments: dead fields removed, downloads authenticated (#2755, #2970)
-
-- **REMOVED: `sys_attachment.share_type` / `sys_attachment.visibility`** — modeled
-  in v1 but with zero runtime consumers. No replacement key: access derives from the
-  parent record. Stop sending these fields (unknown-field validation rejects them);
-  existing DB columns remain as unmanaged leftovers, no data migration needed.
-- **Attachment downloads are no longer anonymous capability URLs.** For
-  `scope === 'attachments'` files that are not `public_read`,
-  `GET /storage/files/:fileId` and `/url` require a session (401 `AUTH_REQUIRED`)
-  plus parent-derived read access (403 `ATTACHMENT_DOWNLOAD_DENIED`) and return a
-  short-lived signed URL (default `downloadTtl` 300s). Field files, avatars, and org
-  logos (embedded in `<img src>`) keep stable anonymous URLs; bare kernels that
-  never wired the auth seam remain open for back-compat.
-- **`sys_attachment.enable.trash` is now `false`** — attachment deletion is a hard
-  delete (declaring the honest state; reap guards reclaim bytes, and a restore
-  would dangle).
-- **Attaching to a record now requires parent EDIT** (was: parent READ), matching
-  Salesforce semantics (#2970 item 3).
-
-### Other semantics worth knowing
-
-- `ConnectorSchema.authentication` defaults to `{ type: 'none' }` (a relaxation;
-  existing connectors unaffected).
-- Aggregate queries gate FLS on the **input** side: a groupBy/aggregate
-  referencing an FLS-unreadable field is rejected fail-closed with the field
-  named — output rows carry only aliases, so the result-masking pass can never
-  run; the input side is where the leak is stopped (#2976). Aggregates map to
-  the `list` ApiMethod (objects excluding `list` can't leak row statistics via
-  GROUP BY), and at least one aggregate is required (no degenerate bare-row
-  scans past the FLS masker).
-- `findData` rejects unknown `$`-prefixed query params with 400
-  `UNSUPPORTED_QUERY_PARAM` (naming the supported aliases) instead of silently
-  treating them as an implicit equality filter matching zero rows (#2926 ⑩).
-  Bare-key implicit equality is unchanged.
-- `getReadFilter` returns a fail-closed deny sentinel for on-behalf-of
-  (delegated) contexts on the analytics/raw-SQL read path — a latent-invariant
-  guard until D10 delegation intersection is implemented there; no production
-  surface reaches it today (#2852, #2988).
-- The FormView `buttons` + `defaults` config (#3014) is **EXPERIMENTAL —
-  declared in the spec but not yet enforced by the Console renderer** (pending
-  objectui#2545). Authoring it today is a declaration, not behavior.
-
-## Security hardening (15.1.0)
-
-Beyond the behavior changes above, an execution-surface sweep (#2849 class)
-closed three confirmed-exploitable holes (#2975), and a second sweep hardened
-seeding and expansion:
-
-- **Reports IDOR + scheduled-report RLS bypass (#2980).** `ReportService` dropped
-  the caller context and read/wrote `sys_saved_report` as system — any authenticated
-  user could read/delete/overwrite any saved report by id, and scheduled dispatch
-  emailed entire tables (`isSystem` reads). Now owner-scoped; scheduled dispatch
-  resolves the owner's real RLS context and **fails closed** (skip + mark failed)
-  when it can't.
-- **Knowledge/RAG fall-open (#2981).** `applyPermissionFilter` returned all hits
-  when the context was missing — an agent omitting `ToolExecutionContext.actor` got
-  unfiltered semantic search over the whole corpus. Missing identity now fails
-  closed; only an explicit system context passes unfiltered.
-- **`$expand` cross-object leak (#2850, #2961).** Expanding a reference resolved
-  the target rows directly against the driver — the referenced object's RLS and
-  FLS never executed, so any caller who could read the base row could pull back
-  RLS-hidden rows and FLS-masked fields of the referenced object. Expansion now
-  batches through the engine `find` path; PUBLIC referenced objects are exempted
-  only from the object-level CRUD gate via a server-side `__expandRead` marker;
-  PRIVATE objects keep every gate.
-- **Public-form anchor forgery (#3022, #3036).** Zero-declared-field public forms
-  fell back to merging the raw body wholesale, letting anonymous visitors POST
-  `owner_id` / `organization_id` / audit columns / `id`. Server-managed fields
-  are now stripped at the data layer (`publicFormGrant` branch, batch included)
-  *and* excluded at the route layer (allow-list, resolve route, lookup
-  `publicPicker` deny on managed anchors) — from a single shared
-  `PUBLIC_FORM_SERVER_MANAGED_FIELDS` definition. Authenticated writes are
-  unaffected.
-- **Bulk-write predicate guard scoped to the caller's filter (#3053).** The
-  anti-oracle predicate guard now inspects the caller's original
-  `options.where` rather than an AST a sibling middleware may already have
-  injected an owner filter into — removing a middleware-order-dependent false
-  403 — and pre-image reads are deduplicated.
-- **Seed-not-clobber (#2909 P0/T1, T3).** An admin's `active: false` on an
-  overshared sharing rule is no longer resurrected by boot seeding, and the
-  curated capability seeder no longer overwrites an admin's re-categorized
-  `scope` on every boot — `managed_by` / `customized` provenance columns land
-  on both.
-- **`sys_position` system-row write gate re-armed (#2926 ①).** After the A4
-  `managed_by` vocabulary rename, the 15.0.0 gate (#2930) still checked the old
-  vocabulary — platform/package-managed positions (including the
-  `everyone`/`guest` anchors) could be physically deleted via the data API once
-  unbound. The gate now recognizes both vocabularies.
-- **GraphQL / realtime identity pre-wiring (#2992, #3013, ADR-0096 D4).** Two
-  surfaces that are not client-reachable today are fixed and CI-pinned before a
-  real transport lands: the GraphQL entry resolves and threads an
-  ExecutionContext (conformance-matrix row `graphql-identity-thread`), realtime
-  registers its pure fan-out posture as an experimental matrix row plus a
-  transport TRIPWIRE (newly wiring a WebSocket/SSE fails CI), and the
-  `service-realtime` README stops advertising APIs (`authorizeChannel` et al.)
-  that don't exist.
-- **better-auth pinned to 1.7.0-rc.1** for GHSA-p2fr-6hmx-4528
-  (`@better-auth/oauth-provider`), with the ObjectQL adapter implementing the
-  new `consumeOne`/`incrementOne` contracts and `sys_jwks` gaining `alg`/`crv`
-  columns — without which JWKS writes 500'd and every authenticated request
-  after login returned 401 (#2974).
-- **CI:** the retired `pnpm audit` is replaced by OSV-Scanner in validate-deps
-  (#2986).
 
 ## New capabilities in 15.1.0
 
@@ -705,35 +541,6 @@ search guide with `sys_user`/picker coverage and existing-row backfill notes
   summaries use the object's display label instead of its API name (#3029).
 - New lint: `field-group-shadowed` warns when a field group is silently
   shadowed (#3029).
-
-## Notable fixes (15.1.0)
-
-- **Studio metadata editing under spec 15:** lazy schema proxies stay
-  identity-compatible with `z.toJSONSchema` — the Page/View inspector no longer
-  crashes with `Cannot set properties of undefined (setting 'ref')`
-  (objectui#2561, #3021). Parse behavior is unchanged; `OS_EAGER_SCHEMAS=1`
-  remains a bypass.
-- **Sharing rules apply to seeded demo data out of the box (#2926 ③):**
-  seed-loader records never produced `sys_record_share` rows (the write hook
-  skips `isSystem`), so demo data with sharing rules was born broken. An
-  idempotent boot backfill on `kernel:listening` now materializes them; a
-  single bad rule doesn't block startup.
-- **Package management REST:** `PATCH /packages/:id` is actually routed —
-  edit-manifest requests used to never reach the handler (#2995); duplicate
-  `POST /packages` ids return 409 (#2971); the client SDK's `packages.install`
-  passes `overwrite` for upgrade flows (#3007).
-- **Create User:** an explicitly typed password wins over the dialog's default
-  `generatePassword: true` instead of erroring 400 "Provide either … not both"
-  (#3031).
-- **REST status passthrough (#2926 ⑦):** record-level 403 FORBIDDEN from
-  plugin-sharing no longer degrades to a bare code-less 400; structured 409
-  envelopes (CONCURRENT_UPDATE et al.) keep their dedicated branch.
-- **`gen:schema` disappearance ratchet (#3012):** an `io:'input'` fallback
-  restores the lost `PageTabsProps` generated schema, and CI now fails if a
-  generated schema disappears.
-- **`isDefault` dual-track documented (#2926 ②):** app-level `isDefault`
-  auto-binds `everyone`; package-level only emits a suggestion — fixing the
-  previously self-contradictory "never auto-bound" wording (doc-only).
 
 ## New in Console (Studio) — bundled objectui 14.1
 
@@ -968,6 +775,251 @@ guide tutorial with real screenshots, and en/zh filter-bar i18n (#2581).
 - **Removals:** the zero-consumer `@object-ui/tenant` package (#2566), the
   duplicate FormRenderer/FieldFactory form path (#2560), and the legacy
   monolith detail renderer (#2546).
+
+## Behavior changes (15.1.0)
+
+### Spec: `tenancy.strategy` and `tenancy.crossTenantAccess` removed (#2962)
+
+Strict-semver breaking, shipped in a minor under the launch-window policy: both
+fields had **zero consumers** and no runtime behavior. The `tenancy` block is now
+`.strict()` — unknown keys are a loud parse error with tombstone guidance instead
+of being silently stripped. **Migration:**
+
+- `tenancy: { enabled: false, strategy: 'shared' }` → `tenancy: { enabled: false }`
+- `tenancy: { enabled: true, strategy: '…', tenantField: 'x', crossTenantAccess: false }`
+  → `tenancy: { enabled: true, tenantField: 'x' }`
+- Per-tenant databases are a deployment concern (environment-per-database, ADR-0002),
+  not object metadata. Cross-tenant visibility is expressed via sharing rules / OWD
+  (`externalSharingModel`).
+
+### 'ObjectOS' retired from the spec's public surface (#2963, #2960)
+
+Layer vocabulary converges on **ObjectQL (data) / Kernel (control) / ObjectUI (view)**;
+"ObjectOS" now refers exclusively to the commercial runtime environment. Three
+public identifiers renamed, with deprecated aliases kept for one release:
+`ObjectOSCapabilitiesSchema` → `KernelCapabilitiesSchema`, `ObjectOSCapabilities` →
+`KernelCapabilities`, `ObjectOSKernel` → `IKernel` (`PluginContext.os` is now typed
+`IKernel`). Find/replace is the whole migration; schema shapes and JSON output are
+unchanged. Docs moved from `protocol/objectos` to `protocol/kernel`.
+
+### Anonymous access denied uniformly across HTTP surfaces (#2567)
+
+Under `requireAuth` (the secure default), anonymous `POST /graphql` and the raw
+`/data` routes now return 401 — previously they bypassed the gate and reached
+ObjectQL directly, so the same object data an authenticated route protected
+could be read anonymously through a different door. The dispatcher's
+`requireAuth` default aligns with the REST plugin (`?? true`). **Migration:**
+deployments that genuinely serve these surfaces publicly must opt out
+explicitly with `requireAuth: false` (boot warns). All anonymous-deny seams
+converge on one shared `shouldDenyAnonymous` in `@objectstack/core`, the
+`/security/suggested-bindings` admin surface hardcodes `requireAuth: true`, 401
+bodies unify on `code: 'unauthenticated'`, and the authz-conformance matrix
+ratchets newly added `/data`/`/meta`/`/graphql` routes — an unclassified new
+route fails CI.
+
+### Server-enforced `readonly` / `readonlyWhen` on UPDATE (#2948, #3042, #3003)
+
+`readonly: true` was documented as a server contract but only enforced in the
+UI — issue #3003 confirmed approval/status/amount columns could be forged via a
+plain REST `PATCH` on 15.0.0 (e.g. self-approving by patching an
+approval-status column).
+Non-system UPDATEs now **strip** caller-supplied writes to static `readonly`
+fields, and `readonlyWhen` predicates are enforced on the multi-row UPDATE path
+too. Server stamps (audit hooks' `updated_by`/`updated_at`), write middleware,
+and `isSystem` writes (import/seed/approvals/lifecycle) are unaffected.
+Multi-row semantics are fail-safe: if **any** matched row locks a field, that
+field is dropped for the whole batch — narrow the `where` to unlocked rows to
+write it. The docs now describe `readonly` as a server contract, not "read-only
+in UI".
+
+### Ownership anchor (`owner_id`) is guarded (#3004, #2982, #3018)
+
+Unprivileged writers can no longer forge another user's `owner_id` on insert or
+reassign it on update; transfers require a transfer grant (`allowTransfer`, or
+`modifyAllRecords` which implies it). Non-scalar `owner_id` payloads are
+rejected outright (prototype-pollution safe, own-property semantics). Empty
+`owner_id` on insert is stamped to the current user — now on bulk rows too
+(previously bulk-inserted rows were NULL-owned and invisible even to their
+creator). Bulk writes (`update({multi:true})`, bulk delete) are now scoped by
+the caller's owner/RLS **write** filter and fail closed if the scoping AST is
+missing; a non-system bulk write with no userId on an owner-scoped object now
+affects 0 rows instead of all of them. Engine-internal referential cascades
+(`set_null` on user deletion) are exempted via a server-side
+`__referentialFieldClear` marker that cannot be forged from a client (#3048) —
+without it, deleting a user tripped the guard mid-cascade and left partial
+state. **Note:** REST import runs as the importing user — a non-privileged user
+importing a CSV with someone else's `owner_id` column is now correctly
+rejected unless they hold a transfer grant; admins with `modifyAllRecords` are
+unaffected.
+
+### MCP action surface gated on `ai.exposed`, fail-closed (#2964)
+
+Action bodies execute as trusted code (the engine facade carries no
+ExecutionContext, so internal reads/writes bypass RLS/FLS/CRUD/tenant scoping),
+yet MCP `run_action` could invoke any headless action. Actions that should
+remain invocable by AI agents must now declare
+`ai: { exposed: true, description: '…' }` (description ≥ 40 chars). Other
+surfaces (UI, REST `/actions/...`) are unchanged. Flow-type actions now receive
+the caller's identity as a real `AutomationContext` (`runAs: 'user'` flows
+evaluate RLS as the caller), and trusted-body invocations are audit-logged on
+both the MCP and REST paths.
+
+### Declarative stdio MCP transports are deny-by-default (#3055)
+
+A declarative `stdio` transport spawns a local child process from metadata — and
+Studio runtime publish can introduce such metadata. Previously-materializing
+declarative stdio instances are now treated as a **configuration error** (boot
+fatal / reload skip), never retried as "upstream unavailable" (a security
+refusal must not be resurrected by the retry loop). **Migration:** hosts opt in
+explicitly — `new ConnectorMcpPlugin({ declarativeStdio: ['my-mcp-server'] })`
+(command allowlist) or `{ declarativeStdio: true }` (full trust). `http`
+transports and hand-wired connectors are unaffected. This gate is the security
+precondition for shipping connector-mcp in the default preset (#3056).
+
+### OWD posture enforced at metadata-save time (#3050)
+
+A new `registerAuthoringGate(type, gate)` seam in `metadata-protocol` runs
+pre-persistence for draft and publish saves (environment writes only).
+`plugin-security` registers the object posture gate on it: an environment
+overlay over a packaged object can only **tighten**
+`sharingModel` / `externalSharingModel` (ADR-0086 D1 — closing the
+`OS_METADATA_WRITABLE=object` unvalidated-widening hole), and
+`externalSharingModel ≤ sharingModel` (ADR-0090 D11) is now rejected at save
+time rather than only flagged by CLI lint. Already-stored metadata loads
+unchanged.
+
+### Attachments: dead fields removed, downloads authenticated (#2755, #2970)
+
+- **REMOVED: `sys_attachment.share_type` / `sys_attachment.visibility`** — modeled
+  in v1 but with zero runtime consumers. No replacement key: access derives from the
+  parent record. Stop sending these fields (unknown-field validation rejects them);
+  existing DB columns remain as unmanaged leftovers, no data migration needed.
+- **Attachment downloads are no longer anonymous capability URLs.** For
+  `scope === 'attachments'` files that are not `public_read`,
+  `GET /storage/files/:fileId` and `/url` require a session (401 `AUTH_REQUIRED`)
+  plus parent-derived read access (403 `ATTACHMENT_DOWNLOAD_DENIED`) and return a
+  short-lived signed URL (default `downloadTtl` 300s). Field files, avatars, and org
+  logos (embedded in `<img src>`) keep stable anonymous URLs; bare kernels that
+  never wired the auth seam remain open for back-compat.
+- **`sys_attachment.enable.trash` is now `false`** — attachment deletion is a hard
+  delete (declaring the honest state; reap guards reclaim bytes, and a restore
+  would dangle).
+- **Attaching to a record now requires parent EDIT** (was: parent READ), matching
+  Salesforce semantics (#2970 item 3).
+
+### Other semantics worth knowing
+
+- `ConnectorSchema.authentication` defaults to `{ type: 'none' }` (a relaxation;
+  existing connectors unaffected).
+- Aggregate queries gate FLS on the **input** side: a groupBy/aggregate
+  referencing an FLS-unreadable field is rejected fail-closed with the field
+  named — output rows carry only aliases, so the result-masking pass can never
+  run; the input side is where the leak is stopped (#2976). Aggregates map to
+  the `list` ApiMethod (objects excluding `list` can't leak row statistics via
+  GROUP BY), and at least one aggregate is required (no degenerate bare-row
+  scans past the FLS masker).
+- `findData` rejects unknown `$`-prefixed query params with 400
+  `UNSUPPORTED_QUERY_PARAM` (naming the supported aliases) instead of silently
+  treating them as an implicit equality filter matching zero rows (#2926 ⑩).
+  Bare-key implicit equality is unchanged.
+- `getReadFilter` returns a fail-closed deny sentinel for on-behalf-of
+  (delegated) contexts on the analytics/raw-SQL read path — a latent-invariant
+  guard until D10 delegation intersection is implemented there; no production
+  surface reaches it today (#2852, #2988).
+- The FormView `buttons` + `defaults` config (#3014) is **EXPERIMENTAL —
+  declared in the spec but not yet enforced by the Console renderer** (pending
+  objectui#2545). Authoring it today is a declaration, not behavior.
+
+## Security hardening (15.1.0)
+
+Beyond the behavior changes above, an execution-surface sweep (#2849 class)
+closed three confirmed-exploitable holes (#2975), and a second sweep hardened
+seeding and expansion:
+
+- **Reports IDOR + scheduled-report RLS bypass (#2980).** `ReportService` dropped
+  the caller context and read/wrote `sys_saved_report` as system — any authenticated
+  user could read/delete/overwrite any saved report by id, and scheduled dispatch
+  emailed entire tables (`isSystem` reads). Now owner-scoped; scheduled dispatch
+  resolves the owner's real RLS context and **fails closed** (skip + mark failed)
+  when it can't.
+- **Knowledge/RAG fall-open (#2981).** `applyPermissionFilter` returned all hits
+  when the context was missing — an agent omitting `ToolExecutionContext.actor` got
+  unfiltered semantic search over the whole corpus. Missing identity now fails
+  closed; only an explicit system context passes unfiltered.
+- **`$expand` cross-object leak (#2850, #2961).** Expanding a reference resolved
+  the target rows directly against the driver — the referenced object's RLS and
+  FLS never executed, so any caller who could read the base row could pull back
+  RLS-hidden rows and FLS-masked fields of the referenced object. Expansion now
+  batches through the engine `find` path; PUBLIC referenced objects are exempted
+  only from the object-level CRUD gate via a server-side `__expandRead` marker;
+  PRIVATE objects keep every gate.
+- **Public-form anchor forgery (#3022, #3036).** Zero-declared-field public forms
+  fell back to merging the raw body wholesale, letting anonymous visitors POST
+  `owner_id` / `organization_id` / audit columns / `id`. Server-managed fields
+  are now stripped at the data layer (`publicFormGrant` branch, batch included)
+  *and* excluded at the route layer (allow-list, resolve route, lookup
+  `publicPicker` deny on managed anchors) — from a single shared
+  `PUBLIC_FORM_SERVER_MANAGED_FIELDS` definition. Authenticated writes are
+  unaffected.
+- **Bulk-write predicate guard scoped to the caller's filter (#3053).** The
+  anti-oracle predicate guard now inspects the caller's original
+  `options.where` rather than an AST a sibling middleware may already have
+  injected an owner filter into — removing a middleware-order-dependent false
+  403 — and pre-image reads are deduplicated.
+- **Seed-not-clobber (#2909 P0/T1, T3).** An admin's `active: false` on an
+  overshared sharing rule is no longer resurrected by boot seeding, and the
+  curated capability seeder no longer overwrites an admin's re-categorized
+  `scope` on every boot — `managed_by` / `customized` provenance columns land
+  on both.
+- **`sys_position` system-row write gate re-armed (#2926 ①).** After the A4
+  `managed_by` vocabulary rename, the 15.0.0 gate (#2930) still checked the old
+  vocabulary — platform/package-managed positions (including the
+  `everyone`/`guest` anchors) could be physically deleted via the data API once
+  unbound. The gate now recognizes both vocabularies.
+- **GraphQL / realtime identity pre-wiring (#2992, #3013, ADR-0096 D4).** Two
+  surfaces that are not client-reachable today are fixed and CI-pinned before a
+  real transport lands: the GraphQL entry resolves and threads an
+  ExecutionContext (conformance-matrix row `graphql-identity-thread`), realtime
+  registers its pure fan-out posture as an experimental matrix row plus a
+  transport TRIPWIRE (newly wiring a WebSocket/SSE fails CI), and the
+  `service-realtime` README stops advertising APIs (`authorizeChannel` et al.)
+  that don't exist.
+- **better-auth pinned to 1.7.0-rc.1** for GHSA-p2fr-6hmx-4528
+  (`@better-auth/oauth-provider`), with the ObjectQL adapter implementing the
+  new `consumeOne`/`incrementOne` contracts and `sys_jwks` gaining `alg`/`crv`
+  columns — without which JWKS writes 500'd and every authenticated request
+  after login returned 401 (#2974).
+- **CI:** the retired `pnpm audit` is replaced by OSV-Scanner in validate-deps
+  (#2986).
+
+## Notable fixes (15.1.0)
+
+- **Studio metadata editing under spec 15:** lazy schema proxies stay
+  identity-compatible with `z.toJSONSchema` — the Page/View inspector no longer
+  crashes with `Cannot set properties of undefined (setting 'ref')`
+  (objectui#2561, #3021). Parse behavior is unchanged; `OS_EAGER_SCHEMAS=1`
+  remains a bypass.
+- **Sharing rules apply to seeded demo data out of the box (#2926 ③):**
+  seed-loader records never produced `sys_record_share` rows (the write hook
+  skips `isSystem`), so demo data with sharing rules was born broken. An
+  idempotent boot backfill on `kernel:listening` now materializes them; a
+  single bad rule doesn't block startup.
+- **Package management REST:** `PATCH /packages/:id` is actually routed —
+  edit-manifest requests used to never reach the handler (#2995); duplicate
+  `POST /packages` ids return 409 (#2971); the client SDK's `packages.install`
+  passes `overwrite` for upgrade flows (#3007).
+- **Create User:** an explicitly typed password wins over the dialog's default
+  `generatePassword: true` instead of erroring 400 "Provide either … not both"
+  (#3031).
+- **REST status passthrough (#2926 ⑦):** record-level 403 FORBIDDEN from
+  plugin-sharing no longer degrades to a bare code-less 400; structured 409
+  envelopes (CONCURRENT_UPDATE et al.) keep their dedicated branch.
+- **`gen:schema` disappearance ratchet (#3012):** an `io:'input'` fallback
+  restores the lost `PageTabsProps` generated schema, and CI now fails if a
+  generated schema disappears.
+- **`isDefault` dual-track documented (#2926 ②):** app-level `isDefault`
+  auto-binds `everyone`; package-level only emits a suggestion — fixing the
+  previously self-contradictory "never auto-bound" wording (doc-only).
 
 ## Upgrade checklist
 
