@@ -28,6 +28,22 @@ const LEVEL_COLORS: Record<LogLevel, string> = {
 
 const RESET = '\x1b[0m';
 
+/**
+ * Whether ANSI color may be written to the given stream.
+ *
+ * Follows the https://no-color.org convention: a non-empty `NO_COLOR` env var
+ * disables color regardless of TTY, and non-TTY destinations (pipes, CI logs,
+ * redirected output) always get plain text so plain-text log scanners see
+ * uncolored level tags. Browser bundles have no `process`/TTY → plain text.
+ */
+function colorEnabled(stream: { isTTY?: boolean } | undefined): boolean {
+    if (typeof process !== 'undefined') {
+        const noColor = (process as any).env?.NO_COLOR;
+        if (noColor !== undefined && noColor !== '') return false;
+    }
+    return Boolean(stream?.isTTY);
+}
+
 export class ObjectLogger implements Logger {
     private config: Required<Omit<LoggerConfig, 'file' | 'rotation' | 'name'>> & {
         file?: string;
@@ -96,10 +112,15 @@ export class ObjectLogger implements Logger {
         const hasContext = Object.keys(context).length > 0;
         const ts = new Date().toISOString();
 
-        let line: string;
+        const isErrorLevel = level === 'error' || level === 'fatal';
+        const proc = typeof process !== 'undefined' ? (process as any) : undefined;
+        const stream = proc ? (isErrorLevel ? proc.stderr : proc.stdout) : undefined;
+
+        let line: string; // console output — may carry ANSI color
+        let plainLine: string; // file output — never colored
 
         if (this.config.format === 'json') {
-            line = JSON.stringify({
+            line = plainLine = JSON.stringify({
                 time: ts,
                 level,
                 ...(this.config.name ? { name: this.config.name } : {}),
@@ -109,27 +130,26 @@ export class ObjectLogger implements Logger {
         } else if (this.config.format === 'text') {
             const parts = [ts, level.toUpperCase(), message];
             if (hasContext) parts.push(JSON.stringify(context));
-            line = parts.join(' | ');
+            line = plainLine = parts.join(' | ');
         } else {
             // pretty
-            const color = LEVEL_COLORS[level] || '';
             const label = this.config.name ? `[${this.config.name}] ` : '';
-            line = `${color}${ts} ${level.toUpperCase()}${RESET} ${label}${message}`;
-            if (hasContext) line += ` ${JSON.stringify(context)}`;
+            const head = `${ts} ${level.toUpperCase()}`;
+            let tail = ` ${label}${message}`;
+            if (hasContext) tail += ` ${JSON.stringify(context)}`;
+            plainLine = head + tail;
+            const color = LEVEL_COLORS[level] || '';
+            line = color && colorEnabled(stream) ? `${color}${head}${RESET}${tail}` : plainLine;
         }
 
-        const out = line + '\n';
-
         // Browser-safe output: prefer process streams when available, otherwise
-        // fall back to console. The previous unguarded `process.stderr?.write`
-        // throws `ReferenceError: process is not defined` in browsers because
+        // fall back to console. `process` may be missing entirely (browsers) or
+        // present without stdio streams (bundler shims) — both fall through to
+        // console. The previous unguarded `process.stderr?.write` threw
+        // `ReferenceError: process is not defined` in browsers because
         // `process` itself is the missing global, not just its `stderr` field.
-        if (typeof process !== 'undefined' && (process as any).stderr) {
-            if (level === 'error' || level === 'fatal') {
-                (process as any).stderr.write(out);
-            } else {
-                (process as any).stdout?.write(out);
-            }
+        if (stream) {
+            stream.write(line + '\n');
         } else if (typeof console !== 'undefined') {
             const fn =
                 level === 'error' || level === 'fatal' ? console.error
@@ -140,7 +160,7 @@ export class ObjectLogger implements Logger {
         }
 
         if (this.fileStream) {
-            this.fileStream.write(out);
+            this.fileStream.write(plainLine + '\n');
         }
     }
 
