@@ -152,8 +152,8 @@ Each node performs a specific action in the flow.
   label: 'Check Status',
   config: {
     conditions: [
-      { label: 'Approved', expression: "status == 'approved'" },
-      { label: 'Rejected', expression: "status == 'rejected'" },
+      { label: 'Approved', expression: "{status} == 'approved'" },
+      { label: 'Rejected', expression: "{status} == 'rejected'" },
     ],
   },
 }

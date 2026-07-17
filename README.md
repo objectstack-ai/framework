@@ -1,60 +1,103 @@
 # ObjectStack
 
-![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue.svg)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](./LICENSE)
-![Version](https://img.shields.io/badge/version-v4.0.1-green.svg)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue.svg)
 ![Tests](https://img.shields.io/badge/tests-6%2C507%20passing-brightgreen.svg)
 
-> **A metadata protocol and TypeScript toolkit for AI-native business apps.** Describe your objects, permissions, workflows, APIs, UI, and AI tools once as typed, version-controlled Zod metadata — and ObjectStack derives the TypeScript types, REST API, client SDK, UI, and MCP tools from that single definition.
+> ## AI writes the app. ObjectStack is what it writes.
+>
+> The open target format and runtime for AI-written business apps. Your coding
+> agent writes models, UI, workflows, and permissions as compact typed metadata —
+> often around 1% of a traditional codebase — and strict TypeScript, Zod schemas,
+> and a validation gate catch its mistakes at authoring time. The runtime derives
+> the database, REST API, UI, and MCP server, and enforces permissions and audit
+> on every call.
 
-This repo is the **framework**: the protocol, kernel, SDK, CLI, and production runtime you build — and ship — with. `os start` or the official Docker image [`ghcr.io/objectstack-ai/objectstack`](./docker) runs your compiled app in production, Console and governance included, entirely on open source.  · Try a live app in ~30s on [StackBlitz](https://stackblitz.com/github/objectstack-ai/hotcrm) (no install).
+`~1% code surface` · `Typed, validated, governed` · `Self-host anywhere` · Apache-2.0
 
 <p align="center">
   <img src="docs/screenshots/architecture.png" width="940" alt="ObjectStack architecture: author typed Zod metadata (objects, flows, views, policies); the microkernel compiles it into a versioned JSON artifact and loads plugins, drivers, and services; it generates a REST API, client SDK, Console and Studio UI, and MCP tools used by developers and AI agents, governed by Auth, RBAC, RLS, FLS, and audit, over PostgreSQL, MySQL, SQLite, or MongoDB">
-  <br><sub>One typed definition → TypeScript types, REST API, client SDK, UI, and MCP tools.</sub>
+  <br><sub>One typed definition → database · REST API · client SDK · UI · MCP tools.</sub>
 </p>
 
-## What is ObjectStack?
+## The loop
 
-ObjectStack is an **open-source** (Apache-2.0) metadata protocol and toolkit for *describing* business applications — so one typed definition powers your data model, API, UI, and AI tools — plus the production runtime that serves them. AI operates your app under your permissions through the built-in MCP server.
+**1 · Create a project.** The scaffolder installs the AI skills bundle and writes
+an `AGENTS.md`, so your agent starts with the protocol's rules already loaded —
+not with generic "write me some TypeScript" priors.
 
-Instead of hiding business logic inside ad-hoc SQL queries, UI state, or JavaScript strings, ObjectStack makes the business system explicit:
+```bash
+npm create objectstack@latest my-app && cd my-app
+```
 
-- **Business objects** are Zod schemas with typed fields, relations, validation, and permissions.
-- **Business actions** are generated from metadata as REST APIs, SDK calls, and MCP tools.
-- **Business logic** is represented as analyzable metadata: flows, conditions, policies, and artifacts.
-- **Business runtime** is a microkernel that loads plugins, drivers, services, and compiled environment artifacts.
+**2 · Describe the requirement.** Open the project in Claude Code (or Cursor,
+Copilot, …) and say what the business needs:
 
-The goal is not to be another low-code UI builder. ObjectStack is the structured *definition* layer for AI-native business software — agent-ready, versioned, and analyzable; permissions and audit are enforced by the runtime.
+> Build a support desk. Add a `ticket` object with subject, description, a
+> priority select and a status select. Add a **Resolve** action that only shows
+> on tickets that aren't already resolved. Add an "Open tickets" list view and a
+> Support nav group. Run `npm run validate` when you're done.
 
-ObjectStack is built around three layers:
+The agent writes typed metadata — not a codebase. The gate rejects what would
+fail silently at runtime, and the agent fixes it before you ever see it.
 
-- **ObjectQL** (Data Layer) — Objects, fields, queries, relations, validation, and data access.
-- **Kernel** (Control Layer) — Runtime, permissions, automation, plugins, environments, and artifact loading.
-- **ObjectUI** (View Layer) — Apps, views, dashboards, actions, and presentation metadata.
+**3 · Preview in the browser.**
 
-All core definitions start with **Zod schemas** (1,600+ exported schemas across 200 schema files). TypeScript types, JSON Schemas, REST routes, UI metadata, and agent tools are derived from the same source of truth.
+```bash
+npx os dev --ui   # → http://localhost:3000/_console/
+```
 
-See [ARCHITECTURE.md](./ARCHITECTURE.md) for the full microkernel and layer architecture documentation, and [content/docs/concepts/north-star.mdx](./content/docs/concepts/north-star.mdx) for the product north star (metadata protocols · environment-aware runtime · compiled app artifacts).
+The Console renders the real app — records, boards, dashboards. Something wrong?
+Say what to change. **Requirement changes run the same loop**, on a diff you can
+actually read.
 
-## Author your app — in code or in Studio
+<p align="center">
+  <img src="docs/screenshots/modeling.png" width="49%" alt="Studio object designer showing the Opportunity object's typed fields, lookups, and layout sections">
+  <img src="docs/screenshots/automation.png" width="49%" alt="Studio flow designer showing a visual DAG that enrolls leads into a campaign">
+</p>
+<p align="center"><sub>Prefer clicking? Studio authors the same metadata visually — same artifacts, same gate.</sub></p>
 
-Everything is **typed metadata**. Define a business object once — fields, a color-coded picklist, validation — all declarative:
+## What can it actually build?
+
+Point an agent at an empty repo and you get a one-off codebase: every screen
+hand-invented, every mistake yours to find at runtime. ObjectStack gives the
+agent a **vocabulary** instead — typed, validated primitives for what enterprise
+software is actually made of. The agent composes the definition; the runtime
+already knows how to run it.
+
+| | Capability |
+| :--- | :--- |
+| **Objects & fields** | Typed schemas with relations, validation, formulas, files |
+| **Permissions** | RBAC plus row- and field-level security, enforced by the runtime |
+| **Automation** | DAG flows, record triggers, scheduled jobs, webhooks |
+| **Approvals** | Multi-step chains with queues and a full audit trail |
+| **Views** | Lists, kanban, calendars, gantt, galleries — declared, not coded |
+| **Dashboards & reports** | Charts, aggregations, KPIs bound to live data |
+| **Actions** | Permission-checked buttons and server operations |
+| **APIs & SDK** | Generated REST + realtime endpoints, typed client SDK |
+| **AI tools** | Every object and exposed action doubles as a governed MCP tool |
+| **Translations** | Labels and UI text as metadata, per locale |
+| **Seed data** | Fixtures and demo datasets that ship with the app |
+| **Datasources** | PostgreSQL, MySQL, SQLite, MongoDB, or in-memory |
+
+Here's the shape of it — one object, and the database table, REST API, UI views,
+and MCP tools all follow:
 
 ```ts
 import { ObjectSchema, Field } from '@objectstack/spec/data';
 
-export const Task = ObjectSchema.create({
-  name: 'todo_task',
-  label: 'Task',
+export const Ticket = ObjectSchema.create({
+  name: 'support_desk_ticket',
+  label: 'Ticket',
+  sharingModel: 'private',            // org-wide default — the security gate requires it
   fields: {
     subject: Field.text({ label: 'Subject', required: true, searchable: true }),
     status: Field.select({
       label: 'Status',
       required: true,
       options: [
-        { label: 'In Progress', value: 'in_progress', color: '#3B82F6' },
-        { label: 'Completed', value: 'completed', color: '#10B981' },
+        { label: 'Open', value: 'open', color: '#3B82F6', default: true },
+        { label: 'Resolved', value: 'resolved', color: '#10B981' },
       ],
     }),
     due_date: Field.date({ label: 'Due Date' }),
@@ -62,84 +105,82 @@ export const Task = ObjectSchema.create({
 });
 ```
 
-From that single schema, ObjectStack derives the database table, an auto-generated REST API and typed client SDK, UI views (list, board, calendar, Gantt…), and MCP tools for agents — all from one definition.
+## Why the mistakes don't ship
 
-Prefer clicking? Author the same metadata visually in **Studio** — objects, relations, validation, and flows — and it compiles to the exact same artifacts:
+"AI writes it" is only useful if AI's mistakes don't reach production. Four gates
+stand between the agent and your users:
 
-<p align="center">
-  <img src="docs/screenshots/modeling.png" width="49%" alt="Studio object designer showing the Opportunity object's typed fields, lookups, and layout sections">
-  <img src="docs/screenshots/automation.png" width="49%" alt="Studio flow designer showing a visual DAG that enrolls leads into a campaign">
-</p>
-<p align="center"><sub><b>Model</b> objects as typed metadata &nbsp;·&nbsp; <b>Automate</b> with visual flows — both produce the same analyzable metadata.</sub></p>
+| Gate | Catches |
+| :--- | :--- |
+| **Typed** | Strict TypeScript + Zod — shape errors die in the editor, seconds after the agent writes them |
+| **Validated** | `os validate` rejects metadata that type-checks but would fail silently at runtime: dangling bindings, bad CEL predicates, missing security posture |
+| **Reviewed** | You approve a small readable diff in the Console — not fifty thousand lines of glue |
+| **Governed** | The runtime enforces permissions and audit on every call, so even a wrong app stays inside the fence |
 
-> **Want to see it running?** `os dev` serves the live Console locally, and `os start` (or the official Docker image) ships the same Console to production — dashboards, boards, calendars, records, and AI working your data under your permissions.
+The reason this works is the same reason TypeScript was the right host language:
+**an agent's errors become located, corrective text it can read and fix itself**,
+in seconds — instead of a silent runtime failure nobody traces back.
 
-## Key Features
+And because the whole business system is a few hundred lines of typed metadata
+rather than tens of thousands of lines of CRUD and glue, it **fits in an agent's
+context window** — so the agent can load it end-to-end, reason about every
+dependency, and refactor across data, API, UI, and permissions in one change.
+That's the difference between AI as autocomplete and AI as a co-maintainer.
 
-- **AI-native, not retrofitted** — Objects, permissions, flows, APIs, and UI are declarative typed metadata, small enough for an agent to load end-to-end. That metadata generates an automatic tool surface — REST APIs, client SDKs, UI views, and an [MCP](packages/mcp) server — so agents inspect and act through the same contracts you defined.
-- **Protocol-first runtime** — Every definition starts as a Zod schema (`z.infer<>` types), compiles into versioned, self-describing JSON artifacts, and runs on a microkernel plugin system (DI container, EventBus, `init → start → destroy` lifecycle).
-- **Data & framework reach** — In-memory, PostgreSQL, MySQL, SQLite, and MongoDB drivers; 7 framework adapters (Express, Fastify, Hono, NestJS, Next.js, Nuxt, SvelteKit); a client SDK with React hooks (`useQuery` / `useMutation` / `usePagination`).
-- **Governance & built-ins** — better-auth, RBAC / RLS / FLS, a DAG-based automation engine, an [MCP](packages/mcp) server that exposes the app to your own AI (BYO-AI), the ObjectUI Console, and a full CLI (`os init` / `dev` / `compile` / `validate` / …).
+> Your objects, permissions, and flows are your business ontology — and the
+> definition layer of the AI era should be an open protocol you own.
+> [Read why](https://www.objectos.ai/en/blog/ai-ontology-open-protocol/).
 
-## Why AI-native?
+## Your app is AI-operable, for free
 
-Most internal-tool and low-code platforms were designed for humans clicking screens. AI support is usually added later as a chat box that can call a few predefined queries. ObjectStack starts from a different assumption: **AI agents need a structured, bounded, and auditable business backend before they can safely perform real work** — and the entire business system has to be small enough to fit in an agent's context window.
-
-A typical enterprise application is tens of thousands of lines of CRUD, forms, queries, permissions, and API glue spread across dozens of files. ObjectStack collapses the same surface into a few hundred lines of typed metadata — **roughly two orders of magnitude less code for a developer (or an AI agent) to read, write, and maintain.**
-
-The point isn't lines of code. The point is **fit in an agent's context window.** When the entire business system is small, typed, and declarative, an AI agent can load it end-to-end, reason about every dependency, and safely refactor across data, API, UI, and permissions in a single change. That turns AI from an autocomplete tool into a real co-maintainer of production business software.
-
-| Dimension | Retool / Appsmith-style tools | ObjectStack |
-| :--- | :--- | :--- |
-| Business model | Implicit in pages, queries, and scripts | Explicit Zod `ObjectSchema` metadata |
-| Code footprint | Thousands of lines of queries, JS, and UI state per app | **~100× less** — declarative metadata replaces CRUD, forms, validation, and API glue |
-| Business logic | JavaScript snippets and query glue | Flows, policies, conditions, and typed metadata |
-| External contract | App-specific UI state | Self-describing JSON Environment Artifact |
-| Agent tools | Manually defined one by one | Generated from metadata and permissions |
-| Agent reasoning | Calls predefined queries | Reads the full schema, composes safe actions, respects boundaries |
-| AI maintainability | Agents must crawl sprawling app code | Whole app fits in an agent's context window |
-| Governance | App-level conventions | Auth, RBAC, RLS, FLS, audit, and versioned artifacts |
-
-Described in ObjectStack and served by its runtime, this is the substrate for AI-native business apps — CRM, support, operations, and workflow agents acting on real business data without bypassing permissions or audit.
-
-## Quick Start
-
-### For Application Developers
+Because the app is typed metadata, the runtime serves it as an **MCP server** at
+`/api/v1/mcp` — on by default. Point any MCP client at it and an agent can
+inspect and *operate* the app you just built, under the same permissions and RLS
+as a human:
 
 ```bash
-# Create a new project
-npx create-objectstack my-app
-cd my-app
-
-# Start dev server (REST API + console UI)
-pnpm dev
-# → API:    http://localhost:3000/api/v1/
-# → Console: http://localhost:3000/_console/
+claude mcp add --transport http my-app http://localhost:3000/api/v1/mcp
 ```
 
-Alternatively, with the CLI installed: `os init my-app && cd my-app && os dev`.
+Objects are exposed automatically; actions opt in with `ai: { exposed: true }`.
+See [Connect an MCP Client](https://objectstack.ai/docs/ai/connect-mcp).
 
-Ready for production? The scaffolded project is container-ready:
+## This repo
+
+The **framework**: the protocol (`@objectstack/spec`), kernel, SDK, CLI, and the
+production runtime. `os start` or the official Docker image
+[`ghcr.io/objectstack-ai/objectstack`](./docker) ships your compiled app —
+Console and governance included — entirely on open source. Try a live app in
+~30s on [StackBlitz](https://stackblitz.com/github/objectstack-ai/hotcrm) (no
+install).
+
+Three layers sit on a microkernel: **ObjectQL** (data), **Kernel** (control),
+**ObjectUI** (view). Everything starts as a Zod schema — 1,600+ of them — and
+TypeScript types, JSON Schemas, REST routes, UI metadata, and agent tools are all
+derived from that one source. See [ARCHITECTURE.md](./ARCHITECTURE.md).
+
+**Want it governed and hosted, with Build & Ask AI built in?**
+[ObjectOS](https://www.objectos.ai) is the commercial runtime for these
+definitions.
+
+## Ship it
+
+The scaffolded project is container-ready:
 
 ```bash
 docker build -t my-app . && docker compose up -d   # app + Postgres on the official runtime image
 ```
 
-See [Self-Hosted Deployment](https://objectstack.ai/docs/deployment/self-hosting) for bare Node, Kubernetes, and the secrets you must pin.
+See [Self-Hosted Deployment](https://objectstack.ai/docs/deployment/self-hosting) for bare Node, Kubernetes, and the secrets you must pin — and [Build with Claude Code](https://objectstack.ai/docs/getting-started/build-with-claude-code) to run the whole loop end-to-end.
 
-### For Framework Contributors
+## Working on the framework itself
 
 ```bash
-# 1. Clone and install
 git clone https://github.com/objectstack-ai/framework.git
 cd framework
-pnpm install
-
-# 2. Build all packages
-pnpm build
-
-# 4. Start ObjectStack Showcase
-pnpm dev
+pnpm install     # Node 18+, pnpm 8+ (corepack enable)
+pnpm build       # build all packages
+pnpm dev         # run the showcase example (REST + Console on :3000)
 ```
 
 ## Monorepo Scripts
