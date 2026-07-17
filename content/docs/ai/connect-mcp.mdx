@@ -103,8 +103,10 @@ Two exposure rules to know:
   are blocked fail-closed.
 - **Actions require the author's opt-in**: `ai: { exposed: true }` plus an
   `ai.description` of at least 40 characters, and the action must be callable
-  without a UI (`script` with a body or registered handler, or `flow`).
-  See [Actions as Tools](/docs/ai/actions-as-tools) and
+  without a UI. In the open framework that means exactly two types — `script`
+  (with an inline body or a registered handler) and `flow` (with the automation
+  service registered). `url`, `modal`, `form`, and `api` have no headless
+  dispatch here. See [Actions as Tools](/docs/ai/actions-as-tools) and
   [Actions](/docs/ui/actions).
 
 ## The security model
@@ -148,7 +150,7 @@ skill and a guided `/objectstack:connect` command.
 | `501 Not Implemented` | The MCP plugin isn't part of this build — check your stack's plugins |
 | `401` on every call | Anonymous or invalid credentials. Interactive clients: complete the browser login (the `WWW-Authenticate` header advertises the OAuth metadata). Headless: check the `osk_` key and header spelling |
 | `403 insufficient_scope` | The OAuth token lacks the scope for that tool family (e.g. writes without `data:write`) — reconnect and grant the scope |
-| An action is missing from `list_actions` | `ai.exposed` is not `true`, `ai.description` is shorter than 40 characters, the type isn't headless-callable (`url` / `modal` / `form` never appear), it targets a `sys_*` object, or the caller fails its `requiredPermissions` |
+| An action is missing from `list_actions` | `ai.exposed` is not `true`, `ai.description` is shorter than 40 characters, the type isn't headless-callable here (only `script` with a body/handler and `flow` with an automation service are — `url`, `modal`, `form`, and `api` never appear), it targets a `sys_*` object, or the caller fails its `requiredPermissions` |
 | Reads return few rows / writes denied | Working as designed — the caller's permissions and RLS apply. Verify with the same user in the Console |
 
 ## Related

@@ -50,6 +50,16 @@ jobs:
       - name: ESLint
         run: pnpm lint
 
+      # Raw NUL guard (#3127): one literal U+0000 byte makes grep/ripgrep treat
+      # the whole file as binary and silently return ZERO matches — the file drops
+      # out of code search and out of every grep-based lint, with no error saying
+      # so. Nothing else catches it: git sniffs only the first 8000 bytes to decide
+      # binary-ness, and protocol.ts carried its NUL at offset 147230, so it kept
+      # diffing as ordinary text through review. That blind spot let six files
+      # accumulate the same defect. Authors must write the unicode escape instead.
+      - name: Raw NUL byte guard
+        run: pnpm check:nul-bytes
+
       # Docs/skills authoring guard (#2035 / ADR-0059): TS code blocks in
       # Markdown/MDX are not type-checked or ESLinted, so skills/ and
       # content/docs/ can drift back to teaching the bare `: Page = {}` literal
@@ -119,24 +129,38 @@ jobs:
       - name: Type check (@objectstack/spec)
         run: pnpm --filter @objectstack/spec exec tsc --noEmit
 
-      # Generated-skill gate: skills/*/references/_index.md and the objectstack-ui
-      # react-blocks contract are generated from packages/spec/src and committed.
-      # Nothing regenerated them in CI, so they drifted — and unlike the reference
-      # docs these ship to third parties via `npx skills add objectstack-ai/framework`,
-      # so the drift is served straight to consumers' agents.
+      # Generated-docs gate: content/docs/references/** is generated from the spec
+      # by `gen:schema && gen:docs` and committed. Nothing regenerated it in CI, so
+      # it drifted silently — #3076 added RowCrudActionOverride to the spec and the
+      # public reference docs never learned the type existed. Regenerates and fails
+      # on any difference.
       #
-      # Deliberately here rather than in ci.yml's `check-generated` job: that job is
-      # paths-filtered on skills/** and the build-skill-docs.ts script, NOT on
-      # packages/spec/src/**, so it skips exactly the spec-only PRs that cause this
-      # drift — and it is not a required check either, so it could be merged past
-      # even when it does run. This job has no paths filter and IS required
-      # ("TypeScript Type Check"), so the gate can neither go dormant nor be bypassed.
+      # Deliberately lives in this job, not in ci.yml's "Build Docs": that job is
+      # gated on a `docs` paths-filter that does not include packages/spec/**, so it
+      # skips exactly the spec-only PRs that cause this drift (#3076 was one). This
+      # job has no paths filter and is a required status check, so the gate cannot go
+      # dormant. It reads src/ + json-schema/ via tsx and needs no build, so it runs
+      # before the workspace build and fails in ~2s.
+      - name: Check generated reference docs are in sync with the spec
+        run: pnpm --filter @objectstack/spec check:docs
+
+      # Same class, same reasoning, different surface: skills/*/references/_index.md
+      # and the objectstack-ui react-blocks contract are generated from
+      # packages/spec/src and committed, and nothing regenerated them either. These
+      # ship to third parties via `npx skills add objectstack-ai/framework`, so the
+      # drift is served straight to consumers' agents — 6 of 113 schema pointers named
+      # files the spec had already deleted or renamed.
       #
-      # Both read packages/spec/src directly via tsx and need no build (verified with
-      # every workspace dist/ removed), so they run before the workspace build and
-      # fail in seconds. `check:skill-refs` also fails on a SKILL_MAP entry pointing
-      # at a file the spec no longer has — the silent skip that let the map keep
-      # naming data/dataset.zod.ts for a year after #1620 renamed it to data/seed.zod.ts.
+      # Not in ci.yml's `check-generated` job for the reason above: its `generated`
+      # filter lists specific spec paths (migrations/, conversions/, protocol-version)
+      # but no schema dirs, so a PR touching src/data/** or src/ui/** — exactly what
+      # drives these two artifacts — never triggers it. It is not required, either.
+      #
+      # Both read packages/spec/src via tsx and need no build (verified with every
+      # workspace dist/ removed), so they run before the workspace build. check:skill-refs
+      # additionally fails on a SKILL_MAP entry naming a file the spec no longer has:
+      # that silent skip is what let the map keep pointing at data/dataset.zod.ts for a
+      # year after #1620 renamed it to data/seed.zod.ts.
       - name: Check generated skill references are in sync with the spec
         run: pnpm --filter @objectstack/spec check:skill-refs
 
