@@ -11,6 +11,13 @@
  * the actual translation bundles attached to the stack and reports any keys
  * that are missing or set to an empty string.
  *
+ * The inline `label:` in the metadata is the *source* string, authored in the
+ * default locale: the runtime resolver falls back to it when a bundle carries
+ * no entry, and `os i18n extract` seeds bundles from it. So an inline label
+ * satisfies the default locale on its own — a bundle is what other locales
+ * need. Keys with no source string anywhere are not reported here; a missing
+ * label is `required/label`'s finding.
+ *
  * Pure: no filesystem or network. Safe to invoke from `os lint`, `os i18n
  * check`, IDE tooling, and unit tests.
  */
@@ -18,6 +25,7 @@
 import type { TranslationBundle, TranslationData } from '@objectstack/spec/system';
 import { METADATA_FORM_REGISTRY } from '@objectstack/spec/system';
 import { DEFAULT_METADATA_TYPE_REGISTRY } from '@objectstack/spec/kernel';
+import { humanizeFieldPath } from './i18n-extract.js';
 
 export type CoverageSeverity = 'error' | 'warning';
 
@@ -150,12 +158,33 @@ interface ExpectedKey {
   displayKey: string;
   /** Description shown in the issue message when the key is missing. */
   context: string;
+  /**
+   * The source string authored inline in the metadata (`label: 'Note'`), when
+   * there is one. This *is* the default-locale text — see `computeI18nCoverage`.
+   */
+  inline?: string;
 }
 
-function pushKey(out: ExpectedKey[], path: string[], source: CoverageIssue['source'], context: string): void {
-  out.push({ source, path, displayKey: path.join('.'), context });
+function pushKey(
+  out: ExpectedKey[],
+  path: string[],
+  source: CoverageIssue['source'],
+  context: string,
+  inline?: string,
+): void {
+  out.push({ source, path, displayKey: path.join('.'), context, inline });
 }
 
+/** Narrow to a usable source string; empty strings are not authored text. */
+function inlineText(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+/**
+ * Collects every key a translation bundle *may* carry, paired with the inline
+ * source string the metadata already authors for it. Callers drop the keys that
+ * are authored nowhere — see `computeI18nCoverage`.
+ */
 function collectExpectedKeys(config: any): ExpectedKey[] {
   const keys: ExpectedKey[] = [];
   const objects: any[] = Array.isArray(config?.objects) ? config.objects : [];
@@ -163,21 +192,34 @@ function collectExpectedKeys(config: any): ExpectedKey[] {
   for (const obj of objects) {
     if (!obj?.name) continue;
     const objectName = obj.name as string;
-    pushKey(keys, ['objects', objectName, 'label'], 'object', `Object "${objectName}" label`);
-    if (obj.pluralLabel || obj.label) {
-      pushKey(keys, ['objects', objectName, 'pluralLabel'], 'object', `Object "${objectName}" pluralLabel`);
-    }
+    pushKey(keys, ['objects', objectName, 'label'], 'object', `Object "${objectName}" label`, inlineText(obj.label));
+    pushKey(
+      keys,
+      ['objects', objectName, 'pluralLabel'],
+      'object',
+      `Object "${objectName}" pluralLabel`,
+      inlineText(obj.pluralLabel),
+    );
     if (obj.fields && typeof obj.fields === 'object') {
       for (const [fieldName, field] of Object.entries<any>(obj.fields)) {
-        pushKey(keys, ['objects', objectName, 'fields', fieldName, 'label'], 'field', `Field ${objectName}.${fieldName} label`);
+        pushKey(
+          keys,
+          ['objects', objectName, 'fields', fieldName, 'label'],
+          'field',
+          `Field ${objectName}.${fieldName} label`,
+          inlineText(field?.label),
+        );
         const opts = field?.options;
         if (opts && typeof opts === 'object' && !Array.isArray(opts)) {
-          for (const optionKey of Object.keys(opts)) {
+          for (const [optionKey, optionLabel] of Object.entries<any>(opts)) {
+            // Mirrors the extractor: an option's source text is its label, or
+            // its own value when the map holds no label string.
             pushKey(
               keys,
               ['objects', objectName, 'fields', fieldName, 'options', optionKey],
               'option',
               `Option ${objectName}.${fieldName}.${optionKey}`,
+              inlineText(optionLabel) ?? optionKey,
             );
           }
         }
@@ -195,6 +237,7 @@ function collectExpectedKeys(config: any): ExpectedKey[] {
       ['objects', objectName, '_views', view.name, 'label'],
       'view',
       `View ${objectName}.${view.name} label`,
+      inlineText(view.label),
     );
   }
 
@@ -205,13 +248,15 @@ function collectExpectedKeys(config: any): ExpectedKey[] {
     const root = objectName ? ['objects', objectName, '_actions', action.name] : ['globalActions', action.name];
     const source: CoverageIssue['source'] = objectName ? 'action' : 'globalAction';
     const ctxOwner = objectName ? `${objectName}.${action.name}` : action.name;
-    pushKey(keys, [...root, 'label'], source, `Action ${ctxOwner} label`);
-    if (action.confirmText) {
-      pushKey(keys, [...root, 'confirmText'], source, `Action ${ctxOwner} confirmText`);
-    }
-    if (action.successMessage) {
-      pushKey(keys, [...root, 'successMessage'], source, `Action ${ctxOwner} successMessage`);
-    }
+    pushKey(keys, [...root, 'label'], source, `Action ${ctxOwner} label`, inlineText(action.label));
+    pushKey(keys, [...root, 'confirmText'], source, `Action ${ctxOwner} confirmText`, inlineText(action.confirmText));
+    pushKey(
+      keys,
+      [...root, 'successMessage'],
+      source,
+      `Action ${ctxOwner} successMessage`,
+      inlineText(action.successMessage),
+    );
   }
 
   collectMetadataFormKeys(keys);
@@ -227,11 +272,20 @@ function collectExpectedKeys(config: any): ExpectedKey[] {
 function collectMetadataFormKeys(out: ExpectedKey[]): void {
   for (const entry of DEFAULT_METADATA_TYPE_REGISTRY) {
     const type = entry.type;
-    pushKey(out, ['metadataForms', type, 'label'], 'metadataForm', `Metadata form "${type}" label`);
-    const desc = (entry as any).description;
-    if (typeof desc === 'string' && desc.length > 0) {
-      pushKey(out, ['metadataForms', type, 'description'], 'metadataForm', `Metadata form "${type}" description`);
-    }
+    pushKey(
+      out,
+      ['metadataForms', type, 'label'],
+      'metadataForm',
+      `Metadata form "${type}" label`,
+      inlineText((entry as any).label) ?? type,
+    );
+    pushKey(
+      out,
+      ['metadataForms', type, 'description'],
+      'metadataForm',
+      `Metadata form "${type}" description`,
+      inlineText((entry as any).description),
+    );
   }
   for (const [type, form] of Object.entries(METADATA_FORM_REGISTRY)) {
     const sections: any[] = [
@@ -241,11 +295,9 @@ function collectMetadataFormKeys(out: ExpectedKey[]): void {
     for (const section of sections) {
       if (!section || typeof section !== 'object') continue;
       const sectionName = normalizeMetadataSectionName(section);
-      if (sectionName && typeof section.label === 'string') {
-        pushKey(out, ['metadataForms', type, 'sections', sectionName, 'label'], 'metadataForm', `Metadata form ${type}.sections.${sectionName} label`);
-      }
-      if (sectionName && typeof section.description === 'string' && section.description.length > 0) {
-        pushKey(out, ['metadataForms', type, 'sections', sectionName, 'description'], 'metadataForm', `Metadata form ${type}.sections.${sectionName} description`);
+      if (sectionName) {
+        pushKey(out, ['metadataForms', type, 'sections', sectionName, 'label'], 'metadataForm', `Metadata form ${type}.sections.${sectionName} label`, inlineText(section.label));
+        pushKey(out, ['metadataForms', type, 'sections', sectionName, 'description'], 'metadataForm', `Metadata form ${type}.sections.${sectionName} description`, inlineText(section.description));
       }
       if (Array.isArray(section.fields)) {
         for (const child of section.fields) walkMetadataFormField(child, type, '', out);
@@ -259,13 +311,13 @@ function walkMetadataFormField(field: any, type: string, parentPath: string, out
   const name = typeof field.field === 'string' ? field.field : undefined;
   const path = name ? (parentPath ? `${parentPath}.${name}` : name) : parentPath;
   if (path) {
-    pushKey(out, ['metadataForms', type, 'fields', path, 'label'], 'metadataForm', `Metadata form ${type}.fields.${path} label`);
-    if (typeof field.helpText === 'string' && field.helpText.length > 0) {
-      pushKey(out, ['metadataForms', type, 'fields', path, 'helpText'], 'metadataForm', `Metadata form ${type}.fields.${path} helpText`);
-    }
-    if (typeof field.placeholder === 'string' && field.placeholder.length > 0) {
-      pushKey(out, ['metadataForms', type, 'fields', path, 'placeholder'], 'metadataForm', `Metadata form ${type}.fields.${path} placeholder`);
-    }
+    // Platform form fields routinely omit `label` and let the renderer
+    // humanize the field path ("name" → "Name"). That derived text is the
+    // source string — the field is not unlabelled — so other locales still
+    // owe it a translation. Mirrors the extractor's seed value.
+    pushKey(out, ['metadataForms', type, 'fields', path, 'label'], 'metadataForm', `Metadata form ${type}.fields.${path} label`, inlineText(field.label) ?? humanizeFieldPath(path));
+    pushKey(out, ['metadataForms', type, 'fields', path, 'helpText'], 'metadataForm', `Metadata form ${type}.fields.${path} helpText`, inlineText(field.helpText));
+    pushKey(out, ['metadataForms', type, 'fields', path, 'placeholder'], 'metadataForm', `Metadata form ${type}.fields.${path} placeholder`, inlineText(field.placeholder));
   }
   if (Array.isArray(field.fields)) {
     for (const child of field.fields) walkMetadataFormField(child, type, path, out);
@@ -313,7 +365,16 @@ export function computeI18nCoverage(config: any, opts: CoverageOptions = {}): Co
     activeLocales = discovered.includes(defaultLocale) ? discovered : [defaultLocale, ...discovered];
   }
 
-  const expected = collectExpectedKeys(config);
+  // A key is only worth translating if a source string is authored somewhere:
+  // inline in the metadata, or in some bundle (a project may externalize a
+  // string it never wrote inline — other locales still owe a translation for
+  // it). A key authored in neither place has no text to translate at all; a
+  // missing label is `required/label`'s finding, not an i18n gap.
+  const authoredInBundle = (path: string[]): boolean =>
+    Object.values(merged).some((data) => lookupKey(data, path) !== undefined);
+  const expected = collectExpectedKeys(config).filter(
+    (key) => key.inline !== undefined || authoredInBundle(key.path),
+  );
   const issues: CoverageIssue[] = [];
   const stats: CoverageStats[] = [];
 
@@ -321,7 +382,11 @@ export function computeI18nCoverage(config: any, opts: CoverageOptions = {}): Co
     const data = merged[locale];
     let translated = 0;
     for (const key of expected) {
-      const value = lookupKey(data, key.path);
+      // The inline `label:` IS the default-locale text — the runtime resolver
+      // falls back to it (i18n-resolver `translateObject`), and `os i18n
+      // extract` seeds bundles from it. Demanding a default-locale bundle entry
+      // that merely restates it reports a gap that does not exist.
+      const value = lookupKey(data, key.path) ?? (locale === defaultLocale ? key.inline : undefined);
       if (value !== undefined) {
         translated += 1;
         continue;

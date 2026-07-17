@@ -138,11 +138,25 @@ describe('computeI18nCoverage', () => {
   });
 
   it('raises errors when the default locale itself is incomplete', () => {
+    // A genuine default-locale gap: zh-CN carries a string that has no source
+    // text anywhere for `en` — neither inline on the action nor in the bundle.
     const incomplete = JSON.parse(JSON.stringify(baseConfig));
     delete incomplete.translations[0].en.objects.account._actions.merge_accounts.label;
+    delete incomplete.actions[0].label;
     const report = computeI18nCoverage(incomplete, { defaultLocale: 'en' });
     const enErrors = report.issues.filter((i) => i.locale === 'en' && i.severity === 'error');
     expect(enErrors.some((i) => i.key === 'objects.account._actions.merge_accounts.label')).toBe(true);
+  });
+
+  it('does not fault the default locale for a string authored inline', () => {
+    // Dropping a bundle entry that merely restates the inline `label:` is not
+    // a gap — the runtime resolver falls back to the inline text. Regression
+    // guard for the blank template linting with i18n errors out of the box.
+    const inlineOnly = JSON.parse(JSON.stringify(baseConfig));
+    delete inlineOnly.translations[0].en.objects.account._actions.merge_accounts.label;
+    const report = computeI18nCoverage(inlineOnly, { defaultLocale: 'en' });
+    const enErrors = report.issues.filter((i) => i.locale === 'en' && i.severity === 'error');
+    expect(enErrors.map((i) => i.key)).not.toContain('objects.account._actions.merge_accounts.label');
   });
 
   it('honours an explicit --locales filter', () => {
@@ -159,7 +173,94 @@ describe('computeI18nCoverage', () => {
     const objectSources = new Set(['object', 'field', 'option', 'view', 'action', 'globalAction']);
     expect(report.issues.filter((i) => objectSources.has(i.source))).toEqual([]);
     expect(report.totals.expectedKeys).toBeGreaterThan(0); // metadataForms baseline
-    expect(report.issues.some((i) => i.key === 'metadataForms.flow.fields.name.label')).toBe(true);
+  });
+
+  describe('inline metadata as the default-locale source', () => {
+    // Shape of the `create-objectstack` blank template: inline labels, no
+    // translation bundle. It must lint clean (#3103).
+    const scaffold: any = {
+      objects: [
+        {
+          name: 'demo_note',
+          label: 'Note',
+          pluralLabel: 'Notes',
+          fields: { title: { label: 'Title' }, body: { label: 'Body' } },
+        },
+      ],
+      translations: [],
+    };
+
+    it('reports no default-locale errors for a bundle-less scaffold', () => {
+      const report = computeI18nCoverage(scaffold, { defaultLocale: 'en' });
+      expect(report.issues.filter((i) => i.severity === 'error')).toEqual([]);
+    });
+
+    it('reports 100% default-locale coverage when every string is authored inline', () => {
+      const report = computeI18nCoverage(scaffold, { defaultLocale: 'en' });
+      expect(report.stats.find((s) => s.locale === 'en')!.coveragePercent).toBe(100);
+    });
+
+    it('still warns for a non-default locale — inline text is not a translation', () => {
+      const withZh = { ...scaffold, translations: [{ 'zh-CN': {} }] };
+      const report = computeI18nCoverage(withZh, { defaultLocale: 'en' });
+      const zhKeys = report.issues.filter((i) => i.locale === 'zh-CN').map((i) => i.key);
+      expect(zhKeys).toContain('objects.demo_note.label');
+      expect(zhKeys).toContain('objects.demo_note.fields.title.label');
+    });
+
+    it('treats the inline label as the source for whatever locale is the default', () => {
+      // Inline text is the source string, not "English" — a zh-CN-first
+      // project authoring inline Chinese labels is complete, not broken.
+      const zhFirst = {
+        objects: [{ name: 'demo_note', label: '备注', pluralLabel: '备注', fields: { title: { label: '标题' } } }],
+        translations: [],
+      };
+      const report = computeI18nCoverage(zhFirst, { defaultLocale: 'zh-CN' });
+      expect(report.issues.filter((i) => i.severity === 'error')).toEqual([]);
+    });
+
+    it('does not demand a pluralLabel translation when none is authored', () => {
+      const noPlural = {
+        objects: [{ name: 'demo_note', label: 'Note', fields: {} }],
+        translations: [],
+      };
+      const report = computeI18nCoverage(noPlural, { defaultLocale: 'en' });
+      expect(report.issues.map((i) => i.key)).not.toContain('objects.demo_note.pluralLabel');
+    });
+
+    it('leaves an unlabelled field to required/label rather than reporting an i18n gap', () => {
+      const unlabelled = {
+        objects: [{ name: 'demo_note', label: 'Note', fields: { title: {} } }],
+        translations: [],
+      };
+      const report = computeI18nCoverage(unlabelled, { defaultLocale: 'en' });
+      expect(report.issues.map((i) => i.key)).not.toContain('objects.demo_note.fields.title.label');
+    });
+
+    it('still expects a key that is authored only in a bundle', () => {
+      // No inline label, but zh-CN externalizes one — `en` genuinely lacks a
+      // source string for it, so the default-locale gate must still fire.
+      const bundleOnly = {
+        objects: [{ name: 'demo_note', label: 'Note', fields: { title: {} } }],
+        translations: [{ 'zh-CN': { objects: { demo_note: { fields: { title: { label: '标题' } } } } } }],
+      };
+      const report = computeI18nCoverage(bundleOnly, { defaultLocale: 'en' });
+      const enErrors = report.issues.filter((i) => i.locale === 'en' && i.severity === 'error');
+      expect(enErrors.map((i) => i.key)).toContain('objects.demo_note.fields.title.label');
+    });
+  });
+
+  it('counts the platform metadataForms baseline as covered for the default locale', () => {
+    // The registry authors those labels inline, so `en` needs no bundle. A
+    // non-default locale still owes a translation for each of them.
+    const report = computeI18nCoverage(
+      { objects: [], views: [], actions: [], translations: [{ 'zh-CN': {} }] },
+      { defaultLocale: 'en' },
+    );
+    expect(report.issues.filter((i) => i.locale === 'en')).toEqual([]);
+    const zh = report.issues.filter((i) => i.locale === 'zh-CN');
+    expect(zh.some((i) => i.key === 'metadataForms.flow.fields.name.label')).toBe(true);
+    expect(zh.every((i) => i.severity === 'warning')).toBe(true);
   });
 
   it('treats data.object as fallback for view objectName', () => {

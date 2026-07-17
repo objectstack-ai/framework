@@ -446,7 +446,7 @@ function walkFormField(field: any, type: string, parentPath: string, out: Expect
 }
 
 /** Match the metadata form renderer's fallback label for fields without an explicit label. */
-function humanizeFieldPath(path: string): string {
+export function humanizeFieldPath(path: string): string {
   const leaf = path.split('.').pop() ?? path;
   return leaf
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
