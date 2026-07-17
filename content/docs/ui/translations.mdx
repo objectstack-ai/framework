@@ -1,0 +1,144 @@
+---
+title: Translations
+description: Labels and UI text as metadata — one bundle per locale, resolved per request, with CLI tooling to draft and to gate coverage in CI.
+---
+
+# Translations
+
+Every label in an ObjectStack app — object and field names, picklist options,
+view titles, action buttons, app navigation — is metadata, not a string baked
+into a component. Adding a language means adding a **bundle**, not touching the
+app.
+
+<Callout type="info">
+**Single-locale apps need none of this.** `translations` and `i18n` are both
+optional; with no bundle the runtime falls back to the labels declared on your
+metadata. Built-in system fields (`owner_id`, `created_at`, …) carry their own
+labels either way.
+</Callout>
+
+## Your first bundle
+
+A bundle is a **map of locale → translations**, registered on your stack:
+
+```typescript title="src/translations/crm.translation.ts"
+import { defineTranslationBundle } from '@objectstack/spec';
+
+export const CrmTranslationBundle = defineTranslationBundle({
+  en: {
+    objects: {
+      crm_account: {
+        label: 'Account',
+        pluralLabel: 'Accounts',
+        fields: {
+          name: { label: 'Account Name' },
+          industry: { label: 'Industry' },
+        },
+      },
+    },
+  },
+  'zh-CN': {
+    objects: {
+      crm_account: {
+        label: '客户',
+        pluralLabel: '客户',
+        fields: {
+          name: { label: '客户名称' },
+          industry: { label: '行业' },
+        },
+      },
+    },
+  },
+});
+```
+
+```typescript title="objectstack.config.ts"
+export default defineStack({
+  // ...
+  translations: [CrmTranslationBundle],
+  i18n: { defaultLocale: 'en', supportedLocales: ['en', 'zh-CN'] },
+});
+```
+
+## What you can translate
+
+| Surface | Where it lives in the bundle |
+|:---|:---|
+| Object label / plural / description | `objects.<name>.label` / `pluralLabel` / `description` |
+| Field labels, help text, placeholders | `objects.<name>.fields.<field>.label` / `help` / `placeholder` |
+| Picklist option labels | `objects.<name>.fields.<field>.options.<value>` |
+| View titles, descriptions, empty states | `objects.<name>._views.<view>` |
+| Action labels, confirm text, success messages | `objects.<name>._actions.<action>` |
+| Form sections | `objects.<name>._sections.<section>` |
+| App navigation | `apps.<app>.navigation.<id>.label` |
+| Dashboards and widgets | `dashboards.<name>` |
+| Global actions, settings, messages | `globalActions`, `settings`, `messages` |
+
+The metadata types resolved per request are **object, field, view, action, app,
+and dashboard**.
+
+## How a locale is chosen
+
+Per request, in this order:
+
+1. The `Accept-Language` header (the client SDK sends it; `setLocale()` sets it)
+2. A `?locale=` query parameter
+3. The stack's `defaultLocale`
+
+Within the bundle, matching walks: exact (`zh-CN`) → case-insensitive →
+**base language** (`zh-CN` → `zh`) → variant expansion (`zh` → `zh-CN`). If
+nothing matches, the chain falls back to `en`, and finally to the literal label
+on the metadata. **Translation lookup never throws** — a missing string
+degrades to the next best text.
+
+Resolved labels are served straight from the REST metadata endpoints (the
+locale is part of the ETag), so the Console and any SDUI client get translated
+metadata without doing lookups themselves.
+
+## Organizing the files
+
+`i18n.fileOrganization` picks the layout:
+
+- **`per_locale`** (default) — one file per language, combined in the bundle.
+  This is what the Todo example does (`en`, `zh-CN`, `ja-JP`).
+- **`bundled`** — every locale in one file, like the CRM example above. Fine
+  for two locales; unwieldy past that.
+- **`per_namespace`** — split by module.
+
+## Draft with the CLI, gate in CI
+
+```bash
+# Scaffold entries for everything translatable that isn't yet
+npx os i18n extract --locales zh-CN --fill todo --out src/translations
+
+# Report coverage; fail the build when it slips
+npx os i18n check --strict --threshold 95
+```
+
+`os i18n check` exits non-zero on violations, so it works as a CI gate.
+A missing string in the **default** locale is an error; missing strings in
+other locales are warnings until you set `--strict` / `--threshold`. The Todo
+example ships a completeness test alongside its bundles — worth copying.
+
+## Current boundaries
+
+Honest limits worth knowing before you plan around them:
+
+- **`validationMessages` has no runtime consumer today.** The schema accepts it
+  and the coverage tooling counts it, but nothing reads it back — validation
+  errors are not translated through bundles yet.
+- **`messageFormat: 'icu'` is declared but not implemented** — plural/gender
+  formatting isn't available; `simple` is what runs.
+- **Two bundle shapes exist.** File-authored bundles use the `objects.<name>`
+  shape documented here, which is what the resolver reads. The `translation`
+  metadata type authored at runtime uses an object-first (`o.<object>`) shape,
+  and the two are not bridged — author translations **as files** for now.
+- AI-suggested translation fields (`aiSuggested`, `aiConfidence`) are schema
+  only.
+
+## Related
+
+- [Views](/docs/ui/views) · [Apps](/docs/ui/apps) · [Actions](/docs/ui/actions) — the surfaces you're translating
+- [Objects](/docs/data-modeling/objects) — where the fallback labels are declared
+- [i18n standard](/docs/protocol/kernel/i18n-standard) — the normative protocol
+- [Translation schema reference](/docs/references/system/translation) — every field, generated from the spec

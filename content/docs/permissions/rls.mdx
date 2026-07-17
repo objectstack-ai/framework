@@ -1,0 +1,188 @@
+---
+title: Row-Level Security (RLS)
+description: Declarative per-row policies compiled into query filters — the grammar, the context variables, how policies compose, and the fail-closed contract.
+---
+
+# Row-Level Security (RLS)
+
+RLS answers a question the other layers can't: *which rows* of an object may
+this user touch? Object permissions say "can read tasks"; the OWD baseline says
+"tasks are private"; RLS says **"only the tasks assigned to you"** — as a
+declarative policy, compiled into the query.
+
+Two properties define how it behaves:
+
+- **It's a filter, not a row hook.** Policies compile to a data filter that is
+  pushed down into the query, so a restricted user's list is *narrower* — they
+  don't get denied, they get fewer rows.
+- **It's fail-closed.** A policy that can't compile denies everything rather
+  than admitting anything. See [the contract](#the-fail-closed-contract).
+
+<Callout type="info">
+RLS is the expert escape hatch. Reach for it when
+[sharing rules](/docs/permissions/sharing-rules), the
+[OWD baseline](/docs/permissions/permissions-matrix), and
+[scope depth](/docs/permissions/positions) can't express the rule — not before.
+</Callout>
+
+## Anatomy of a policy
+
+Policies live on a permission set under `rowLevelSecurity`:
+
+```typescript
+import { definePermissionSet } from '@objectstack/spec';
+
+export const ContributorAccess = definePermissionSet({
+  name: 'contributor',
+  label: 'Contributor',
+  objects: {
+    showcase_task: { allowRead: true, allowEdit: true },
+  },
+  rowLevelSecurity: [
+    {
+      name: 'task_own_rows',
+      label: 'Own Tasks Only',
+      object: 'showcase_task',
+      operation: 'select',
+      using: 'assignee == current_user.email',
+      positions: ['contributor'],
+      enabled: true,
+      priority: 10,
+    },
+  ],
+});
+```
+
+| Property | Type | Notes |
+|:---|:---|:---|
+| `name` | `string` | snake_case identifier |
+| `label` | `string` | Human-readable name |
+| `object` | `string` | Target object — or `'*'` to apply to every object |
+| `operation` | `'select' \| 'insert' \| 'update' \| 'delete' \| 'all'` | Which operation the policy guards |
+| `using` | `string` | Predicate for rows the user may **see / act on** (compiled into the query filter) |
+| `check` | `string` | Predicate rows must satisfy **after a write**. Omit it and `using` is reused |
+| `positions` | `string[]` | Which positions the policy applies to. Omit = everyone |
+| `enabled` | `boolean` | Default `true` |
+| `priority` | `number` | Default `0` |
+
+At least one of `using` / `check` is required.
+
+**Choosing `operation`:** `select` narrows reads (the common case);
+`insert` / `update` / `delete` guard the matching write; `all` applies to
+everything. Internally `find` / `findOne` / `count` / `aggregate` all map to
+`select`.
+
+## The expression grammar
+
+This is the part that bites. RLS expressions are **not** general CEL — only
+four forms compile:
+
+| Form | Example |
+|:---|:---|
+| Column equals a context property | `created_by == current_user.id` |
+| Column equals a literal | `status == 'active'` |
+| Column is in a context array | `owner_id IN (current_user.org_user_ids)` |
+| Always true | `1 = 1` |
+
+Everything else is rejected, including `AND` / `OR` / `NOT`, comparison
+operators other than equality (`>`, `<`, `!=`), `IS NULL`, `NOT IN`,
+`LIKE` / `ILIKE`, regex, `ANY` / `ALL`, subqueries, and time functions
+(`NOW()`, `CURRENT_DATE`).
+
+<Callout type="warn">
+**There is no `AND` / `OR` inside a policy — use multiple policies instead.**
+Policies on the same object compose with **OR** (see below), which covers
+"owner *or* team member". For "owner *and* active", model the second condition
+in the data (a dedicated column or a narrower context array) rather than
+reaching for a compound expression the compiler will reject.
+</Callout>
+
+## Context variables
+
+Predicates reference the acting user through `current_user`, and record fields
+as **bare column names** (no `record.` prefix — that's the UI/flow convention,
+not this one):
+
+| Variable | Source |
+|:---|:---|
+| `current_user.id` | The acting user's id |
+| `current_user.organization_id` | The acting tenant |
+| `current_user.positions` | The user's positions (array) |
+| `current_user.org_user_ids` | User ids in the user's org (array) |
+| `current_user.email` | The user's email |
+
+<Callout type="info">
+**`current_user.name` is deliberately not exposed.** Names aren't unique — a
+policy keyed on a display name would hand a second "John Smith" someone else's
+rows. Match on `id` or `email`, which are.
+</Callout>
+
+Deployments can inject additional membership sets (team ids, territory codes)
+into the evaluation context, which lets policies express set membership without
+subqueries the grammar doesn't allow.
+
+## How policies compose
+
+```
+Layer 0 (tenant isolation)   ─┐
+                              ├── AND ──► the query's final filter
+Layer 1 (business RLS)       ─┘
+   policy A  OR  policy B  OR  …
+```
+
+- **Tenant isolation is a separate layer that always applies first** and is
+  never OR-ed away by a business policy.
+- **Multiple policies on the same object are OR-ed** — a row is admitted if it
+  matches *any* applicable policy. This is the intended way to express
+  alternatives.
+- The full evaluation pipeline around RLS is: object CRUD → FLS → OWD baseline →
+  depth → sharing → RLS. RLS narrows what the earlier layers already allowed;
+  it never widens.
+- A superuser bypasses business policies but **not** tenant isolation —
+  crossing tenants requires a genuine platform admin.
+- Children of a master-detail parent with `sharingModel: 'controlled_by_parent'`
+  derive access from the master record instead.
+
+## The fail-closed contract
+
+Four ways a policy denies rather than leaks:
+
+1. A policy exists but **every** applicable expression fails to compile → a
+   deny-everything filter.
+2. A referenced context variable is missing, null, or an empty array → that
+   policy drops out (it cannot match).
+3. A policy references a column the object doesn't have → deny.
+4. `check` is omitted → `using` is reused for writes, never "anything goes".
+
+<Callout type="warn">
+**The one non-obvious case: no applicable policy means *no restriction*, not
+"deny".** RLS only narrows what other layers granted — it is not what stops an
+un-permissioned user. If a user sees rows you expected RLS to hide, check
+whether any policy actually applies to their positions and the operation.
+</Callout>
+
+## Verify it
+
+Don't guess — ask the runtime:
+
+```bash
+curl -b cookies.txt \
+  "https://your-app.example.com/api/v1/security/explain?object=showcase_task&operation=select&userId=usr_123"
+```
+
+The response walks the layers (`tenant_isolation`, `object_crud`, `fls`,
+`owd_baseline`, `depth`, `sharing`, `rls`) with a `verdict` per layer —
+`grants`, `denies`, `narrows`, `widens`, `neutral`, or `not_applicable` — and
+tags each with `kernelTier` (`layer_0_tenant` vs `layer_1_business`). An RLS
+policy that fired shows up as `narrows` on the `rls` layer; per-record
+explanations mark rows `admitted` / `excluded`.
+
+Explaining another user's access requires `manage_users` or delegated-admin
+rights. Pair it with Impersonate in the Console to see the same rows they'd see.
+
+## Related
+
+- [Authorization Model](/docs/permissions/authorization) — how all the layers fit together
+- [Sharing Rules](/docs/permissions/sharing-rules) — the declarative layer to try first
+- [Explain](/docs/permissions/explain) — the verdict vocabulary in full
+- [Access Recipes](/docs/permissions/access-recipes) — requirement → layer mapping

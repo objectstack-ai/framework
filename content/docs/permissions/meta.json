@@ -12,6 +12,7 @@
     "positions",
     "delegated-administration",
     "sharing-rules",
+    "rls",
     "field-level-security",
     "attachments-access",
     "permission-metadata",
