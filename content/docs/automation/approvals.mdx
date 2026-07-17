@@ -130,14 +130,11 @@ record is **locked** against edits while pending (`lockRecord`, default `true`),
 and the flow run parks until a decision arrives.
 
 Only `approvers` is required on the node; everything else has a default
-(`behavior: 'first_response'`, `lockRecord: true`, `maxRevisions: 3`).
-
-<Callout type="warn">
-**`type: 'role'` is not a position.** In an approver entry, `role` means the
-better-auth membership tier (`owner` / `admin` / `member`). Naming a business
-role like `sales_manager` there matches nobody and the request silently has no
-approvers — use `{ type: 'position', value: 'sales_manager' }`.
-</Callout>
+(`behavior: 'first_response'`, `lockRecord: true`, `maxRevisions: 3`). An
+approver entry that resolves to nobody is not an error: the request opens with
+an empty `pending_approvers` and nothing can move it, so the run parks forever.
+The approver-type trap that causes this is covered under
+**3. The approval node** above.
 
 ### The approver finds it in their queue
 
@@ -150,8 +147,10 @@ curl -b cookies.txt \
   "https://your-app.example.com/api/v1/approvals/requests?status=pending&approverId=usr_123"
 ```
 
-`approverId` accepts a user id, an email, or `role:<r>` — and takes several
-values (comma-separated or repeated) to cover a person's identities in one call.
+`approverId` accepts a user id, an email, or a `<type>:<value>` approver literal
+(`position:finance_manager` — the form an entry falls back to when it resolves
+to no users) — and takes several values (comma-separated or repeated) to cover
+a person's identities in one call.
 Other filters: `status`, `object`, `recordId`, `submitterId`, `q`, `limit`,
 `offset`.
 
