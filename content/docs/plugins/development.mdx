@@ -105,15 +105,15 @@ export function createHelloPlugin(): Plugin {
       ctx.registerService('greeting', greetingService);
 
       // Hook into the record lifecycle via the data engine.
-      // Data hooks receive a single HookContext; mutate the flat hookCtx.input
-      // in before* hooks to change the operation.
+      // Data hooks receive a single HookContext. The input shape is
+      // `{ doc }` for inserts (`{ id, doc }` for updates) — mutate
+      // `hookCtx.input.doc` in before* hooks to change the operation.
       const engine = ctx.getService<any>('data');
       engine.registerHook('beforeInsert', async (hookCtx: any) => {
-        if (hookCtx.input.first_name) {
+        const doc = hookCtx.input.doc;
+        if (doc?.first_name) {
           // Auto-generate a greeting field
-          hookCtx.input.welcome_message = greetingService.greet(
-            hookCtx.input.first_name as string
-          );
+          doc.welcome_message = greetingService.greet(doc.first_name as string);
         }
       }, { object: 'contact' }); // the engine only runs this hook for 'contact'
     }
@@ -198,7 +198,7 @@ describe('HelloPlugin', () => {
     createHelloPlugin().init(ctx);
     const hookCtx = { object: 'contact', input: { doc: { first_name: 'Bob' } as Record<string, unknown> } };
     await hooks['beforeInsert'](hookCtx);
-    expect(hookCtx.input.welcome_message).toBe('Hello, Bob! Welcome to ObjectStack.');
+    expect(hookCtx.input.doc.welcome_message).toBe('Hello, Bob! Welcome to ObjectStack.');
   });
 
   it('should scope the hook to the contact object', () => {

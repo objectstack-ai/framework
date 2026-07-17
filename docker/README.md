@@ -25,7 +25,8 @@ Multi-arch: `linux/amd64` + `linux/arm64`.
 
 ## Usage
 
-**Extend it** (the usual path — see [`examples/docker`](../examples/docker)):
+**Extend it** (the usual path — the full walkthrough lives in
+[Self-Hosted Deployment](https://objectstack.ai/docs/deployment/self-hosting)):
 
 ```dockerfile
 FROM ghcr.io/objectstack-ai/objectstack:14.8.0

@@ -11,6 +11,15 @@ This guide covers the most common patterns you will use when building applicatio
 **Import:** `import { defineStack, defineView, defineApp, defineFlow, defineAgent } from '@objectstack/spec'`
 </Callout>
 
+<Callout type="warn">
+**Before you copy:** the examples use short object names (`project`, `order`) for
+readability. In a real project, `os validate` additionally enforces your project's
+**namespace prefix** on every object name (`my_app_project`) and an explicit
+**`sharingModel`** on every custom object (ADR-0090) — the patterns below include
+`sharingModel`; remember to add your prefix. See
+[Validating Metadata](/docs/getting-started/validating-metadata).
+</Callout>
+
 ---
 
 ## 1. CRUD Object Definition
@@ -27,6 +36,7 @@ export default defineStack({
     {
       name: 'project',
       label: 'Project',
+      sharingModel: 'public_read_write',
       fields: {
         title: { label: 'Title', type: 'text', required: true, maxLength: 200 },
         description: { label: 'Description', type: 'textarea' },
@@ -53,6 +63,7 @@ export default defineStack({
   objects: {
     project: {
       label: 'Project',
+      sharingModel: 'public_read_write',
       fields: {
         title: { label: 'Title', type: 'text', required: true, maxLength: 200 },
         description: { label: 'Description', type: 'textarea' },
@@ -85,6 +96,7 @@ Create a parent-child relationship between a master and its detail records. Note
     {
       name: 'order',
       label: 'Order',
+      sharingModel: 'public_read',
       fields: {
         order_number: { label: 'Order #', type: 'autonumber', autonumberFormat: 'ORD-{0000}' },
         customer: { label: 'Customer', type: 'lookup', reference: 'contact' },
@@ -106,8 +118,10 @@ Create a parent-child relationship between a master and its detail records. Note
       }
     },
     {
+      // Master-detail child: access is derived from the parent order record
       name: 'order_line',
       label: 'Order Line',
+      sharingModel: 'controlled_by_parent',
       fields: {
         order: {
           label: 'Order',
@@ -265,6 +279,7 @@ Define a multi-step approval flow for records.
   objects: [{
     name: 'expense_report',
     label: 'Expense Report',
+    sharingModel: 'private',
     fields: {
       title: { label: 'Title', type: 'text', required: true },
       amount: { label: 'Amount', type: 'currency' },
@@ -402,6 +417,7 @@ Restrict field visibility and editability based on user profiles.
   objects: [{
     name: 'employee',
     label: 'Employee',
+    sharingModel: 'private',
     fields: {
       name: { label: 'Name', type: 'text', required: true },
       email: { label: 'Email', type: 'email', required: true },

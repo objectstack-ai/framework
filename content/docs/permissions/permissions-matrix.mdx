@@ -189,13 +189,19 @@ OWD sets the baseline access level for each object across the entire organizatio
 
 | Default | `sharingModel` | Read Access | Write Access | Use When |
 |:---|:---|:---|:---|:---|
-| **Public Read/Write** | `read_write` | All users | All users | Low-sensitivity data (e.g., tasks, wiki pages) |
-| **Public Read Only** | `read` | All users | Owner + shared | Moderate sensitivity (e.g., accounts, contacts) |
+| **Public Read/Write** | `public_read_write` | All users | All users | Low-sensitivity data (e.g., tasks, wiki pages) |
+| **Public Read Only** | `public_read` | All users | Owner + shared | Moderate sensitivity (e.g., accounts, contacts) |
 | **Private** | `private` | Owner + shared | Owner + shared | High sensitivity (e.g., opportunities, HR records) |
-| **Full Access** | `full` | All users | All users | Legacy alias — enforced identically to `public_read_write` |
+| **Controlled by Parent** | `controlled_by_parent` | Derived from the master record | Derived from the master record | Master-detail children (e.g., order lines) |
 
-<Callout type="info">
-Since ADR-0056 (D1), `object.sharingModel` accepts the **canonical OWD vocabulary** — `private`, `public_read`, `public_read_write`, and `controlled_by_parent` — *in addition to* the legacy `read` / `read_write` / `full` spellings shown above (both are valid; the canonical values are preferred for new objects). `controlled_by_parent` is for child objects in a master-detail relationship, where access is **derived from the parent record** (a line is visible/editable only if its master is). These models are enforced by `plugin-sharing` + `plugin-security` and dogfood-proven over the real HTTP stack.
+<Callout type="warn">
+These are the **only four canonical values** (ADR-0090 D4). The legacy spellings
+`read` / `read_write` / `full` were **removed** — the conversion pipeline rewrites
+them to `public_read` / `public_read_write` on upgrade, and an unknown value
+resolves to `private` (fail-closed). A custom object that omits `sharingModel`
+resolves to `private` at runtime (D1), and `os validate`'s security-posture check
+requires every custom object to declare it explicitly. These models are enforced
+by `plugin-sharing` + `plugin-security` and dogfood-proven over the real HTTP stack.
 </Callout>
 
 ### Configuration Example
@@ -204,10 +210,10 @@ Since ADR-0056 (D1), `object.sharingModel` accepts the **canonical OWD vocabular
 // OWD is declared on each object, not as a central map.
 defineStack({
   objects: {
-    account:     { sharingModel: 'read' /* ...fields */ },
-    contact:     { sharingModel: 'read' },
+    account:     { sharingModel: 'public_read' /* ...fields */ },
+    contact:     { sharingModel: 'public_read' },
     opportunity: { sharingModel: 'private' },
-    task:        { sharingModel: 'read_write' },
+    task:        { sharingModel: 'public_read_write' },
     hr_record:   { sharingModel: 'private' },
   },
 });

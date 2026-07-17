@@ -78,6 +78,13 @@ export async function ensureApp(): Promise<Hono> {
 }
 ```
 
+<Callout type="warn">
+`InMemoryDriver` keeps this snippet self-contained, but on serverless **all data
+is lost on every cold start** — fine for a demo, wrong for anything real. Before
+going past a proof of concept, swap the driver for a real database (see
+[Database Drivers](/docs/data-modeling/drivers)) and point `OS_DATABASE_URL` at it.
+</Callout>
+
 **2. Create the API entrypoint** (`api/index.ts`):
 
 ```typescript

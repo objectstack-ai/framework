@@ -15,7 +15,7 @@ ObjectStack exposes a fully typed REST API. All endpoints use JSON request/respo
 | :--- | :--- |
 | **REST** | ✅ Auto-generated from the protocol (`@objectstack/rest`) — CRUD, query, batch, metadata, packages |
 | **Realtime** | ⚠️ In-process pub/sub service (`@objectstack/service-realtime`, single-instance); the `/realtime/*` REST routes and WebSocket/SSE transport are plugin-provided — none ships in the open framework |
-| **MCP** | ✅ Non-system objects and their actions exposed as Model Context Protocol tools, gated by the caller's permissions/RLS rather than a per-action opt-in flag ([AI module](/docs/ai)) |
+| **MCP** | ✅ Non-system objects exposed automatically as Model Context Protocol tools; actions additionally require the author's `ai.exposed` opt-in — every call is gated by the caller's permissions/RLS ([AI module](/docs/ai)) |
 | **GraphQL** | ⚠️ Route is wired but **bring-your-own service**: `/graphql` returns 501 unless an implementation of the `IGraphQLService` contract is registered — none ships in the open framework |
 | **OData** | ⚠️ Vocabulary only: REST list endpoints accept OData-style operators (e.g. `$top`), but there is no standalone OData endpoint |
 
@@ -57,6 +57,23 @@ sequenceDiagram
 
 See [Actions as Tools](/docs/ai/actions-as-tools) for the `run_action` bridge and the
 [MCP reference](/docs/references/ai/mcp) for binding external MCP servers into your agents.
+
+## Authentication
+
+Every REST call runs as a principal — anonymous requests only see what your
+permission model grants anonymous users. Two ways to authenticate:
+
+- **Session cookie** (browsers, quick local tests): `POST /api/v1/auth/sign-in/email`
+  with `{ "email": "…", "password": "…" }` sets the session cookie — reuse it with
+  `curl -c cookies.txt` / `-b cookies.txt`. On a fresh dev database the seeded
+  admin is `admin@objectos.ai` / `admin123`.
+- **API key** (scripts, CI, headless agents): mint one with `POST /api/v1/keys`
+  (the key is shown once), or from **Setup → Connect an Agent** in the Console.
+  Send it as `x-api-key: osk_…` or `Authorization: Bearer osk_…`.
+
+See [Authentication](/docs/permissions/authentication) for the full identity
+surface (OAuth flows, sessions, providers) and
+[Plugin Endpoints](/docs/api/plugin-endpoints) for the auth route catalog.
 
 ## What's in this module
 

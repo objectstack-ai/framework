@@ -157,16 +157,21 @@ Before you start, make sure you have the following installed:
 | Tool | Minimum Version | Check Command |
 |:---|:---|:---|
 | **Node.js** | 18.0.0+ | `node --version` |
-| **pnpm** | 8.0.0+ (repo pins 10.x) | `pnpm --version` |
-| **TypeScript** | 5.3.0+ (project targets 6.x) | `npx tsc --version` |
+
+That's everything the standard path needs — `npx create-objectstack my-app`
+scaffolds a project with its own TypeScript toolchain and npm scripts.
 
 <Callout type="info">
-**Why pnpm?** ObjectStack uses pnpm workspaces for monorepo management. Install it with `npm install -g pnpm` or `corepack enable` (corepack will pull the pinned pnpm 10.x from the repo's `packageManager` field).
+**pnpm and TypeScript versions only matter for the framework monorepo.** If you
+clone [`objectstack-ai/framework`](https://github.com/objectstack-ai/framework)
+itself (to contribute, or to run the bundled examples), you'll additionally need
+pnpm 8+ (`corepack enable` pulls the pinned 10.x) — and the repo builds against
+TypeScript 6.x.
 </Callout>
 
 ## Common Setup Issues
 
-### pnpm not found
+### pnpm not found (framework monorepo only)
 ```bash
 # Install pnpm globally
 npm install -g pnpm

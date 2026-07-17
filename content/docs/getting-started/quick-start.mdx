@@ -146,8 +146,8 @@ Reading the metadata is half of verification; running the app is the other half.
 Two commands, both of which the agent runs for you but you can run yourself:
 
 ```bash
-os validate     # the gate — schema + CEL predicates + widget bindings (no artifact)
-os dev --ui     # boot the app, then open http://localhost:3000/_console/
+npx os validate     # the gate — schema + CEL predicates + widget bindings (no artifact)
+npx os dev --ui     # boot the app, then open http://localhost:3000/_console/
 ```
 
 `os validate` proves the metadata is *well-formed*; the **Console** at `/_console/`

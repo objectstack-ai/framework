@@ -32,7 +32,7 @@ workable default:
 
 | Variable | Why it must be set |
 |:---|:---|
-| `OS_DATABASE_URL` | Without it, data lands in a SQLite file under the ObjectStack home directory (`~/.objectstack`, or `<cwd>/.objectstack` next to a project config) — fine for one box, wrong for containers. Use `postgres://…`, `libsql://…`, or a mounted `file:…` path. |
+| `OS_DATABASE_URL` | Without it, data lands in a SQLite file under the ObjectStack home directory (`~/.objectstack`, or `<cwd>/.objectstack` next to a project config) — fine for one box, wrong for containers. Use `postgres://…`, `mongodb://…`, or a mounted `file:…` path (`libsql://` / Turso is **not** supported by the open framework — that driver ships in ObjectStack Cloud). |
 | `OS_AUTH_SECRET` | Session secret for the auth plugin (`AUTH_SECRET` is the legacy alias). Without it, `/api/v1/auth/*` is **silently skipped** — the server runs unauthenticated. |
 | `OS_SECRET_KEY` | 32-byte master key encrypting every stored secret (`openssl rand -hex 32`). On a container's ephemeral filesystem the auto-minted key is **lost on restart**, making previously-encrypted secrets undecryptable. |
 | `OS_PORT` | `os start` **fails loudly** if the port is busy (it never auto-shifts like `os dev`). Pin it and keep your reverse-proxy upstream in sync. |
@@ -117,7 +117,7 @@ straight from release storage instead of a mount.)
 For a self-contained deployable image, extend it. The Dockerfile below (plus
 the compose stack in the next section and a `.dockerignore`) ships
 ready-to-copy in
-[`examples/docker`](https://github.com/objectstack-ai/framework/tree/main/examples/docker)
+[`docker/`](https://github.com/objectstack-ai/framework/tree/main/docker)
 — drop the files into your scaffolded project.
 
 ```dockerfile title="Dockerfile"
@@ -313,6 +313,20 @@ explicit `OS_SECRET_KEY`** rather than minting per-node keys that can't
 decrypt each other's secrets. All replicas must share the same
 `OS_SECRET_KEY`, `OS_AUTH_SECRET`, and database. See
 [Cluster](/docs/kernel/cluster).
+
+## First boot: create the admin
+
+On a fresh production database there are no users yet. Open the deployment's
+root URL and **sign up — the very first account to register becomes the
+bootstrap admin** (this works even with `OS_DISABLE_SIGNUP=true`, which only
+blocks sign-ups after that first account exists). Do this immediately after
+the first deploy, before sharing the URL; then create your real user accounts
+and lock sign-up down via `OS_AUTH_SIGNUP_ENABLED` /
+[SSO](/docs/permissions/sso) as policy dictates.
+
+Note the production server seeds **no** dev credentials — the
+`admin@objectos.ai` / `admin123` account you may know from `os dev` exists only
+on empty development databases.
 
 ## Go-live
 

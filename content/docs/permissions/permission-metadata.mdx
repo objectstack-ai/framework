@@ -196,7 +196,8 @@ contextVariables: {
 
 The built-in context variables available in RLS `using`/`check` clauses include
 `current_user.id`, `current_user.organization_id`, and `current_user.positions`
-(ADR-0068). `roles` is a **string array** — the only canonical role field — so test
+(ADR-0068). `positions` is a **string array** — the canonical assignment field
+(D3 reserves the word "role"; there is no `current_user.roles`) — so test
 membership with CEL: `'org_admin' in current_user.positions` or
 `current_user.positions.exists(p, p == 'sales_manager')`. The framework-seeded
 built-in position names are `platform_admin`, `org_owner`, `org_admin`, and
