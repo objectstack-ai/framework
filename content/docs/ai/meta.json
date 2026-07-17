@@ -3,6 +3,7 @@
   "icon": "Bot",
   "pages": [
     "index",
+    "connect-mcp",
     "agents",
     "actions-as-tools",
     "knowledge-rag",
