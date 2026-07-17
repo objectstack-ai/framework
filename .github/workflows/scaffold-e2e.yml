@@ -143,7 +143,9 @@ jobs:
             exit 1
           fi
 
-          listing=$(npx -y skills add "$GITHUB_WORKSPACE" --list 2>&1)
+          # Strip ANSI color codes — the skills CLI colors the count even
+          # when piped ("Found \e[32m9\e[39m skills"), which broke the greps.
+          listing=$(npx -y skills add "$GITHUB_WORKSPACE" --list 2>&1 | sed 's/\x1b\[[0-9;]*m//g')
           echo "$listing"
           if echo "$listing" | grep -q 'dogfood-verification'; then
             echo "::error::repo-root discovery surfaced an internal skill (metadata.internal marker missing?)"
