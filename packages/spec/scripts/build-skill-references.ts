@@ -18,11 +18,14 @@
  * 3. Writes `skills/{name}/references/_index.md` with pointers + one-line
  *    descriptions extracted from each file's leading JSDoc comment
  *
- * Usage: tsx scripts/build-skill-references.ts
+ * Usage:
+ *   tsx scripts/build-skill-references.ts            # write
+ *   tsx scripts/build-skill-references.ts --check    # verify in sync (CI); exit 1 on drift
  */
 
 import fs from 'fs';
 import path from 'path';
+import { createSink, type Owns } from './lib/generated-output';
 
 // ── Paths ────────────────────────────────────────────────────────────────────
 
@@ -30,6 +33,9 @@ const REPO_ROOT = path.resolve(__dirname, '../../..');
 const SPEC_SRC = path.resolve(__dirname, '../src');
 const SKILLS_DIR = path.resolve(REPO_ROOT, 'skills');
 const SPEC_PKG = '@objectstack/spec';
+
+const CHECK = process.argv.includes('--check');
+const { emit, manageDir, flush } = createSink({ check: CHECK, repoRoot: REPO_ROOT });
 
 // ── Skill → Zod file mapping ────────────────────────────────────────────────
 // Paths are relative to packages/spec/src/ (category/file.zod.ts)
@@ -41,7 +47,7 @@ const SKILL_MAP: Record<string, string[]> = {
     'data/validation.zod.ts',
     'data/hook.zod.ts',
     'data/datasource.zod.ts',
-    'data/dataset.zod.ts',
+    'data/seed.zod.ts',
     'security/permission.zod.ts',
   ],
   'objectstack-query': [
@@ -94,7 +100,7 @@ const SKILL_MAP: Record<string, string[]> = {
     // project setup (was objectstack-quickstart)
     'kernel/manifest.zod.ts',
     'data/datasource.zod.ts',
-    'data/dataset.zod.ts',
+    'data/seed.zod.ts',
     // plugin development (was objectstack-plugin)
     'kernel/plugin.zod.ts',
     'kernel/context.zod.ts',
@@ -130,15 +136,26 @@ function extractLocalImports(filePath: string): string[] {
   return imports;
 }
 
-function resolveAll(entryFiles: string[]): string[] {
+/**
+ * Transitive closure of a skill's core files.
+ *
+ * Only SKILL_MAP entries can be `missing` — `extractLocalImports` resolves
+ * against disk, so a dep that doesn't exist is never queued. A dangling entry
+ * is therefore an authoring bug in SKILL_MAP, not a spec change to absorb, and
+ * the caller fails on it: silently dropping the pointer is how the skill ends
+ * up advertising a schema it no longer references (`data/dataset.zod.ts`
+ * lingered here for a year after #1620 renamed it to `data/seed.zod.ts`).
+ */
+function resolveAll(entryFiles: string[]): { files: string[]; missing: string[] } {
   const visited = new Set<string>();
+  const missing: string[] = [];
   const queue = [...entryFiles];
   while (queue.length > 0) {
     const rel = queue.shift()!;
     if (visited.has(rel)) continue;
     const abs = path.resolve(SPEC_SRC, rel);
     if (!fs.existsSync(abs)) {
-      console.warn(`  ⚠ File not found: ${rel} (skipped)`);
+      missing.push(rel);
       continue;
     }
     visited.add(rel);
@@ -146,7 +163,7 @@ function resolveAll(entryFiles: string[]): string[] {
       if (!visited.has(dep)) queue.push(dep);
     }
   }
-  return [...visited].sort();
+  return { files: [...visited].sort(), missing };
 }
 
 // ── JSDoc description extractor ──────────────────────────────────────────────
@@ -226,57 +243,73 @@ function generateIndex(skillName: string, coreFiles: string[], allFiles: string[
   return lines.join('\n');
 }
 
-// ── Cleanup helper ───────────────────────────────────────────────────────────
+// ── Managed scope ────────────────────────────────────────────────────────────
 
-function cleanReferencesDir(refsDir: string) {
-  if (!fs.existsSync(refsDir)) {
-    fs.mkdirSync(refsDir, { recursive: true });
-    return;
-  }
-  for (const entry of fs.readdirSync(refsDir)) {
-    // Keep hand-written markdown other than _index.md untouched.
-    if (entry === '_index.md') {
-      fs.rmSync(path.resolve(refsDir, entry));
-      continue;
-    }
-    const entryPath = path.resolve(refsDir, entry);
-    const stat = fs.statSync(entryPath);
-    if (stat.isDirectory()) {
-      fs.rmSync(entryPath, { recursive: true });
-    } else if (entry.endsWith('.zod.ts')) {
-      fs.rmSync(entryPath);
-    }
-  }
+/**
+ * Which paths under a skill's `references/` folder this generator owns — i.e.
+ * would delete and rewrite on a real run, and must therefore flag as stale
+ * under `--check`.
+ *
+ * The folder is only *partially* ours: `react-blocks.md` is written by
+ * build-react-blocks-contract.ts and hand-written notes are allowed, so both
+ * are left alone. Subfolders and loose `*.zod.ts` are leftovers from the
+ * retired bundled-schema layout (skills used to carry copies of the schemas);
+ * we still sweep them so an old checkout converges.
+ */
+function ownsReferenceEntry(refsDir: string): Owns {
+  return (abs) => {
+    const rel = path.relative(refsDir, abs);
+    if (!rel || rel.startsWith('..')) return false;
+    if (rel.includes(path.sep)) return true; // inside a subfolder → wiped wholesale
+    return rel === '_index.md' || rel.endsWith('.zod.ts');
+  };
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 function main() {
   console.log('🔗 Building skill schema reference indexes...\n');
+  const problems: string[] = [];
   let totalSkills = 0;
 
   for (const [skillName, coreFiles] of Object.entries(SKILL_MAP)) {
     const skillDir = path.resolve(SKILLS_DIR, skillName);
     if (!fs.existsSync(skillDir)) {
-      console.warn(`⚠ Skill directory not found: ${skillName}, skipping`);
+      problems.push(`${skillName} → no such skill directory under skills/`);
       continue;
     }
 
     console.log(`📦 ${skillName}`);
-    const allFiles = resolveAll(coreFiles);
+    const { files: allFiles, missing } = resolveAll(coreFiles);
+    for (const m of missing) problems.push(`${skillName} → ${m} (no such file under packages/spec/src)`);
     console.log(`   ${coreFiles.length} core + ${allFiles.length - coreFiles.length} deps`);
 
     const refsDir = path.resolve(skillDir, 'references');
-    cleanReferencesDir(refsDir);
-
-    fs.writeFileSync(
-      path.resolve(refsDir, '_index.md'),
-      generateIndex(skillName, coreFiles, allFiles),
-    );
+    manageDir(refsDir, ownsReferenceEntry(refsDir));
+    emit(path.resolve(refsDir, '_index.md'), generateIndex(skillName, coreFiles, allFiles));
     totalSkills += 1;
   }
 
-  console.log(`\n✅ Done — ${totalSkills} skill index files written`);
+  flush({
+    surface: 'skills/*/references/_index.md',
+    regenerate: '  pnpm --filter @objectstack/spec gen:skill-refs\n  git add skills',
+    guard: () => {
+      // A dangling SKILL_MAP entry drops a schema pointer from a shipped skill.
+      // Dropping it quietly is what this generator used to do; fail instead, in
+      // both modes — the map is authored config, so this is always a bug in it.
+      if (problems.length) {
+        return (
+          `SKILL_MAP is out of sync with packages/spec/src:\n\n` +
+          problems.map((p) => `  - ${p}`).join('\n') +
+          `\n\n  Fix the mapping in ${path.relative(REPO_ROOT, __filename)} — point it at the\n` +
+          `  schema's current path, or drop the entry if the concept is gone.`
+        );
+      }
+      // Nothing emitted means nothing compared; "no drift" would read as green.
+      if (totalSkills === 0) return `No skills found under ${path.relative(REPO_ROOT, SKILLS_DIR)} — nothing to generate.`;
+      return null;
+    },
+  });
 }
 
 main();

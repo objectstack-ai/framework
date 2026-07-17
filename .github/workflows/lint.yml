@@ -144,6 +144,29 @@ jobs:
       - name: Check generated reference docs are in sync with the spec
         run: pnpm --filter @objectstack/spec check:docs
 
+      # Same class, same reasoning, different surface: skills/*/references/_index.md
+      # and the objectstack-ui react-blocks contract are generated from
+      # packages/spec/src and committed, and nothing regenerated them either. These
+      # ship to third parties via `npx skills add objectstack-ai/framework`, so the
+      # drift is served straight to consumers' agents — 6 of 113 schema pointers named
+      # files the spec had already deleted or renamed.
+      #
+      # Not in ci.yml's `check-generated` job for the reason above: its `generated`
+      # filter lists specific spec paths (migrations/, conversions/, protocol-version)
+      # but no schema dirs, so a PR touching src/data/** or src/ui/** — exactly what
+      # drives these two artifacts — never triggers it. It is not required, either.
+      #
+      # Both read packages/spec/src via tsx and need no build (verified with every
+      # workspace dist/ removed), so they run before the workspace build. check:skill-refs
+      # additionally fails on a SKILL_MAP entry naming a file the spec no longer has:
+      # that silent skip is what let the map keep pointing at data/dataset.zod.ts for a
+      # year after #1620 renamed it to data/seed.zod.ts.
+      - name: Check generated skill references are in sync with the spec
+        run: pnpm --filter @objectstack/spec check:skill-refs
+
+      - name: Check the react-blocks contract is in sync with the spec
+        run: pnpm --filter @objectstack/spec check:react-blocks
+
       # Example apps are AI-authoring reference templates; a red typecheck is a
       # bad signal to copy from. tsup transpiles them without a full typecheck,
       # so build alone will not catch type drift — typecheck them explicitly.

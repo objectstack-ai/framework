@@ -10,18 +10,19 @@ from `node_modules` — there is no local copy in the skill bundle.
 
 - `node_modules/@objectstack/spec/src/automation/approval.zod.ts` — Approval Step Approver Type
 - `node_modules/@objectstack/spec/src/automation/execution.zod.ts` — Automation Execution Protocol
-- `node_modules/@objectstack/spec/src/automation/flow.zod.ts` — Flow Node Types
+- `node_modules/@objectstack/spec/src/automation/flow.zod.ts` — Flow Node Types — **built-in seed set** (ADR-0018).
 - `node_modules/@objectstack/spec/src/automation/node-executor.zod.ts` — Node Executor Plugin Protocol — Wait Node Pause/Resume
 - `node_modules/@objectstack/spec/src/automation/state-machine.zod.ts` — XState-inspired State Machine Protocol
 - `node_modules/@objectstack/spec/src/automation/trigger-registry.zod.ts` — Trigger Registry Protocol
 - `node_modules/@objectstack/spec/src/automation/webhook.zod.ts` — Webhook Trigger Event
-- `node_modules/@objectstack/spec/src/automation/workflow.zod.ts` — Trigger events for workflow automation
 
 ## Transitive dependencies
 
+- `node_modules/@objectstack/spec/src/kernel/metadata-protection.zod.ts` — Metadata Protection Model — Phase 1 (ADR-0010)
 - `node_modules/@objectstack/spec/src/shared/expression.zod.ts` — Expression Protocol
 - `node_modules/@objectstack/spec/src/shared/identifiers.zod.ts` — System Identifier Schema
 - `node_modules/@objectstack/spec/src/shared/lazy-schema.ts` — Wrap a Zod schema constructor so its body is only evaluated on first use.
+- `node_modules/@objectstack/spec/src/shared/protection.zod.ts` — Package-level metadata protection (ADR-0010 §3.7 — Phase 4.3)
 
 ## How to read these
 
