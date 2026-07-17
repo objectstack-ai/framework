@@ -560,6 +560,10 @@ export class AuthManager {
   // the node that issues a flag (other nodes catch up within the TTL).
   private _mustChangeCache: { value: boolean; at: number } = { value: false, at: 0 };
   private _mustChangeRefreshing = false;
+  // Optional auth features whose better-auth plugin failed to initialize and
+  // was skipped so core auth stays up (feature key → error message). Rebuilt
+  // by every buildPluginList() run; see addOptionalPlugin().
+  private degradedFeatures = new Map<string, string>();
 
   /**
    * Result of the dev-only admin seed (set by `AuthPlugin.maybeSeedDevAdmin`
@@ -1304,13 +1308,76 @@ export class AuthManager {
   }
 
   /**
+   * Construct one OPTIONAL better-auth plugin, isolating failures.
+   *
+   * The 15.1.0 incident: `@better-auth/oauth-provider` threw during
+   * construction (`Cannot set properties of undefined (setting 'modelName')`)
+   * and, because the better-auth instance is (re)built lazily per request,
+   * EVERY auth endpoint — sign-up, sign-in, get-session — returned 500. One
+   * optional federation feature must never take down core email/password +
+   * session auth, so a throwing optional plugin is skipped with a loud
+   * console.error and recorded in `degradedFeatures` (surfaced via
+   * getDegradedAuthFeatures(); the OIDC discovery mount checks it).
+   *
+   * `build` may return one plugin or an array that must land atomically
+   * (e.g. jwt + oauthProvider): on failure NOTHING from the unit is pushed.
+   */
+  private async addOptionalPlugin(
+    plugins: any[],
+    feature: string,
+    build: () => Promise<any | any[]>,
+  ): Promise<void> {
+    try {
+      const built = await build();
+      for (const p of Array.isArray(built) ? built : [built]) plugins.push(p);
+    } catch (err: any) {
+      const message = err?.message ?? String(err);
+      this.degradedFeatures.set(feature, message);
+      console.error(
+        `[AuthManager] Optional auth feature "${feature}" failed to initialize and is DISABLED ` +
+        `for this process — its endpoints will 404. Core email/password + session auth is unaffected. ` +
+        `Fix the underlying error (often a better-auth version mismatch) and restart. Cause: ${message}`,
+        err,
+      );
+    }
+  }
+
+  /**
+   * Optional auth features skipped by the last plugin-list build because
+   * their better-auth plugin threw during initialization. Empty when the
+   * instance is healthy (or not built yet). Keys match the
+   * `AuthPluginConfig` flag names (`oidcProvider`, `sso`, `scim`, …).
+   */
+  getDegradedAuthFeatures(): Array<{ feature: string; error: string }> {
+    return Array.from(this.degradedFeatures, ([feature, error]) => ({ feature, error }));
+  }
+
+  /**
    * Build the list of better-auth plugins based on AuthPluginConfig flags.
    *
    * Each plugin that introduces its own database tables is configured with
    * a `schema` option containing the appropriate snake_case field mappings,
    * so that `createAdapterFactory` transforms them automatically.
+   *
+   * Failure semantics — two tiers, chosen per plugin below:
+   *
+   *   CORE (construction failure fails the whole instance — better a hard
+   *   500 than silently weakened auth):
+   *     • bearer        — token auth for every non-cookie API client.
+   *     • twoFactor     — skipping it would let accounts WITH 2FA enrolled
+   *                       sign in on password alone (fail-open).
+   *     • haveIBeenPwned— operator explicitly opted into breached-password
+   *                       rejection; dropping it silently relaxes policy.
+   *     • customSession — carries positions[]/isPlatformAdmin and the
+   *                       ADR-0069 authGate (password expiry, enforced MFA);
+   *                       without it authorization and policy gates vanish.
+   *
+   *   OPTIONAL (skipped on failure via addOptionalPlugin — feature 404s,
+   *   core auth stays up): organization, admin, phoneNumber, magicLink,
+   *   genericOAuth, jwt+oauthProvider, sso, scim, deviceAuthorization.
    */
   private async buildPluginList(): Promise<any[]> {
+    this.degradedFeatures.clear();
     const pluginConfig: Partial<AuthPluginConfig> = this.config.plugins ?? {};
     const plugins: any[] = [];
 
@@ -1384,6 +1451,7 @@ export class AuthManager {
     plugins.push(bearer());
 
     if (enabled.organization) {
+      await this.addOptionalPlugin(plugins, 'organization', async () => {
       const { organization } = await import('better-auth/plugins/organization');
       // Build a `roles` map that registers each app-supplied org role
       // (e.g. CRM's sales_rep, sales_manager) as a valid Better-Auth role
@@ -1419,7 +1487,7 @@ export class AuthManager {
           customOrgRoles = undefined;
         }
       }
-      plugins.push(organization({
+      return organization({
         schema: buildOrganizationPluginSchema(),
         // Enable the team sub-feature so the framework's `sys_team` /
         // `sys_team_member` tables (already declared in platform-objects)
@@ -1604,7 +1672,8 @@ export class AuthManager {
             console.error(`[AuthManager] sendInvitationEmail failed (swallowed): ${err?.message ?? err}`);
           }
         },
-      }));
+      });
+      });
     }
 
     if (enabled.twoFactor) {
@@ -1628,18 +1697,21 @@ export class AuthManager {
     }
 
     if (enabled.admin) {
-      const { admin } = await import('better-auth/plugins/admin');
-      // Platform admin: ban/unban, set-password, impersonate, set-role.
-      // Schema mapping ensures the plugin's added user/session columns
-      // match ObjectStack's snake_case conventions (ban_reason,
-      // ban_expires, impersonated_by). `role` and `banned` are already
-      // snake_case-compatible.
-      plugins.push(admin({
-        schema: buildAdminPluginSchema(),
-      }));
+      await this.addOptionalPlugin(plugins, 'admin', async () => {
+        const { admin } = await import('better-auth/plugins/admin');
+        // Platform admin: ban/unban, set-password, impersonate, set-role.
+        // Schema mapping ensures the plugin's added user/session columns
+        // match ObjectStack's snake_case conventions (ban_reason,
+        // ban_expires, impersonated_by). `role` and `banned` are already
+        // snake_case-compatible.
+        return admin({
+          schema: buildAdminPluginSchema(),
+        });
+      });
     }
 
     if (enabled.phoneNumber) {
+      await this.addOptionalPlugin(plugins, 'phoneNumber', async () => {
       const { phoneNumber } = await import('better-auth/plugins/phone-number');
       // #2766 V1.5 wired phone+password sign-in; #2780 opens the OTP surface
       // (`/phone-number/send-otp` + `/verify`, `/request-password-reset` +
@@ -1651,7 +1723,7 @@ export class AuthManager {
       // by the admin create-user/import routes with a placeholder email
       // (see placeholder-email.ts), never by OTP self-signup.
       const otpCfg = this.config.phoneOtp ?? {};
-      plugins.push(phoneNumber({
+      return phoneNumber({
         schema: buildPhoneNumberPluginSchema(),
         // Wrong-code attempts before the stored OTP is invalidated. Explicit
         // (even though 3 is the better-auth default) — #2780 names it a
@@ -1677,13 +1749,15 @@ export class AuthManager {
         sendPasswordResetOTP: async ({ phoneNumber: phone, code }) => {
           await this.deliverPhoneOtp(phone, code);
         },
-      }));
+      });
+      });
     }
 
     if (enabled.magicLink) {
+      await this.addOptionalPlugin(plugins, 'magicLink', async () => {
       const { magicLink } = await import('better-auth/plugins/magic-link');
       // magic-link reuses the `verification` table — no extra schema mapping needed.
-      plugins.push(magicLink({
+      return magicLink({
         sendMagicLink: async ({ email: recipientEmail, url, token }) => {
           // #2766 V1.5 — placeholder addresses are never real recipients.
           if (isPlaceholderEmail(recipientEmail)) {
@@ -1718,14 +1792,17 @@ export class AuthManager {
             throw err;
           }
         },
-      }));
+      });
+      });
     }
 
     // OIDC / Generic OAuth2 providers (enterprise SSO via genericOAuth plugin)
     if (this.config.oidcProviders?.length) {
+      const oidcProviders = this.config.oidcProviders;
+      await this.addOptionalPlugin(plugins, 'genericOAuth', async () => {
       const { genericOAuth } = await import('better-auth/plugins/generic-oauth');
-      plugins.push(genericOAuth({
-        config: this.config.oidcProviders.map(p => ({
+      return genericOAuth({
+        config: oidcProviders.map(p => ({
           providerId: p.providerId,
           ...(p.discoveryUrl ? { discoveryUrl: p.discoveryUrl } : {}),
           ...(p.issuer ? { issuer: p.issuer } : {}),
@@ -1737,7 +1814,8 @@ export class AuthManager {
           ...(p.scopes ? { scopes: p.scopes } : {}),
           ...(p.pkce != null ? { pkce: p.pkce } : {}),
         })),
-      }));
+      });
+      });
     }
 
     // OAuth/OIDC Provider — turn this server into an OpenID Connect Identity
@@ -1751,16 +1829,20 @@ export class AuthManager {
     // models — see `buildOauthProviderPluginSchema()` for the snake_case
     // mappings to ObjectStack's `sys_oauth_*` tables.
     if (enabled.oidcProvider) {
+      // jwt + oauthProvider are one atomic unit: on failure neither lands.
+      // This is the plugin that broke every fresh 15.1.0 project (modelName
+      // TypeError from a 1.6/1.7 version mix) — see addOptionalPlugin.
+      await this.addOptionalPlugin(plugins, 'oidcProvider', async () => {
       // The new @better-auth/oauth-provider package requires the `jwt`
       // plugin (used to sign id_tokens / JWT access tokens). Register it
       // automatically — it is otherwise an internal implementation detail
       // and forcing every consumer to opt in would be poor DX.
       const { jwt } = await import('better-auth/plugins');
-      plugins.push(jwt({ schema: buildJwtPluginSchema() }));
+      const jwtPlugin = jwt({ schema: buildJwtPluginSchema() });
 
       const { oauthProvider } = await import('@better-auth/oauth-provider');
       const dcr = resolveDcrEnabled(pluginConfig);
-      plugins.push(oauthProvider({
+      return [jwtPlugin, oauthProvider({
         // Console SPA renders both pages (replaces the legacy Account SPA at
         // /_account). Override `uiBasePath` in AuthConfig if Console is
         // mounted elsewhere.
@@ -1786,7 +1868,8 @@ export class AuthManager {
         // an anonymous registration mints no authority by itself.
         allowDynamicClientRegistration: dcr,
         allowUnauthenticatedClientRegistration: dcr,
-      }));
+      })];
+      });
     }
 
     // External SSO (OIDC / SAML) relying-party — lets this environment federate
@@ -1797,6 +1880,7 @@ export class AuthManager {
     //
     // Toggle with `OS_SSO_ENABLED` (mirrors `OS_OIDC_PROVIDER_ENABLED`).
     if (enabled.sso) {
+      await this.addOptionalPlugin(plugins, 'sso', async () => {
       const { sso } = await import('@better-auth/sso');
       // NOTE: unlike `oauthProvider`, @better-auth/sso hardcodes its `ssoProvider`
       // model and accepts NO `schema` option (verified against 1.6.20 — no
@@ -1816,10 +1900,11 @@ export class AuthManager {
       // external IdP's email domain be DNS-verified before it may complete a
       // login — preventing an org admin from registering a provider for a domain
       // they don't control. Off by default to preserve the register→login flow.
-      plugins.push(sso({
+      return sso({
         organizationProvisioning: { defaultRole: 'member' },
         ...(enabled.ssoDomainVerification ? { domainVerification: { enabled: true } } : {}),
-      }));
+      });
+      });
     }
 
     // External SCIM 2.0 Service Provider (@better-auth/scim, MIT) — lets an
@@ -1835,8 +1920,10 @@ export class AuthManager {
     // storeSCIMToken: 'hashed' — never persist the bearer in cleartext; the
     // plaintext is returned exactly once from generate-token (for the IdP admin).
     if (enabled.scim) {
-      const { scim } = await import('@better-auth/scim');
-      plugins.push(scim({ storeSCIMToken: 'hashed' }));
+      await this.addOptionalPlugin(plugins, 'scim', async () => {
+        const { scim } = await import('@better-auth/scim');
+        return scim({ storeSCIMToken: 'hashed' });
+      });
     }
 
     // Device Authorization Grant (RFC 8628) — for CLI / TV-style devices.
@@ -1848,11 +1935,13 @@ export class AuthManager {
     // the `user_code` query parameter that better-auth appends to
     // `verification_uri_complete`.
     if (enabled.deviceAuthorization) {
-      const { deviceAuthorization } = await import('better-auth/plugins/device-authorization');
-      plugins.push(deviceAuthorization({
-        verificationUri: this.getConsolePageUrl('/auth/device'),
-        schema: buildDeviceAuthorizationPluginSchema(),
-      }));
+      await this.addOptionalPlugin(plugins, 'deviceAuthorization', async () => {
+        const { deviceAuthorization } = await import('better-auth/plugins/device-authorization');
+        return deviceAuthorization({
+          verificationUri: this.getConsolePageUrl('/auth/device'),
+          schema: buildDeviceAuthorizationPluginSchema(),
+        });
+      });
     }
 
     // customSession() — augments the session payload with the canonical

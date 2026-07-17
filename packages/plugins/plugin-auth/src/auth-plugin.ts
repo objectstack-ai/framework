@@ -1751,6 +1751,25 @@ export class AuthPlugin implements Plugin {
    */
   private async registerOidcDiscoveryRoutes(rawApp: any, ctx: PluginContext): Promise<void> {
     const auth = await this.authManager!.getAuthInstance();
+
+    // The oauthProvider plugin may have been skipped by the optional-plugin
+    // isolation in AuthManager.buildPluginList (a failing optional plugin no
+    // longer fails the whole instance — the 15.1.0 lesson). Advertising
+    // .well-known discovery documents for an IdP whose endpoints are not
+    // mounted would send every external client into 404s, so skip the mounts
+    // and say why. Core auth is already up at this point.
+    const degradedOidc = this.authManager!
+      .getDegradedAuthFeatures()
+      .find((d) => d.feature === 'oidcProvider');
+    if (degradedOidc) {
+      ctx.logger.error(
+        'OIDC provider is configured but its better-auth plugin failed to initialize; ' +
+          'skipping /.well-known discovery mounts. External SSO/MCP clients cannot use this ' +
+          `deployment as an IdP until the underlying error is fixed: ${degradedOidc.error}`,
+      );
+      return;
+    }
+
     const { oauthProviderAuthServerMetadata, oauthProviderOpenIdConfigMetadata } = await import(
       '@better-auth/oauth-provider'
     );
