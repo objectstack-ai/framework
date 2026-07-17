@@ -8,6 +8,14 @@ description: >
   "act as a real admin/user", "dogfood the Setup/Studio app", or browser-verify
   a change in the running app. NOT a customer-published skill — this is internal
   agent tooling (lives in .claude/, never in the published `skills/` dir).
+metadata:
+  # Hides this skill from interactive `npx skills add objectstack-ai/framework`
+  # discovery. NOTE: the skills CLI's `--all` implies `--skill '*'`, which
+  # includes internal skills — so the hard boundary against leaking into
+  # customer projects is the `/skills` subpath in every advertised install
+  # command (scaffolder, docs). Every SKILL.md outside `skills/` must carry
+  # this marker — template-consistency.test.ts enforces both layers.
+  internal: true
 ---
 
 # Dogfood verification

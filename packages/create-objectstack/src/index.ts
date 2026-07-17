@@ -24,7 +24,10 @@
  *   - README.md                 first H1
  *
  * Finally we run `<pm> install` and (best-effort) install the ObjectStack
- * skills bundle via `npx skills add objectstack-ai/framework --all`.
+ * skills bundle via `npx skills add objectstack-ai/framework/skills --all`.
+ * The `/skills` subpath scopes discovery to the curated, customer-published
+ * catalog — repo-internal skills (e.g. under `.claude/skills/`) must never
+ * reach scaffolded projects.
  */
 
 import { Command } from 'commander';
@@ -477,7 +480,7 @@ const program = new Command()
       if (!options.skipInstall && !options.skipSkills) {
         printStep('Installing AI skills for your coding agent...');
         try {
-          execSync('npx -y skills add objectstack-ai/framework --all', {
+          execSync('npx -y skills add objectstack-ai/framework/skills --all', {
             stdio: 'inherit',
             cwd: targetDir,
           });
@@ -485,7 +488,7 @@ const program = new Command()
         } catch {
           printWarning(
             'Skills installation skipped. Run manually:\n' +
-              '    npx skills add objectstack-ai/framework',
+              '    npx skills add objectstack-ai/framework/skills',
           );
           console.log('');
         }
@@ -507,7 +510,7 @@ const program = new Command()
       if (options.skipInstall || options.skipSkills) {
         console.log('');
         console.log(chalk.bold('  AI Skills (recommended):'));
-        console.log(chalk.dim('    npx skills add objectstack-ai/framework'));
+        console.log(chalk.dim('    npx skills add objectstack-ai/framework/skills'));
       }
       console.log('');
     } catch (error) {
