@@ -14,8 +14,8 @@ API Operations Enum
 ## TypeScript Usage
 
 ```typescript
-import { ApiMethod, Index, Lifecycle, LifecycleClass, Object, ObjectAccessConfig, ObjectCapabilities, ObjectExtension, ObjectExternalBinding, ObjectFieldGroup, ObjectOwnershipEnum, ObjectRequiredPermissions, PerOperationRequiredPermissions, SoftDeleteConfig, TenancyConfig, VersioningConfig } from '@objectstack/spec/data';
-import type { ApiMethod, Index, Lifecycle, LifecycleClass, Object, ObjectAccessConfig, ObjectCapabilities, ObjectExtension, ObjectExternalBinding, ObjectFieldGroup, ObjectOwnershipEnum, ObjectRequiredPermissions, PerOperationRequiredPermissions, SoftDeleteConfig, TenancyConfig, VersioningConfig } from '@objectstack/spec/data';
+import { ApiMethod, Index, Lifecycle, LifecycleClass, Object, ObjectAccessConfig, ObjectCapabilities, ObjectExtension, ObjectExternalBinding, ObjectFieldGroup, ObjectOwnershipEnum, ObjectRequiredPermissions, PerOperationRequiredPermissions, RowCrudActionOverride, SoftDeleteConfig, TenancyConfig, VersioningConfig } from '@objectstack/spec/data';
+import type { ApiMethod, Index, Lifecycle, LifecycleClass, Object, ObjectAccessConfig, ObjectCapabilities, ObjectExtension, ObjectExternalBinding, ObjectFieldGroup, ObjectOwnershipEnum, ObjectRequiredPermissions, PerOperationRequiredPermissions, RowCrudActionOverride, SoftDeleteConfig, TenancyConfig, VersioningConfig } from '@objectstack/spec/data';
 
 // Validate data
 const result = ApiMethod.parse(data);
@@ -280,6 +280,21 @@ Type: `string[]`
 | **create** | `string[]` | optional | Capabilities required to create (insert). |
 | **update** | `string[]` | optional | Capabilities required to update (update/transfer/restore). |
 | **delete** | `string[]` | optional | Capabilities required to delete (delete/purge). |
+
+
+---
+
+## RowCrudActionOverride
+
+Boolean-or-predicates override for a built-in row CRUD affordance.
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **enabled** | `boolean` | optional | Object-level on/off for the generic affordance; same meaning as the bare boolean form. Omitted → managedBy bucket default. |
+| **visibleWhen** | `string \| Object` | optional | Per-record CEL predicate; false → hide the row button for that record. Fail-closed. |
+| **disabledWhen** | `string \| Object` | optional | Per-record CEL predicate; true → render the row button disabled for that record. Fail-soft. |
 
 
 ---

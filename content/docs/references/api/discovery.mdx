@@ -28,8 +28,8 @@ not been verified (may 501 at runtime).
 ## TypeScript Usage
 
 ```typescript
-import { ApiRoutes, Discovery, RouteHealthEntry, RouteHealthReport, ServiceInfo, WellKnownCapabilities } from '@objectstack/spec/api';
-import type { ApiRoutes, Discovery, RouteHealthEntry, RouteHealthReport, ServiceInfo, WellKnownCapabilities } from '@objectstack/spec/api';
+import { ApiRoutes, Discovery, RouteHealthEntry, RouteHealthReport, ServiceInfo, ServiceSelfInfo, WellKnownCapabilities } from '@objectstack/spec/api';
+import type { ApiRoutes, Discovery, RouteHealthEntry, RouteHealthReport, ServiceInfo, ServiceSelfInfo, WellKnownCapabilities } from '@objectstack/spec/api';
 
 // Validate data
 const result = ApiRoutes.parse(data);
@@ -130,6 +130,19 @@ const result = ApiRoutes.parse(data);
 | **version** | `string` | optional | Semantic version of the service implementation (e.g. "3.0.6") |
 | **message** | `string` | optional | e.g. "Install plugin-workflow to enable" |
 | **rateLimit** | `Object` | optional | Rate limit and quota info for this service |
+
+
+---
+
+## ServiceSelfInfo
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **status** | `Enum<'stub' \| 'degraded'>` | ✅ | stub = placeholder or dev fake (do not use for real work); degraded = functional fallback with reduced capability |
+| **handlerReady** | `boolean` | optional | Whether the HTTP handler genuinely serves requests. Defaults: false for stub, true for degraded. |
+| **message** | `string` | optional | Human-readable explanation, e.g. what to install for the full implementation |
 
 
 ---
