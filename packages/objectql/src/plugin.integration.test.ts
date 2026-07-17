@@ -423,6 +423,63 @@ describe('ObjectQLPlugin - Metadata Service Integration', () => {
       expect(synced.length).toBeGreaterThanOrEqual(2);
     });
 
+    // 15.1 third-party eval: an object added while the server runs never
+    // became queryable — `manager.register()` doesn't fire subscribe()
+    // watchers, so the registry missed it, and tables were only created at
+    // boot. The `metadata:reloaded` hook must ingest payload objects AND
+    // re-run the schema sync so a hot-added object is immediately usable.
+    it('ingests metadata:reloaded payload objects and syncs their tables mid-run', async () => {
+      const synced: string[] = [];
+      let probeCtx: any;
+      const mockDriver = {
+        name: 'reload-driver',
+        version: '1.0.0',
+        connect: async () => {},
+        disconnect: async () => {},
+        find: async () => [],
+        findOne: async () => null,
+        create: async (_o: string, d: any) => d,
+        update: async (_o: string, _i: any, d: any) => d,
+        delete: async () => true,
+        syncSchema: async (object: string) => {
+          synced.push(object);
+        },
+      };
+
+      await kernel.use({
+        name: 'mock-driver-plugin',
+        type: 'driver',
+        version: '1.0.0',
+        init: async (ctx) => {
+          probeCtx = ctx;
+          ctx.registerService('driver.sync', mockDriver);
+        },
+      });
+
+      const plugin = new ObjectQLPlugin();
+      await kernel.use(plugin);
+      await kernel.bootstrap();
+      synced.length = 0;
+
+      // Simulate MetadataPlugin's artifact hot-reload announce.
+      await probeCtx.trigger('metadata:reloaded', {
+        changed: ['dist/objectstack.json'],
+        metadata: {
+          objects: [
+            {
+              name: 'hotload_widget',
+              label: 'Widget',
+              fields: { title: { name: 'title', label: 'Title', type: 'text' } },
+            },
+          ],
+        },
+      });
+
+      const ql: any = kernel.getService('objectql');
+      expect(ql.registry.getObject('hotload_widget')).toBeTruthy();
+      expect(synced).toContain('hotload_widget');
+    });
+
     it('should tolerate drivers without syncSchema', async () => {
       // Arrange - driver without syncSchema
       const mockDriver = {

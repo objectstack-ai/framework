@@ -2839,3 +2839,44 @@ describe('AuthManager', () => {
     });
   });
 });
+
+// 15.1 third-party eval — dev-only login hint for the auto-seeded admin.
+// `devSeedAdmin` may only ever leave the process in development: the field
+// is derived from `devSeedResult`, which the auth plugin sets exclusively
+// under NODE_ENV==='development', and getPublicConfig re-checks the env as
+// defense in depth. These tests pin the gate from the manager's side.
+describe('getPublicConfig devSeedAdmin (dev-only login hint)', () => {
+  const prevNodeEnv = process.env.NODE_ENV;
+  afterEach(() => {
+    process.env.NODE_ENV = prevNodeEnv;
+  });
+
+  const makeManager = () =>
+    new AuthManager({
+      secret: 'test-secret-at-least-32-chars-long',
+      baseUrl: 'http://localhost:3000',
+    });
+
+  it('is absent when devSeedResult is unset', () => {
+    process.env.NODE_ENV = 'development';
+    const manager = makeManager();
+    expect((manager.getPublicConfig() as any).devSeedAdmin).toBeUndefined();
+  });
+
+  it('surfaces the seeded credentials in development', () => {
+    process.env.NODE_ENV = 'development';
+    const manager = makeManager();
+    manager.devSeedResult = { email: 'admin@objectos.ai', password: 'admin123' };
+    expect((manager.getPublicConfig() as any).devSeedAdmin).toEqual({
+      email: 'admin@objectos.ai',
+      password: 'admin123',
+    });
+  });
+
+  it('never appears outside development even if devSeedResult leaked', () => {
+    process.env.NODE_ENV = 'production';
+    const manager = makeManager();
+    manager.devSeedResult = { email: 'admin@objectos.ai', password: 'admin123' };
+    expect((manager.getPublicConfig() as any).devSeedAdmin).toBeUndefined();
+  });
+});

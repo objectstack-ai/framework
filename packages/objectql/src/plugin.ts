@@ -131,6 +131,8 @@ export class ObjectQLPlugin implements Plugin {
   private hostContext?: Record<string, any>;
   private environmentId?: string;
   private skipSchemaSync = false;
+  /** Serializes reload-time schema syncs so overlapping reloads can't race DDL. */
+  private reloadSchemaSync: Promise<void> = Promise.resolve();
   private hydrateMetadataFromDb = false;
   /** Unsubscribe handles for metadata-event subscriptions (ADR-0008 PR-7). */
   private metadataUnsubscribes: Array<() => void> = [];
@@ -395,9 +397,37 @@ export class ObjectQLPlugin implements Plugin {
             // No settings service — governance stays at declared defaults.
         }
     });
-    ctx.hook('metadata:reloaded', async () => {
+    ctx.hook('metadata:reloaded', async (payload?: unknown) => {
         await this.resyncAuthoredHooks(ctx);
         await this.resyncAuthoredActions(ctx);
+        // 15.1 third-party eval: an object added while `os dev` runs was
+        // invisible until a manual restart. Two gaps compounded:
+        //   1. MetadataPlugin's artifact reload calls `manager.register()`,
+        //      which does NOT fire `subscribe()` watchers — so the bridge in
+        //      `subscribeToMetadataEvents` never saw the new object and the
+        //      SchemaRegistry never learned it ("Object … is not registered").
+        //      Ingest the reloaded object definitions straight off the
+        //      `metadata:reloaded` payload (mirroring the subscribe handler's
+        //      registerObject call, provenance included).
+        //   2. Tables were only ever created by the boot-time sync — re-run
+        //      the idempotent schema sync after each reload so new objects
+        //      get their DDL immediately. Honors the same opt-out as boot
+        //      (`skipSchemaSync` / OS_SKIP_SCHEMA_SYNC) for deployments that
+        //      manage DDL out-of-band, and serializes through
+        //      `reloadSchemaSync` so overlapping reload events can't race DDL.
+        this.ingestReloadedObjects(ctx, payload);
+        if (!this.skipSchemaSync) {
+            this.reloadSchemaSync = this.reloadSchemaSync.then(async () => {
+                try {
+                    await this.syncRegisteredSchemas(ctx);
+                } catch (e: any) {
+                    ctx.logger.warn('[ObjectQLPlugin] reload-time schema sync failed', {
+                        error: e?.message ?? String(e),
+                    });
+                }
+            });
+            await this.reloadSchemaSync;
+        }
     });
 
     // Discover features from Kernel Services
@@ -524,6 +554,50 @@ export class ObjectQLPlugin implements Plugin {
       }
     }
     this.metadataUnsubscribes = [];
+  }
+
+  /**
+   * Re-register every object definition carried on a `metadata:reloaded`
+   * payload into the SchemaRegistry. The artifact reload path registers
+   * items via `MetadataManager.register()`, which does not fire
+   * `subscribe()` watchers — without this ingest, an object added while the
+   * server runs never reaches the registry (and therefore can never get a
+   * table or answer a query). Mirrors `subscribeToMetadataEvents`'s
+   * registerObject call: provenance comes from the `_packageId` the
+   * MetadataPlugin stamped during registration (falling back to
+   * 'metadata-service'), so package attribution stays reload-stable.
+   * Removed objects are left registered until restart — same lifecycle as
+   * their tables, which managed drift deliberately never drops.
+   */
+  private ingestReloadedObjects(ctx: PluginContext, payload: unknown): void {
+    if (!this.ql) return;
+    const objects = (payload as any)?.metadata?.objects;
+    if (!Array.isArray(objects) || objects.length === 0) return;
+    let ingested = 0;
+    for (const obj of objects) {
+      const name = (obj as any)?.name;
+      if (typeof name !== 'string' || name.length === 0) continue;
+      try {
+        this.ql.registry.invalidate(name);
+        this.ql.registry.registerObject(
+          obj as any,
+          (obj as any)._packageId ?? 'metadata-service',
+          (obj as any).namespace,
+          'own',
+        );
+        ingested++;
+      } catch (e: any) {
+        ctx.logger.warn('[ObjectQLPlugin] reload object ingest failed', {
+          name,
+          error: e?.message,
+        });
+      }
+    }
+    if (ingested > 0) {
+      ctx.logger.info('[ObjectQLPlugin] reload ingested object definitions into the registry', {
+        count: ingested,
+      });
+    }
   }
 
   /**
