@@ -48,7 +48,7 @@
 # create-objectstack template needs updating. It has already happened once:
 # pnpm 11 turned unapproved build scripts from a warning into a hard error, so
 # every `npx create-objectstack` + `pnpm install` exited 1 until the template
-# started declaring `allowBuilds` (#3110).
+# started declaring `allowBuilds` (#3119).
 #
 # Usage:
 #   bash scripts/publish-smoke.sh
@@ -129,7 +129,7 @@ if [ "$SMOKE_MODE" = "pack" ]; then
   # Appending, not overwriting, is load-bearing: the template's build-approval
   # block (allowBuilds / onlyBuiltDependencies) is part of what a user gets, so
   # it has to be part of what this gate tests. This script used to hand-write
-  # the whole file, declaring the approvals itself — which is exactly how #3110
+  # the whole file, declaring the approvals itself — which is exactly how #3119
   # stayed invisible here: a locally-authored declaration proves nothing about
   # what the template ships.
   #

@@ -74,10 +74,10 @@ describe('blank template manifest engines.protocol (ADR-0087 D1)', () => {
 
 // pnpm 11 turned an unapproved dependency build script from a warning into a
 // hard error, so the template declaring nothing meant `npx create-objectstack`
-// + `pnpm install` exited 1 for every user on a current pnpm (#3110). Both keys
+// + `pnpm install` exited 1 for every user on a current pnpm (#3119). Both keys
 // are load-bearing and read by different pnpm versions: pnpm 11 honours only
 // `allowBuilds`, while pnpm 10.0–10.30 understand only `onlyBuiltDependencies`.
-describe('blank template pnpm build approvals (#3110)', () => {
+describe('blank template pnpm build approvals (#3119)', () => {
   const wsPath = path.join(pkgRoot, 'src', 'templates', 'blank', 'pnpm-workspace.yaml');
   const APPROVED = ['better-sqlite3', 'esbuild'];
   // Strip comments: the prose below explains these keys and must not satisfy
