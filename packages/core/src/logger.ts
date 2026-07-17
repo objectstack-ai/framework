@@ -44,6 +44,39 @@ function colorEnabled(stream: { isTTY?: boolean } | undefined): boolean {
     return Boolean(stream?.isTTY);
 }
 
+/**
+ * Resolve a Node builtin without putting it in this module's import graph.
+ *
+ * This entry is deliberately browser-safe — `@objectstack/client` bundles it —
+ * so `fs`/`path` must never be imported statically. A lazy `require()` used to
+ * meet that bar, but esbuild rewrites it to the `__require` shim in the ESM
+ * output, which throws `Dynamic require of "fs" is not supported`. Every Node
+ * ESM consumer (`os serve`, `os dev`) therefore lost file logging (#3110).
+ * `process.getBuiltinModule` is a plain method call — opaque to bundlers — and
+ * works in both module systems.
+ */
+function loadNodeBuiltin<T>(id: string): T | undefined {
+    if (typeof process === 'undefined') return undefined;
+
+    const getBuiltinModule = (process as { getBuiltinModule?: (id: string) => unknown }).getBuiltinModule;
+    if (typeof getBuiltinModule === 'function') {
+        try {
+            return getBuiltinModule.call(process, `node:${id}`) as T;
+        } catch {
+            return undefined;
+        }
+    }
+
+    // Node < 20.16 / < 22.3 predates `getBuiltinModule`. Real `require` still
+    // resolves in the CJS build; in the ESM build this is the shim that throws,
+    // which the caller now reports rather than swallows.
+    try {
+        return require(id) as T;
+    } catch {
+        return undefined;
+    }
+}
+
 export class ObjectLogger implements Logger {
     private config: Required<Omit<LoggerConfig, 'file' | 'rotation' | 'name'>> & {
         file?: string;
@@ -52,6 +85,9 @@ export class ObjectLogger implements Logger {
     };
     private bindings: Record<string, any>;
     private fileStream?: any;
+    /** Only the logger that opened the stream may close it — children share it. */
+    private ownsFileStream = false;
+    private fileLoggingDisabled = false;
 
     constructor(config: Partial<LoggerConfig> = {}, bindings: Record<string, any> = {}) {
         this.config = {
@@ -71,14 +107,48 @@ export class ObjectLogger implements Logger {
     }
 
     private openFileStream(path: string) {
+        const fs = loadNodeBuiltin<typeof import('node:fs')>('fs');
+        const nodePath = loadNodeBuiltin<typeof import('node:path')>('path');
+        if (!fs || !nodePath) {
+            this.disableFileLogging(path, 'no filesystem access in this runtime');
+            return;
+        }
+
         try {
-            // Lazy require to avoid bundling issues
-            const fs = require('fs');
-            const dir = require('path').dirname(path);
-            fs.mkdirSync(dir, { recursive: true });
-            this.fileStream = fs.createWriteStream(path, { flags: 'a' });
-        } catch {
-            // ignore — file logging is optional
+            fs.mkdirSync(nodePath.dirname(path), { recursive: true });
+            const stream = fs.createWriteStream(path, { flags: 'a' });
+            // `createWriteStream` reports open failures (EACCES, EISDIR, …)
+            // asynchronously. An 'error' event with no listener is fatal to the
+            // process, so file logging must degrade here rather than take the
+            // host down.
+            stream.on('error', (err: Error) => this.disableFileLogging(path, err.message));
+            this.fileStream = stream;
+            this.ownsFileStream = true;
+        } catch (err) {
+            this.disableFileLogging(path, (err as Error).message);
+        }
+    }
+
+    /**
+     * Report — once — that an explicitly configured `file` destination is not
+     * being written, and stop trying.
+     *
+     * Deliberately not routed through `write()`: this says the logger cannot
+     * honour its own config, so `level` must not filter it. The bare `catch {}`
+     * this replaces is exactly how #3110 stayed hidden.
+     */
+    private disableFileLogging(path: string, reason: string) {
+        this.fileStream = undefined;
+        this.ownsFileStream = false;
+        if (this.fileLoggingDisabled) return;
+        this.fileLoggingDisabled = true;
+
+        const label = this.config.name ? `[${this.config.name}] ` : '';
+        const notice = `${label}logger: file logging disabled — cannot write to ${path}: ${reason}`;
+        if (typeof process !== 'undefined' && (process as any).stderr) {
+            (process as any).stderr.write(notice + '\n');
+        } else if (typeof console !== 'undefined') {
+            console.warn(notice);
         }
     }
 
@@ -197,8 +267,12 @@ export class ObjectLogger implements Logger {
     }
 
     child(context: Record<string, any>): ObjectLogger {
-        const child = new ObjectLogger(this.config, { ...this.bindings, ...context });
-        // Share the file stream — no double-open
+        // Construct without `file`, then share the parent's stream: the
+        // constructor opens eagerly, so passing `file` through would open a
+        // second stream per child and immediately orphan it. That leak was
+        // unreachable while #3110 kept the ESM open path dead.
+        const child = new ObjectLogger({ ...this.config, file: undefined }, { ...this.bindings, ...context });
+        child.config.file = this.config.file;
         child.fileStream = this.fileStream;
         return child;
     }
@@ -208,10 +282,15 @@ export class ObjectLogger implements Logger {
     }
 
     async destroy(): Promise<void> {
-        if (this.fileStream) {
-            await new Promise<void>((resolve) => this.fileStream.end(resolve));
-            this.fileStream = undefined;
-        }
+        const stream = this.fileStream;
+        this.fileStream = undefined;
+        // Children share the opener's stream; if they closed it too, one child's
+        // teardown would end file logging for the parent and every sibling,
+        // whose writes then land on a closed stream and only trip the 'error'
+        // handler above.
+        if (!stream || !this.ownsFileStream) return;
+        this.ownsFileStream = false;
+        await new Promise<void>((resolve) => stream.end(resolve));
     }
 }
 
