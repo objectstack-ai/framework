@@ -639,7 +639,7 @@ export default defineObject({
 os datasource validate warehouse
 # ✓ wh_order matches warehouse.mart.fact_orders (5/14 mapped, 9 unmapped — ok)
 
-pnpm dev:crm -- --fresh -p 38421
+pnpm dev:crm --fresh -p 38421
 # [info] external-validation: 1 datasource, 1 object, 0 mismatches
 ```
 

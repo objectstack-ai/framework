@@ -28,14 +28,14 @@ pnpm docs:dev         # docs site
 | Scenario | Command | Notes |
 |:---|:---|:---|
 | **Frontend debug** (UI in `../objectui` calls backend) | `PORT=3000 pnpm dev` | `pnpm dev` = the **showcase** kitchen-sink app (default; best for exercising the platform). Port **must** be 3000 (UI hard-wired); persistent state; leave running. For the minimal CRM app instead: `PORT=3000 pnpm dev:crm`. |
-| **Backend-only debug** | `pnpm dev -- --fresh -p <random>` | Random high port; ephemeral tempdir; **you must kill it** when done |
+| **Backend-only debug** | `pnpm dev --fresh -p <random>` | Random high port; ephemeral tempdir; **you must kill it** when done |
 
 `--fresh`: ephemeral tempdir (auto-deleted on exit) + `--seed-admin` (POSTs sign-up, prints creds — default `admin@objectos.ai` / `admin123`, override via `--admin-email`/`--admin-password`). The seeded admin is auto-promoted to **platform admin** (the system seed identity `usr_system` is skipped), so Setup/Studio are reachable on first login.
 
-Rules: never run two backends on port 3000; for backend tasks pick a random port and tear it down; **never kill a server you didn't start** (other agents/the user may be using it — see Multi-agent discipline §8); always use a `pnpm dev`/`dev:crm`/`dev:showcase` script (flags after `--` are forwarded), not raw `pnpm --filter`.
+Rules: never run two backends on port 3000; for backend tasks pick a random port and tear it down; **never kill a server you didn't start** (other agents/the user may be using it — see Multi-agent discipline §8); always use a `pnpm dev`/`dev:crm`/`dev:showcase` script (flags are forwarded as-is — no `--` separator, pnpm passes it through and the CLI rejects it), not raw `pnpm --filter`.
 
 ```bash
-pnpm dev:crm -- --fresh -p 38421   # start; debug via curl
+pnpm dev:crm --fresh -p 38421      # start; debug via curl
 kill $(lsof -ti tcp:38421)         # tear down — tempdir auto-deletes
 ```
 
@@ -113,7 +113,7 @@ own worktree, operate defensively:
 8. **Testing needs a server? Start your own temporary one — never stop someone
    else's.** A running dev server you didn't start probably belongs to another
    agent or the user; killing it (or its port) breaks their in-flight work. Spin
-   up your own instance on a random high port (`pnpm dev -- --fresh -p <random>`)
+   up your own instance on a random high port (`pnpm dev --fresh -p <random>`)
    and **shut it down yourself when the task is done**
    (`kill $(lsof -ti tcp:<port>)`). Don't leave orphan servers behind.
 
