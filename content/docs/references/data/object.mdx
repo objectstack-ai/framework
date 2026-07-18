@@ -100,10 +100,7 @@ const result = ApiMethod.parse(data);
 | **pluralLabel** | `string` | optional | Human readable plural label (e.g. "Accounts") |
 | **description** | `string` | optional | Developer documentation / description |
 | **icon** | `string` | optional | Icon name (Lucide/Material) for UI representation |
-| **tags** | `string[]` | optional | Categorization tags (e.g. "sales", "system", "reference") |
-| **active** | `boolean` | optional | Is the object active and usable |
-| **isSystem** | `boolean` | optional | Is system object (protected from deletion) |
-| **abstract** | `boolean` | optional | Is abstract base object (cannot be instantiated) |
+| **isSystem** | `boolean` | optional | Is system object (protected from deletion; defaults its org-wide sharing to public when no sharingModel is set — plugin-sharing) |
 | **managedBy** | `Enum<'platform' \| 'config' \| 'system' \| 'append-only' \| 'better-auth'>` | optional | Lifecycle bucket — platform (user CRUD) \| config (admin authored) \| system (engine-managed) \| append-only (audit) \| better-auth (identity). UI clients honour the resolved affordance matrix. |
 | **ownership** | `Enum<'user' \| 'org' \| 'none'>` | optional | Record-ownership model: user (default — injects reassignable owner_id) \| org \| none (no per-record owner, skips owner_id). Distinct from the package own/extend contribution kind. |
 | **userActions** | `{ create?: boolean; import?: boolean; edit?: boolean \| { enabled?: boolean; visibleWhen?: string \| { dialect: Enum<'cel' \| 'js' \| 'cron' \| 'template'>; source?: string; ast?: any; meta?: object }; disabledWhen?: string \| { dialect: Enum<'cel' \| 'js' \| 'cron' \| 'template'>; source?: string; ast?: any; meta?: object } }; delete?: boolean \| { enabled?: boolean; visibleWhen?: string \| { dialect: Enum<'cel' \| 'js' \| 'cron' \| 'template'>; source?: string; ast?: any; meta?: object }; disabledWhen?: string \| { dialect: Enum<'cel' \| 'js' \| 'cron' \| 'template'>; source?: string; ast?: any; meta?: object } }; … }` | optional | Per-object override of the resolved CRUD affordance matrix. |

@@ -182,7 +182,6 @@ describe('FieldWidgetPropsSchema', () => {
         onChange: () => {},
         field: Field.lookup('account', { 
           label: 'Account',
-          referenceFilters: ['status = "active"'],
         }),
       };
 

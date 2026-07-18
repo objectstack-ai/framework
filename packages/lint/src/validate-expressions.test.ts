@@ -422,57 +422,6 @@ describe('validateStackExpressions (ADR-0032 build-time)', () => {
     });
   });
 
-  describe('ADR-0062 D7 — field.columnName on external objects', () => {
-    it('rejects field.columnName on a federated (external) object', () => {
-      const issues = validateStackExpressions({
-        objects: [{
-          name: 'ext_customer',
-          datasource: 'warehouse',
-          external: { remoteName: 'customers' },
-          fields: { region: { type: 'text', columnName: 'cust_region' } },
-        }],
-      });
-      const issue = issues.find(i => /columnName/.test(i.message));
-      expect(issue).toBeDefined();
-      expect(issue!.severity).toBe('error');
-      expect(issue!.where).toContain("object 'ext_customer'");
-      expect(issue!.where).toContain("field 'region'");
-      expect(issue!.message).toMatch(/external\.columnMap|ADR-0062 D7/);
-    });
-
-    it('rejects field.columnName declared as a map-shaped field too', () => {
-      const issues = validateStackExpressions({
-        objects: [{
-          name: 'ext_order',
-          external: {},
-          fields: { amount: { type: 'number', columnName: 'amt' } },
-        }],
-      });
-      expect(issues.some(i => /columnName/.test(i.message) && i.where.includes("field 'amount'"))).toBe(true);
-    });
-
-    it('leaves field.columnName on a MANAGED object untouched (no issue)', () => {
-      const issues = validateStackExpressions({
-        objects: [{
-          name: 'crm_account',
-          fields: { region: { type: 'text', columnName: 'acct_region' } },
-        }],
-      });
-      expect(issues.some(i => /columnName/.test(i.message))).toBe(false);
-    });
-
-    it('passes an external object that uses no columnName', () => {
-      const issues = validateStackExpressions({
-        objects: [{
-          name: 'ext_customer',
-          external: { remoteName: 'customers' },
-          fields: { region: { type: 'text' } },
-        }],
-      });
-      expect(issues.some(i => /columnName/.test(i.message))).toBe(false);
-    });
-  });
-
   // #3183 — `date` field `== today()` silently never matches (cel-js equality).
   // The stack validator threads each object's field types into the shared
   // validator, which flags the pattern with an advisory (non-blocking) warning.
@@ -555,4 +504,7 @@ describe('validateStackExpressions (ADR-0032 build-time)', () => {
       expect(dateWarns(issues)).toHaveLength(0);
     });
   });
+
+  // The ADR-0062 D7 `field.columnName`-on-external-objects lint was removed with
+  // `field.columnName` itself (#2377): external column mapping is `external.columnMap`.
 });

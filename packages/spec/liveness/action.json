@@ -30,7 +30,7 @@
     "type": {
       "status": "live",
       "evidence": "packages/runtime/src/http-dispatcher.ts",
-      "note": "api/script/flow wired; url thinner; modal PARTIAL (maps to serverActionHandler, not a real modal); form DEAD (no consumer)."
+      "note": "api/script/flow wired; url thinner; modal PARTIAL (maps to serverActionHandler, not a real modal); form LIVE via objectui ActionRunner.executeForm (routes a type:'form' action to the FormView at /forms/:target, forwarding the current record id) — the 2026-06 audit mis-classified as dead (objectui renderer not re-verified; fixed the 'Log Time does nothing' report). Build-time lint-view-refs.ts validates the form target resolves to a form view."
     },
     "target": {
       "status": "live",

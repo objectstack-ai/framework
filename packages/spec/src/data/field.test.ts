@@ -204,7 +204,6 @@ describe('FieldSchema', () => {
       expect(result.unique).toBe(false);
       expect(result.hidden).toBe(false);
       expect(result.readonly).toBe(false);
-      expect(result.index).toBe(false);
       expect(result.externalId).toBe(false);
     });
   });
@@ -262,7 +261,6 @@ describe('FieldSchema', () => {
         label: 'Account',
         type: 'lookup',
         reference: 'account',
-        referenceFilters: ['status = "active"'],
       };
 
       expect(() => FieldSchema.parse(lookupField)).not.toThrow();
@@ -423,7 +421,6 @@ describe('FieldSchema', () => {
         label: 'Email',
         type: 'email',
         unique: true,
-        index: true,
         externalId: true,
       };
 
@@ -443,7 +440,6 @@ describe('FieldSchema', () => {
         maxLength: 20,
         minLength: 10,
         defaultValue: 'ACC-0000',
-        index: true,
         externalId: true,
         readonly: false,
         hidden: false,
@@ -528,7 +524,6 @@ describe('Field Factory Helpers', () => {
     it('should create lookup field', () => {
       const lookupField = Field.lookup('account', { 
         label: 'Account',
-        referenceFilters: ['status = "active"'],
       });
       
       expect(lookupField.type).toBe('lookup');
@@ -966,35 +961,6 @@ describe('FieldSchema - conditional field rules (visibleWhen / readonlyWhen / re
     });
     expect(result.requiredWhen).toEqual({ dialect: 'cel', source: "record.status == 'sent'" });
     expect(result.conditionalRequired).toEqual({ dialect: 'cel', source: "record.status == 'closed_won'" });
-  });
-});
-
-// ============================================================================
-// columnName — Storage Layer Mapping
-// ============================================================================
-
-describe('FieldSchema - columnName', () => {
-  it('should accept columnName for storage layer mapping', () => {
-    const result = FieldSchema.parse({
-      type: 'text',
-      columnName: 'user_email',
-    });
-    expect(result.columnName).toBe('user_email');
-  });
-
-  it('should accept field without columnName (optional, defaults to key)', () => {
-    const result = FieldSchema.parse({
-      type: 'text',
-    });
-    expect(result.columnName).toBeUndefined();
-  });
-
-  it('should accept camelCase columnName for legacy DB compatibility', () => {
-    const result = FieldSchema.parse({
-      type: 'datetime',
-      columnName: 'expiresAt',
-    });
-    expect(result.columnName).toBe('expiresAt');
   });
 });
 

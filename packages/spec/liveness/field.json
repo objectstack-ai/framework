@@ -165,12 +165,6 @@
       "evidence": "packages/objectql/src/validation/record-validator.ts:130",
       "note": "CAVEAT — server camel; client form reads min_length."
     },
-    "referenceFilters": {
-      "status": "dead",
-      "evidence": "lookup dialog reads lookup_filters/lookupFilters (LookupField.tsx) — the string[] referenceFilters form is not read (naming drift)",
-      "authorWarn": true,
-      "authorHint": "The picker reads the structured `lookupFilters` ({field,operator,value}), not the string[] `referenceFilters` — as authored this filters nothing. Use `lookupFilters`, or remove this to avoid implying a constrained lookup."
-    },
     "displayField": {
       "status": "live",
       "note": "objectui LookupField/RecordPickerDialog — candidate label field in the record picker (reads displayField || display_field)."
@@ -199,23 +193,10 @@
       "status": "live",
       "note": "objectui LookupField — opt-in inline quick-create (dataSource.create from typed text) (reads allowCreate || allow_create)."
     },
-    "columnName": {
-      "status": "dead",
-      "evidence": "resolveColumnName (spec system-names.ts:182) has ZERO call sites; SQL driver hardcodes column = field key",
-      "note": "DANGEROUS — advertises custom physical columns the driver never honors.",
-      "authorWarn": true,
-      "authorHint": "The physical column always equals the field key — a custom `columnName` is silently ignored by the driver. Remove it; rename the field key itself if you need a different column."
-    },
     "searchable": {
       "status": "live",
       "evidence": "objectui: packages/plugin-dashboard/src/WidgetConfigPanel.tsx:458",
       "note": "LIVE via objectui renderer — the 2026-06 audit mis-classified as dead (renderer side not re-verified). Corrected after checking ../objectui."
-    },
-    "index": {
-      "status": "dead",
-      "evidence": "field-level — driver reads object indexes[] (sql-driver.ts:1252); field bool unused",
-      "authorWarn": true,
-      "authorHint": "A field-level `index: true` creates no index — the driver builds indexes from the object's `indexes[]` array. Declare the index there instead."
     },
     "externalId": {
       "status": "live",

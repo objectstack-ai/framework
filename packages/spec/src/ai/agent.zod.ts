@@ -167,8 +167,9 @@ export const AgentSchema = lazySchema(() => z.object({
   /** Permission-set capabilities required to use this agent */
   permissions: z.array(z.string()).optional().describe('Required permission-set capabilities'),
 
-  /** Multi-tenancy & Visibility */
-  tenantId: z.string().optional().describe('Tenant/Organization ID'),
+  // `tenantId` removed in the 16.x line (#2377, ADR-0049): it had no runtime
+  // reader and did NOT scope the agent to a tenant — tenancy comes from the
+  // request context (resolveAuthzContext), not this field.
   // ⚠️ EXPERIMENTAL — NOT ENFORCED (#1901, ADR-0049). The chat-access evaluator
   // deliberately excludes `visibility` (agent-access.ts) and the agent list
   // route does not filter by it — setting `private` does NOT hide the agent.

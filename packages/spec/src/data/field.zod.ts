@@ -252,8 +252,10 @@ export const FieldSchema = lazySchema(() => z.object({
   description: z.string().optional().describe('Tooltip/Help text'),
   format: z.string().optional().describe('Format string (e.g. email, phone)'),
 
-  /** Storage Layer Mapping */
-  columnName: z.string().optional().describe('Physical column name in the target datasource. Defaults to the field key when not set.'),
+  // `columnName` removed in the 16.x line (#2377, ADR-0049): the SQL driver
+  // hardcodes the physical column = field key (createColumn never reads it), so
+  // a custom column name was silently ignored. External/federated objects map
+  // physical columns via `external.columnMap` (ADR-0062 D7 / ADR-0015).
 
   /** Database Constraints */
   required: z.boolean().default(false).describe('Is required'),
@@ -290,7 +292,9 @@ export const FieldSchema = lazySchema(() => z.object({
     'Target object name (snake_case) for lookup/master_detail fields. '
     + 'Required for relationship types. Used by $expand to resolve foreign key IDs into full objects.'
   ),
-  referenceFilters: z.array(z.string()).optional().describe('Filters applied to lookup dialogs (e.g. "active = true")'),
+  // `referenceFilters` (string[]) removed in the 16.x line (#2377, ADR-0049):
+  // the lookup picker reads the structured `lookupFilters` ({field,operator,value}),
+  // never this string[] form — as authored it filtered nothing. Use `lookupFilters`.
   deleteBehavior: z.enum(['set_null', 'cascade', 'restrict']).optional().default('set_null').describe('What happens if referenced record is deleted'),
   /**
    * Master-detail INLINE EDITING. On a child's `master_detail`/`lookup` field
@@ -375,7 +379,7 @@ export const FieldSchema = lazySchema(() => z.object({
     field: z.string(),
     operator: z.enum(['eq', 'ne', 'gt', 'lt', 'gte', 'lte', 'contains', 'in', 'notIn']),
     value: z.any(),
-  })).optional().describe('Base filters restricting which records are selectable (e.g. only active). Structured, picker-honoured form of referenceFilters.'),
+  })).optional().describe('Base filters restricting which records are selectable (e.g. only active). The structured, picker-honoured lookup filter.'),
   dependsOn: z.array(z.union([z.string(), z.object({
     field: z.string(),
     param: z.string().optional(),
@@ -509,8 +513,9 @@ export const FieldSchema = lazySchema(() => z.object({
    * optional field → warning).
    */
   autonumberFormat: z.string().optional().describe('Auto-number format: literal text + {0000} counter, {YYYY}/{MM}/{DD}/{YYYYMMDD} date tokens (business tz), and {field_name} interpolation. Counter resets per rendered prefix (e.g. AD{YYYYMMDD}{0000} resets daily).'),
-  /** Indexing */
-  index: z.boolean().default(false).describe('Create standard database index'),
+  // `index` (field-level bool) removed in the 16.x line (#2377, ADR-0049): the
+  // driver builds indexes from the object's `indexes[]` array; a field-level
+  // `index: true` created no index. Declare the index in object `indexes[]`.
   externalId: z.boolean().default(false).describe('Is external ID for upsert operations'),
 }));
 

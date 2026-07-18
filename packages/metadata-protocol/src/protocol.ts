@@ -100,10 +100,7 @@ const HAND_CRAFTED_SCHEMAS: Record<string, Record<string, unknown>> = {
             pluralLabel: { type: 'string' },
             icon: { type: 'string' },
             description: { type: 'string' },
-            tags: { type: 'array', items: { type: 'string' } },
-            active: { type: 'boolean', default: true },
             isSystem: { type: 'boolean', default: false },
-            abstract: { type: 'boolean', default: false },
             datasource: { type: 'string' },
             fields: {
                 // Canonical Object.fields is a name-keyed map

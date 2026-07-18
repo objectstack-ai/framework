@@ -114,7 +114,9 @@ export type SystemUserId = typeof SystemUserId[keyof typeof SystemUserId];
  * All API calls, SDK references, and permission checks MUST use these constants
  * instead of hardcoded strings or physical column names.
  *
- * The actual storage column name may differ via `FieldSchema.columnName`.
+ * The physical storage column always equals the field key (the driver does not
+ * support per-field column overrides; external objects map columns via
+ * `external.columnMap`, ADR-0062 D7 / ADR-0015).
  *
  * @example
  * ```ts
@@ -184,45 +186,8 @@ export const StorageNameMapping = {
     return idx === -1 ? object.name : object.name.slice(idx + 2);
   },
 
-  /**
-   * Resolve the physical column name for a field.
-   * Falls back to `fieldKey` when `columnName` is not set on the field.
-   *
-   * @param fieldKey - The protocol-level field key (snake_case identifier).
-   * @param field    - Field definition (at minimum `{ columnName?: string }`).
-   * @returns The physical column name to use in storage operations.
-   */
-  resolveColumnName(fieldKey: string, field: { columnName?: string }): string {
-    return field.columnName ?? fieldKey;
-  },
-
-  /**
-   * Build a complete field-key → column-name map for an entire object.
-   *
-   * @param fields - The fields record from an ObjectSchema.
-   * @returns A record mapping every protocol field key to its physical column name.
-   */
-  buildColumnMap(fields: Record<string, { columnName?: string }>): Record<string, string> {
-    const map: Record<string, string> = {};
-    for (const key of Object.keys(fields)) {
-      map[key] = fields[key].columnName ?? key;
-    }
-    return map;
-  },
-
-  /**
-   * Build a reverse column-name → field-key map for an entire object.
-   * Useful for translating storage-layer results back to protocol-level field keys.
-   *
-   * @param fields - The fields record from an ObjectSchema.
-   * @returns A record mapping every physical column name back to its protocol field key.
-   */
-  buildReverseColumnMap(fields: Record<string, { columnName?: string }>): Record<string, string> {
-    const map: Record<string, string> = {};
-    for (const key of Object.keys(fields)) {
-      const col = fields[key].columnName ?? key;
-      map[col] = key;
-    }
-    return map;
-  },
+  // resolveColumnName / buildColumnMap / buildReverseColumnMap were removed with
+  // `field.columnName` (#2377, ADR-0049): the SQL driver hardcodes the physical
+  // column = field key, so these had zero call sites. External-object physical
+  // mapping lives in `external.columnMap` (ADR-0062 D7 / ADR-0015).
 } as const;

@@ -31,7 +31,7 @@ This ADR defines the **complete external-datasource runtime contract** and the d
 | R7 | Introspection (`remote-tables`, `object-draft`) + runtime Sync wizard | ✅ shipped | ADR-0015 addendum; `service-datasource` |
 | R8 | **Connection lifecycle/health/pooling for N datasources** | ❌ **gap** | only the single `default` driver's lifecycle is managed today |
 | R9 | dogfood/verify handles read-only external; canonical example | ✅ shipped | #2139 (`verify` skip + `app-showcase`) |
-| R10 | **`columnMap` ↔ `field.columnName` single source of truth** | ❌ **gap** | two inverse mechanisms coexist |
+| R10 | **`columnMap` ↔ `field.columnName` single source of truth** | ✅ resolved | #2377 removed `field.columnName` (it was never applied by the driver); `external.columnMap` is now the sole physical-column mapping |
 
 ### The structural gap, precisely (R2)
 
@@ -82,6 +82,8 @@ The analytics native-SQL strategy compiles its own `FROM "<table>"` / column ref
 ### D7 — `columnMap` is the external mechanism; reconcile `field.columnName`
 
 `external.columnMap` ({ remoteColumn → localField }) is the supported way to map external columns (shipped #2149). `field.columnName` (localField → physicalColumn) is its inverse and is **not** applied by the driver's query pipeline for external objects. Decision: for external objects, `columnMap` is authoritative; `field.columnName` on an external object is rejected at validation (no silent dual-source) until a unified column-resolution model is designed. Managed objects' `field.columnName` semantics are untouched.
+
+> **Resolution (#2377, R10 closed).** `field.columnName` was **removed from the spec entirely** (ADR-0049 enforce-or-remove): the SQL driver hardcodes the physical column = field key (`createColumn` never read `columnName`), so it was inert on *managed* objects too — not just external ones. With the field gone there is no dual-source ambiguity, so the build-time D7 rejection lint (`validateStackExpressions`) and the dead `StorageNameMapping.resolveColumnName`/`buildColumnMap`/`buildReverseColumnMap` helpers were removed with it. `external.columnMap` is the single, authoritative physical-column mechanism. Physical-column override for managed objects (e.g. legacy-DB adoption) — the only case with real value — should, if ever needed, be designed as a first-class driver feature rather than reintroduced as an unenforced field.
 
 > **Phase 4 implementation note (#2163).** *D7* is enforced at build time in `validateStackExpressions` (`os compile`/`build`): any object that declares an `external` binding and a field with `columnName` is an error with a corrective message (use `external.columnMap`). Managed objects are untouched. *D8*: `examples/app-showcase` now declares its external datasource with **no** `onEnable` driver registration — `onEnable` only provisions the "remote" fixture tables; the declared datasource auto-connects (D1). To exercise this in the dogfood gate, the `@objectstack/verify` harness now wires the datasource-admin plugin (hence the `'datasource-connection'` service) when an app declares datasources — so the harness matches `objectstack dev`/serve and the federated read is covered end-to-end (a new dogfood test reads `showcase_ext_customer`/`_order`, including the `remoteName` remap). `onEnable` + `ctx.drivers.register` remains documented as the escape hatch for drivers built dynamically at runtime.
 

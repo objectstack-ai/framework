@@ -102,7 +102,6 @@ const result = Address.parse(data);
 | **type** | `Enum<'text' \| 'textarea' \| 'email' \| 'url' \| 'phone' \| 'password' \| 'secret' \| 'markdown' \| 'html' \| 'richtext' \| 'number' \| 'currency' \| 'percent' \| 'date' \| 'datetime' \| 'time' \| 'boolean' \| 'toggle' \| 'select' \| 'multiselect' \| 'radio' \| 'checkboxes' \| 'lookup' \| 'master_detail' \| 'tree' \| 'user' \| 'image' \| 'file' \| 'avatar' \| 'video' \| 'audio' \| 'formula' \| 'summary' \| 'autonumber' \| 'composite' \| 'repeater' \| 'record' \| 'location' \| 'address' \| 'code' \| 'json' \| 'color' \| 'rating' \| 'slider' \| 'signature' \| 'qrcode' \| 'progress' \| 'tags' \| 'vector'>` | ✅ | Field Data Type |
 | **description** | `string` | optional | Tooltip/Help text |
 | **format** | `string` | optional | Format string (e.g. email, phone) |
-| **columnName** | `string` | optional | Physical column name in the target datasource. Defaults to the field key when not set. |
 | **required** | `boolean` | optional | Is required |
 | **searchable** | `boolean` | optional | Is searchable |
 | **multiple** | `boolean` | optional | Allow multiple values (Stores as Array/JSON). Applicable for select, lookup, file, image. |
@@ -116,7 +115,6 @@ const result = Address.parse(data);
 | **max** | `number` | optional | Maximum value |
 | **options** | `{ label: string; value: string; color?: string; default?: boolean; … }[]` | optional | Static options for select/multiselect |
 | **reference** | `string` | optional | Target object name (snake_case) for lookup/master_detail fields. Required for relationship types. Used by $expand to resolve foreign key IDs into full objects. |
-| **referenceFilters** | `string[]` | optional | Filters applied to lookup dialogs (e.g. "active = true") |
 | **deleteBehavior** | `Enum<'set_null' \| 'cascade' \| 'restrict'>` | optional | What happens if referenced record is deleted |
 | **inlineEdit** | `boolean \| Enum<'grid' \| 'form'>` | optional | Edit these child records inline within the parent's form (atomic master-detail). true = auto-pick grid/form by child shape; 'grid' = editable line-item grid; 'form' = list + per-row full form. |
 | **inlineTitle** | `string` | optional | Title for the inline master-detail grid |
@@ -129,7 +127,7 @@ const result = Address.parse(data);
 | **descriptionField** | `string` | optional | Secondary field shown under the label in the quick-select popover. |
 | **lookupColumns** | `string \| { field: string; label?: string; width?: string; type?: string }[]` | optional | Explicit columns for the record-picker table; auto-derived from the referenced object when omitted. |
 | **lookupPageSize** | `integer` | optional | Rows per page in the record-picker dialog (default 10). |
-| **lookupFilters** | `{ field: string; operator: Enum<'eq' \| 'ne' \| 'gt' \| 'lt' \| 'gte' \| 'lte' \| 'contains' \| 'in' \| 'notIn'>; value: any }[]` | optional | Base filters restricting which records are selectable (e.g. only active). Structured, picker-honoured form of referenceFilters. |
+| **lookupFilters** | `{ field: string; operator: Enum<'eq' \| 'ne' \| 'gt' \| 'lt' \| 'gte' \| 'lte' \| 'contains' \| 'in' \| 'notIn'>; value: any }[]` | optional | Base filters restricting which records are selectable (e.g. only active). The structured, picker-honoured lookup filter. |
 | **dependsOn** | `string \| { field: string; param?: string }[]` | optional | Declares that this field's available values depend on the value of other field(s) on the same record — the form gates the field until they are set and re-evaluates as they change. For `lookup`/`master_detail` it scopes the candidate query (string = same local/remote key; `{field,param}` when the remote filter key differs — the `{field,param}` form is lookup-only). For `select`/`multiselect`/`radio` the actual per-option rule lives in each option's `visibleWhen`; list the referenced fields here (string form) so the option list gates and refreshes with the parent. |
 | **allowCreate** | `boolean` | optional | Allow inline quick-create from the record picker: when no match exists the user can create a record from the typed text (optimistic dataSource.create with the display field). Best for simple objects whose only required field is the display field. |
 | **expression** | `string \| { dialect: Enum<'cel' \| 'js' \| 'cron' \| 'template'>; source?: string; ast?: any; meta?: object }` | optional | Formula expression (CEL). e.g. F`record.amount * 0.1` |
@@ -153,7 +151,6 @@ const result = Address.parse(data);
 | **sortable** | `boolean` | optional | Whether field is sortable in list views |
 | **inlineHelpText** | `string` | optional | Help text displayed below the field in forms |
 | **autonumberFormat** | `string` | optional | Auto-number format: literal text + `{0000}` counter, `{YYYY}`/`{MM}`/`{DD}`/`{YYYYMMDD}` date tokens (business tz), and `{field_name}` interpolation. Counter resets per rendered prefix (e.g. AD`{YYYYMMDD}``{0000}` resets daily). |
-| **index** | `boolean` | optional | Create standard database index |
 | **externalId** | `boolean` | optional | Is external ID for upsert operations |
 
 

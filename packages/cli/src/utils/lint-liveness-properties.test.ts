@@ -1,31 +1,26 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { describe, it, expect } from 'vitest';
-import {
-  lintLivenessProperties,
-  LIVENESS_DEAD_PROPERTY,
-} from './lint-liveness-properties.js';
+import { lintLivenessProperties } from './lint-liveness-properties.js';
 
 /**
  * These run against the REAL ledgers shipped by `@objectstack/spec` (the same
  * files the gate enforces), so they double as a contract test: if an
- * `authorWarn` annotation is removed from `abstract` / `columnName` / etc.,
+ * `authorWarn` annotation is removed from a still-dead prop (e.g. tool
+ * `permissions`, permission `contextVariables`, flow `nodes.outputSchema`),
  * the matching assertion fails.
  */
 
 const objStack = (obj: Record<string, unknown>) => ({ objects: [{ name: 'widget', ...obj }] });
-const rules = (findings: { rule: string }[]) => findings.map((f) => f.rule);
 const paths = (findings: { message: string }[]) => findings.map((f) => f.message);
 
 describe('lintLivenessProperties', () => {
-  it('warns on a present dead object prop (abstract)', () => {
-    const findings = lintLivenessProperties(objStack({ abstract: true }));
-    const v = findings.find((f) => f.message.includes('abstract'));
-    expect(v).toBeDefined();
-    expect(v!.rule).toBe(LIVENESS_DEAD_PROPERTY);
-    expect(v!.where).toBe("object 'widget'");
-    expect(v!.hint.length).toBeGreaterThan(0);
-  });
+  // NOTE: as of #2377 the object- and field-level dead+authorWarn surface is
+  // empty (enforce-or-remove complete for those types), so the positive-warn
+  // assertions here run against still-dead props of OTHER governed types
+  // (flow.nodes.outputSchema, tool.permissions, permission.contextVariables,
+  // action.undoable). The object/field WALKER is still exercised by the
+  // silent-clean and default-on-suppression cases below.
 
   it('does NOT warn on a default-on flag the author left alone (enable.trash: true)', () => {
     const findings = lintLivenessProperties(objStack({ enable: { trash: true } }));
@@ -42,22 +37,6 @@ describe('lintLivenessProperties', () => {
     expect(paths(findings).some((m) => m.includes('enable.'))).toBe(false);
   });
 
-  it('warns on a misleading dead field prop (columnName)', () => {
-    const findings = lintLivenessProperties(
-      objStack({ fields: [{ name: 'code', type: 'text', columnName: 'legacy_code' }] }),
-    );
-    const f = findings.find((x) => x.message.includes('columnName'));
-    expect(f).toBeDefined();
-    expect(f!.where).toBe("object 'widget' · field 'code'");
-  });
-
-  it('warns on a field-level index flag set true, but not when false', () => {
-    const on = lintLivenessProperties(objStack({ fields: [{ name: 'code', type: 'text', index: true }] }));
-    expect(paths(on).some((m) => m.includes('`index`'))).toBe(true);
-    const off = lintLivenessProperties(objStack({ fields: [{ name: 'code', type: 'text', index: false }] }));
-    expect(paths(off).some((m) => m.includes('`index`'))).toBe(false);
-  });
-
   it('is silent for a clean object with only live properties', () => {
     const findings = lintLivenessProperties(
       objStack({
@@ -70,10 +49,13 @@ describe('lintLivenessProperties', () => {
   });
 
   it('handles objects as a keyed record (not just arrays)', () => {
+    // Record form ({ name: obj }) is walked like the array form — a clean object
+    // in record form yields no findings and does not throw (no object-level
+    // dead+authorWarn prop remains to assert a positive on, post-#2377).
     const findings = lintLivenessProperties({
-      objects: { widget: { name: 'widget', abstract: true } },
+      objects: { widget: { name: 'widget', label: 'Widget', enable: { apiEnabled: true } } },
     });
-    expect(rules(findings)).toContain(LIVENESS_DEAD_PROPERTY);
+    expect(findings).toEqual([]);
   });
 
   it('returns [] on an empty / shapeless stack', () => {
