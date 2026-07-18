@@ -167,6 +167,13 @@ dispatch was rejected: MCP actions ARE the server's `tools/list`, so a
 connector materialized without connecting would register a zero-action def —
 exactly the plausible-but-dead shape this ADR exists to kill.
 
+The `openapi` provider applies the same split to its **remote-URL spec fetch**:
+an unreachable endpoint (network error) or a transient HTTP status
+(`408` / `429` / `5xx`, mirroring the `retryableStatusCodes` convention) is
+upstream-unavailable — degrade + retry — while a wrong URL (non-retryable
+`4xx`) or an unparseable document stays a fatal configuration fault. Inline and
+file-path (`#3016`) specs do no boot I/O and are unaffected.
+
 ### Declarative stdio policy: default-deny (follow-up, landed — #3055)
 
 A declarative `provider: 'mcp'` entry may name a **stdio transport**, and
@@ -196,5 +203,4 @@ any default preset (#3056).
 
 - **`providerConfig.spec` (openapi)** accepts an inline document, an http(s) URL, **or a package-relative file path** (#3016 follow-up). The connector still owns no filesystem access: the automation service injects a `loadPackageFile` capability into `ConnectorProviderContext` that resolves the ref against the declaring stack/package root (`packageRoot`, CLI default: the `objectstack.config.ts` directory) and **confines reads to that root** — absolute and `..`-escaping paths are rejected. Read/parse failures follow the reconcile policy above: fatal at boot, skipped on reload.
 - **MCP credentials** ride the transport (ADR-0024); for an http transport a resolved `auth` is folded into the request headers.
-- **A live `provider: 'mcp'` showcase demo** remains deferred: materialization needs a reachable MCP server, and the natural in-repo target (`@objectstack/mcp`, the platform's own MCP endpoint) is not listening until after the automation plugin's `start()` — the demo would deterministically boot degraded and heal seconds later, making the dogfood CI gate timing-sensitive. It should land together with an in-repo MCP fixture server (or an explicit boot-ordering story for self-connection).
-- **The openapi provider's remote-URL spec fetch** still throws plain on network failure (fatal at boot). It can adopt the same `CONNECTOR_UPSTREAM_UNAVAILABLE` classification once operators ask for it — the mechanism is provider-agnostic.
+- **A live `provider: 'mcp'` showcase demo** landed with #3056 (#3062): the showcase points a declarative `mcp` instance at an in-repo stdio MCP fixture (`examples/app-showcase/scripts/mcp-fixture.mjs`), spawned under the host `declarativeStdio` allowlist, and a dogfood proof pins materialization + dispatch. Self-connection to the platform's own `@objectstack/mcp` endpoint (which is not listening until after the automation plugin's `start()`) stays out of scope — the fixture sidesteps the boot-ordering timing entirely.

@@ -5,6 +5,7 @@
 
 import { describe, it, expect } from 'vitest';
 import type { ConnectorProviderContext } from '@objectstack/spec/integration';
+import { isConnectorUpstreamUnavailable } from '@objectstack/spec/integration';
 import { createOpenApiProviderFactory, OPENAPI_PROVIDER_KEY } from './openapi-provider.js';
 
 const petstore = {
@@ -94,5 +95,75 @@ describe('openapi provider factory (ADR-0097)', () => {
         await expect(
             factory(ctx({ providerConfig: { spec: './petstore.json' } })),
         ).rejects.toThrow(/no package file access/);
+    });
+});
+
+// ── #3049 follow-up: remote-URL fetch fault classification ──────────────────
+//
+// A remote spec URL that is unreachable / transiently failing is an OPERATIONAL
+// fault: the factory throws the CONNECTOR_UPSTREAM_UNAVAILABLE marker so the
+// materializer degrades + retries the instance instead of failing boot
+// (symmetric with connector-mcp's connect path). A wrong URL (non-retryable
+// 4xx) or an unparseable document stays a plain, fatal configuration fault.
+
+describe('openapi provider — remote spec fetch fault classification (#3049)', () => {
+    const url = 'https://petstore.example.com/openapi.json';
+    const cfg = { providerConfig: { spec: url } };
+
+    it('classifies a network failure (fetch rejects) as upstream-unavailable, keeping the cause', async () => {
+        const boom = new Error('connect ECONNREFUSED 93.184.216.34:443');
+        const fetchImpl = (async () => { throw boom; }) as unknown as typeof fetch;
+        const factory = createOpenApiProviderFactory({ fetchImpl });
+
+        const err = await factory(ctx(cfg)).then(
+            () => { throw new Error('expected rejection'); },
+            (e: unknown) => e,
+        );
+        expect(isConnectorUpstreamUnavailable(err)).toBe(true);
+        expect((err as Error).message).toMatch(/'pets' could not reach spec URL/);
+        expect((err as Error).message).toContain('ECONNREFUSED');
+        expect((err as { cause?: unknown }).cause).toBe(boom);
+    });
+
+    it.each([408, 429, 500, 502, 503, 504])(
+        'classifies a transient HTTP %i as upstream-unavailable (retryable)',
+        async (status) => {
+            const fetchImpl = (async () => ({ ok: false, status, json: async () => ({}) }) as unknown as Response) as unknown as typeof fetch;
+            const factory = createOpenApiProviderFactory({ fetchImpl });
+            const err = await factory(ctx(cfg)).then(() => { throw new Error('expected rejection'); }, (e: unknown) => e);
+            expect(isConnectorUpstreamUnavailable(err), `HTTP ${status} should degrade`).toBe(true);
+            expect((err as Error).message).toContain(String(status));
+        },
+    );
+
+    it.each([400, 401, 403, 404, 410])(
+        'keeps a non-retryable HTTP %i a plain (fatal) configuration fault',
+        async (status) => {
+            const fetchImpl = (async () => ({ ok: false, status, json: async () => ({}) }) as unknown as Response) as unknown as typeof fetch;
+            const factory = createOpenApiProviderFactory({ fetchImpl });
+            const err = await factory(ctx(cfg)).then(() => { throw new Error('expected rejection'); }, (e: unknown) => e);
+            expect(isConnectorUpstreamUnavailable(err), `HTTP ${status} should stay fatal`).toBe(false);
+            expect((err as Error).message).toMatch(/failed to fetch spec/);
+        },
+    );
+
+    it('keeps a 2xx-but-unparseable body a plain (fatal) content fault, not upstream-unavailable', async () => {
+        const fetchImpl = (async () => ({
+            ok: true,
+            status: 200,
+            json: async () => { throw new SyntaxError('Unexpected token < in JSON'); },
+        }) as unknown as Response) as unknown as typeof fetch;
+        const factory = createOpenApiProviderFactory({ fetchImpl });
+        const err = await factory(ctx(cfg)).then(() => { throw new Error('expected rejection'); }, (e: unknown) => e);
+        expect(isConnectorUpstreamUnavailable(err)).toBe(false);
+        expect((err as Error).message).toMatch(/not a parseable.*OpenAPI JSON document/s);
+    });
+
+    it('keeps a 2xx non-object body (array) a plain (fatal) content fault', async () => {
+        const fetchImpl = (async () => ({ ok: true, status: 200, json: async () => [1, 2] }) as unknown as Response) as unknown as typeof fetch;
+        const factory = createOpenApiProviderFactory({ fetchImpl });
+        const err = await factory(ctx(cfg)).then(() => { throw new Error('expected rejection'); }, (e: unknown) => e);
+        expect(isConnectorUpstreamUnavailable(err)).toBe(false);
+        expect((err as Error).message).toMatch(/not a parseable.*OpenAPI JSON document/s);
     });
 });
