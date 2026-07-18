@@ -19,6 +19,37 @@ import {
 } from './suspended-run-store.js';
 
 /**
+ * #1928 — normalize an ObjectQL object's `fields` (a name-keyed map, or an
+ * array of `{name, type}`) into the `{ fields, fieldTypes }` shape the flow
+ * condition validator consumes. Fields whose `type` isn't a string are still
+ * listed (so existence checks work) but contribute no type (→ treated as `dyn`).
+ * Returns `undefined` when there is nothing usable. Exported for unit testing.
+ */
+export function parseObjectFieldSchema(
+    fieldsDef: unknown,
+): { fields: string[]; fieldTypes: Record<string, string> } | undefined {
+    if (!fieldsDef || typeof fieldsDef !== 'object') return undefined;
+    const fields: string[] = [];
+    const fieldTypes: Record<string, string> = {};
+    if (Array.isArray(fieldsDef)) {
+        for (const f of fieldsDef as Array<Record<string, unknown>>) {
+            const n = (f as { name?: unknown })?.name;
+            if (typeof n !== 'string') continue;
+            fields.push(n);
+            const t = (f as { type?: unknown })?.type;
+            if (typeof t === 'string') fieldTypes[n] = t;
+        }
+    } else {
+        for (const [n, def] of Object.entries(fieldsDef as Record<string, unknown>)) {
+            fields.push(n);
+            const t = (def as { type?: unknown })?.type;
+            if (typeof t === 'string') fieldTypes[n] = t;
+        }
+    }
+    return { fields, fieldTypes };
+}
+
+/**
  * Configuration options for the AutomationServicePlugin.
  */
 export interface AutomationServicePluginOptions {
@@ -437,6 +468,27 @@ export class AutomationServicePlugin implements Plugin {
             }
         } catch {
             ctx.logger.debug('[Automation] objectql not present — script-node function calls will fail loudly when used');
+        }
+
+        // #1928 — bridge the object registry so `registerFlow` runs the same
+        // schema-aware condition checks as `objectstack build`: unknown-field
+        // refs, likely bare-field typos, and text/boolean fields misused in
+        // arithmetic. Everything it surfaces is advisory (logged, never thrown),
+        // so a dynamically-registered flow (which bypasses the build lint) still
+        // gets the guardrail. Wired BEFORE the flow pull below so pulled flows
+        // are covered too. Best-effort: without ObjectQL, registration falls back
+        // to syntax + bare-ref validation only.
+        try {
+            const ql = ctx.getService<{
+                registry?: { getObject?: (name: string) => unknown };
+            }>('objectql');
+            if (ql?.registry && typeof ql.registry.getObject === 'function') {
+                this.engine.setObjectSchemaResolver((objectName) =>
+                    parseObjectFieldSchema((ql.registry!.getObject!(objectName) as { fields?: unknown } | undefined)?.fields));
+                ctx.logger.debug('[Automation] object-schema resolver bridged to objectql.registry (#1928 condition checks)');
+            }
+        } catch {
+            ctx.logger.debug('[Automation] objectql registry not present — flow-condition checks limited to syntax');
         }
 
         // Pull flow definitions from the ObjectQL schema registry. AppPlugin.init()

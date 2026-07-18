@@ -3,7 +3,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { LiteKernel } from '@objectstack/core';
 import { AutomationEngine, DEFAULT_MAX_EXECUTION_LOG_SIZE } from './engine.js';
-import { AutomationServicePlugin } from './plugin.js';
+import { AutomationServicePlugin, parseObjectFieldSchema } from './plugin.js';
 import { registerScreenNodes } from './builtin/screen-nodes.js';
 import { InMemorySuspendedRunStore } from './suspended-run-store.js';
 import type { NodeExecutor } from './engine.js';
@@ -818,6 +818,117 @@ describe('AutomationEngine', () => {
             expect(typeof service.registerFlow).toBe('function');
             expect(typeof service.unregisterFlow).toBe('function');
         });
+    });
+});
+
+// ─── Schema-aware condition validation at registration (#1928) ───────
+
+describe('Schema-aware condition validation at registration (#1928)', () => {
+    // A logger that captures warnings, so we can assert the advisory channel.
+    function loggerCapturing(warns: string[]) {
+        const l: any = {
+            info: () => {}, error: () => {}, debug: () => {},
+            warn: (m: string) => warns.push(m),
+            child: () => l,
+        };
+        return l;
+    }
+
+    const OPP_SCHEMA = {
+        crm_opportunity: {
+            fields: ['stage', 'amount', 'is_active', 'title'],
+            fieldTypes: { stage: 'select', amount: 'currency', is_active: 'boolean', title: 'text' } as Record<string, string>,
+        } as { fields: string[]; fieldTypes: Record<string, string> },
+    };
+
+    function makeFlow(condition: string) {
+        return {
+            name: 'opp_flow', label: 'Opp Flow', type: 'record_change',
+            nodes: [
+                { id: 'start', type: 'start', label: 'Start', config: { objectName: 'crm_opportunity' } },
+                { id: 'check', type: 'decision', label: 'Check', config: { condition } },
+                { id: 'end', type: 'end', label: 'End' },
+            ],
+            edges: [
+                { id: 'e1', source: 'start', target: 'check' },
+                { id: 'e2', source: 'check', target: 'end' },
+            ],
+        };
+    }
+
+    it('logs an advisory warning (does NOT throw) for a text field misused in arithmetic — tier 4', () => {
+        const warns: string[] = [];
+        const engine = new AutomationEngine(loggerCapturing(warns));
+        engine.setObjectSchemaResolver((name) => (OPP_SCHEMA as Record<string, unknown>)[name] as any);
+        expect(() => engine.registerFlow('opp_flow', makeFlow('title * 2 > 10'))).not.toThrow();
+        const w = warns.filter((m) => /type mismatch/i.test(m));
+        expect(w).toHaveLength(1);
+        expect(w[0]).toMatch(/`title`/);
+    });
+
+    it('logs an advisory warning for a likely field typo — tier 3', () => {
+        const warns: string[] = [];
+        const engine = new AutomationEngine(loggerCapturing(warns));
+        engine.setObjectSchemaResolver((name) => (OPP_SCHEMA as Record<string, unknown>)[name] as any);
+        expect(() => engine.registerFlow('opp_flow', makeFlow('stagee == "closed_won"'))).not.toThrow();
+        expect(warns.some((m) => /did you mean `stage`/.test(m))).toBe(true);
+    });
+
+    it('logs an advisory warning for an unknown record field — tier 2', () => {
+        const warns: string[] = [];
+        const engine = new AutomationEngine(loggerCapturing(warns));
+        engine.setObjectSchemaResolver((name) => (OPP_SCHEMA as Record<string, unknown>)[name] as any);
+        expect(() => engine.registerFlow('opp_flow', makeFlow('record.amont > 5'))).not.toThrow();
+        expect(warns.some((m) => /unknown field `amont`/.test(m))).toBe(true);
+    });
+
+    it('does not warn on sound conditions (number arithmetic, equality, flow variables)', () => {
+        const warns: string[] = [];
+        const engine = new AutomationEngine(loggerCapturing(warns));
+        engine.setObjectSchemaResolver((name) => (OPP_SCHEMA as Record<string, unknown>)[name] as any);
+        engine.registerFlow('opp_flow', makeFlow('amount / 100 > 5 && stage == "won" && expiring_count * 2 > 3'));
+        expect(warns.filter((m) => /type mismatch|did you mean|unknown field/i.test(m))).toHaveLength(0);
+    });
+
+    it('still HARD-FAILS a malformed condition (fatal set unchanged)', () => {
+        const warns: string[] = [];
+        const engine = new AutomationEngine(loggerCapturing(warns));
+        engine.setObjectSchemaResolver((name) => (OPP_SCHEMA as Record<string, unknown>)[name] as any);
+        expect(() => engine.registerFlow('opp_flow', makeFlow('{record.stage} == "won"'))).toThrow(/template braces|bare CEL/);
+    });
+
+    it('is a no-op when no resolver is wired (registration behaviour unchanged)', () => {
+        const warns: string[] = [];
+        const engine = new AutomationEngine(loggerCapturing(warns));
+        // No setObjectSchemaResolver — a tier-4 mistake registers with NO advisory.
+        expect(() => engine.registerFlow('opp_flow', makeFlow('title * 2 > 10'))).not.toThrow();
+        expect(warns.filter((m) => /type mismatch|did you mean|unknown field/i.test(m))).toHaveLength(0);
+    });
+});
+
+describe('parseObjectFieldSchema (#1928 — object-registry → schema hint)', () => {
+    it('normalizes a name-keyed field map (the ObjectQL ServiceObject shape)', () => {
+        const r = parseObjectFieldSchema({ title: { type: 'text' }, amount: { type: 'currency' }, done: { type: 'boolean' } });
+        expect(r?.fields.sort()).toEqual(['amount', 'done', 'title']);
+        expect(r?.fieldTypes).toEqual({ title: 'text', amount: 'currency', done: 'boolean' });
+    });
+
+    it('normalizes an array of {name, type}', () => {
+        const r = parseObjectFieldSchema([{ name: 'title', type: 'text' }, { name: 'amount', type: 'currency' }]);
+        expect(r?.fields).toEqual(['title', 'amount']);
+        expect(r?.fieldTypes).toEqual({ title: 'text', amount: 'currency' });
+    });
+
+    it('lists a field with a non-string type but assigns it no type (→ dyn)', () => {
+        const r = parseObjectFieldSchema({ meta: {}, name: { type: 'text' } });
+        expect(r?.fields.sort()).toEqual(['meta', 'name']);
+        expect(r?.fieldTypes).toEqual({ name: 'text' });
+    });
+
+    it('returns undefined for a non-object fields value', () => {
+        expect(parseObjectFieldSchema(undefined)).toBeUndefined();
+        expect(parseObjectFieldSchema(null)).toBeUndefined();
+        expect(parseObjectFieldSchema('nope')).toBeUndefined();
     });
 });
 

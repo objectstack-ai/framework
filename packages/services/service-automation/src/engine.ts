@@ -235,6 +235,22 @@ export type FlowFunctionHandler = (ctx: FlowFunctionContext) => unknown | Promis
 export type FlowFunctionResolver = (name: string) => FlowFunctionHandler | undefined;
 
 /**
+ * Resolves the schema of the object a flow's conditions bind against — its field
+ * names and (spec) types — so `registerFlow` can run the same schema-aware
+ * expression checks as `objectstack build` (ADR-0032 tiers 2–4): unknown
+ * `record.<field>` refs, likely bare-field typos, and text/boolean fields
+ * misused in arithmetic (#1928). Injected by the host (bridged to the object
+ * registry), so the engine stays decoupled from any metadata store. Returns
+ * `undefined` for an unknown object. When unwired, registration validation is
+ * unchanged (syntax + bare-ref only). Everything it surfaces is advisory (logged
+ * as a warning, never thrown) — a resolver can never break a flow that used to
+ * register cleanly.
+ */
+export type FlowObjectSchemaResolver = (
+  objectName: string,
+) => { fields?: readonly string[]; fieldTypes?: Record<string, string> } | undefined;
+
+/**
  * A designer-facing view of one connector action — identity + its JSON-Schema
  * input/output. The runtime handler is intentionally omitted; this is metadata.
  */
@@ -516,6 +532,9 @@ export class AutomationEngine implements IAutomationService {
     private connectorProviders = new Map<string, ConnectorProviderFactory>();
     /** Bridge to the host function registry for `script`-node calls (#1870), if wired. */
     private functionResolver: FlowFunctionResolver | null = null;
+    /** Bridge to the host object registry for schema-aware condition validation at
+     *  registration (#1928), if wired. Advisory-only — see {@link FlowObjectSchemaResolver}. */
+    private objectSchemaResolver: FlowObjectSchemaResolver | null = null;
     private executionLogs: ExecutionLogEntry[] = [];
     private readonly maxLogSize: number;
     private logger: Logger;
@@ -932,6 +951,18 @@ export class AutomationEngine implements IAutomationService {
      */
     setFunctionResolver(resolver: FlowFunctionResolver | null): void {
         this.functionResolver = resolver;
+    }
+
+    /**
+     * Wire the engine to the host's object registry (#1928) so `registerFlow`
+     * runs the same schema-aware condition checks as `objectstack build` —
+     * unknown-field refs, likely bare-field typos, and text/boolean fields
+     * misused in arithmetic. Everything it adds is advisory (logged, never
+     * thrown); passing `null` detaches the bridge (registration reverts to
+     * syntax + bare-ref validation only).
+     */
+    setObjectSchemaResolver(resolver: FlowObjectSchemaResolver | null): void {
+        this.objectSchemaResolver = resolver;
     }
 
     /**
@@ -2066,18 +2097,48 @@ export class AutomationEngine implements IAutomationService {
      * Only the *predicate* surfaces are checked here (start/node `config.condition`
      * and `edge.condition`) — node string fields are templates (a different
      * dialect) and are validated by the template engine, not as CEL.
+     *
+     * #1928 — when an object-schema resolver is wired ({@link setObjectSchemaResolver}),
+     * a second, schema-aware pass surfaces the checks `objectstack build` runs
+     * (unknown-field refs, likely bare-field typos, text/boolean fields misused
+     * in arithmetic) as ADVISORY warnings (logged, never thrown). Flow conditions
+     * bind the record's fields flat, so the schema pass uses `flattened` scope.
+     * The fatal set is unchanged — a resolver can never break a flow that used to
+     * register cleanly.
      */
     private validateFlowExpressions(flowName: string, flow: FlowParsed): void {
         const failures: string[] = [];
 
+        // Resolve the flow's record-change target object (start node's
+        // `config.objectName`) so `record.*`/bare field refs can be checked
+        // against the real schema. Absent resolver / non-record flow → the hint
+        // is undefined and only the fatal syntax/bare-ref pass runs (unchanged).
+        const startNode = flow.nodes.find((n) => n.type === 'start');
+        const objectName = ((startNode?.config ?? {}) as Record<string, unknown>).objectName;
+        const schemaHint = typeof objectName === 'string'
+            ? (() => {
+                const s = this.objectSchemaResolver?.(objectName);
+                return s ? { objectName, fields: s.fields, fieldTypes: s.fieldTypes, scope: 'flattened' as const } : undefined;
+            })()
+            : undefined;
+
         const check = (where: string, raw: unknown): void => {
             if (raw == null) return;
-            // Conditions are predicates (bare CEL). Delegate to the one shared
-            // validator (ADR-0032 §5) so the corrective message matches the CLI
-            // build and the agent `validate_expression` tool exactly.
+            // Fatal pass — syntax, brace-in-CEL, unknown-function (ADR-0032 §5).
+            // Unchanged: matches the CLI build's fatal set exactly.
             const result = validateExpression('predicate', raw as string | { dialect?: string; source?: string });
             for (const e of result.errors) {
                 failures.push(`  • ${where}: ${e.message}\n      source: \`${e.source}\``);
+            }
+            // Advisory schema-aware pass — only when the source is syntactically
+            // valid (else it would just re-report the fatal error). Everything it
+            // finds (field-existence, tier-3 typo, tier-4 type mismatch) is LOGGED,
+            // never thrown, so registration behaviour is strictly additive (#1928).
+            if (result.errors.length === 0 && schemaHint) {
+                const schemaPass = validateExpression('predicate', raw as string | { dialect?: string; source?: string }, schemaHint);
+                for (const issue of [...schemaPass.errors, ...schemaPass.warnings]) {
+                    this.logger.warn(`[flow '${flowName}'] ${where}: ${issue.message}\n      source: \`${issue.source}\``);
+                }
             }
         };
 
