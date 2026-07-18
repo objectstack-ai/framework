@@ -446,9 +446,13 @@ GET /api/v1/automation/{flow}/runs/{runId}/screen  # re-fetch a paused screen
 
 Each run's `steps[]` records every executed node — including loop iterations,
 parallel branch bodies, and try/catch region steps — and the Studio flow
-designer surfaces the same data in its **Runs** side panel. Run history is an
-in-memory ring buffer (the durable rows in `sys_automation_run` hold only
-*live pauses*), so history starts fresh on each boot.
+designer surfaces the same data in its **Runs** side panel. Recent runs are held
+in an in-memory ring buffer for full step detail, and every terminal run is also
+mirrored to the durable `sys_automation_run` store (`completed` / `failed` rows,
+kept under a per-flow cap and a 30-day retention sweep); `listRuns` merges the
+two, so run history **survives a process restart** rather than starting fresh on
+each boot. (Live `paused` runs are always durable there — that is what makes
+resume work across a restart.)
 
 ## Edges
 
@@ -676,7 +680,7 @@ export const hotLeadFollowUp: Flow = {
       type: 'create_record',
       label: 'Create Follow-up Task',
       config: {
-        object: 'task',
+        objectName: 'task',
         fields: {
           subject: 'Follow up on hot lead',
           related_to: '{record.id}',

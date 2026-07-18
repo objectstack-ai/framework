@@ -24,7 +24,7 @@ A flow declares `runAs` (ADR-0049), and for approvals this is the decision that 
 - `runAs: 'user'` (default) — the flow's data operations run as the **submitter**, respecting their RLS. Good when the flow only touches records the submitter can already see.
 - `runAs: 'system'` — **elevated**, bypasses RLS. Needed when the flow must read/write records the submitter can't (e.g. post to a ledger, notify an approver who owns rows the submitter can't see). Declare it **explicitly** so the elevation is visible, not accidental.
 
-A schedule-triggered escalation has no triggering user — so it must be `system` to act at all.
+A schedule-triggered escalation has no triggering user, so under the default `runAs: 'user'` its data operations run **unscoped** (elevated, RLS-bypassing) anyway — declare `system` to make that elevation explicit and intended rather than an implicit fail-open (the engine warns, and `os lint` flags the bare shape as `flow-schedule-runas-unscoped`).
 
 ### 3. The approval node
 

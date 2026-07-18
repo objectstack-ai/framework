@@ -68,7 +68,8 @@ copy-paste-ready connect snippets per client), or over REST:
 
 ```bash
 curl -b cookies.txt -X POST https://your-deployment.example.com/api/v1/keys
-# → { "key": "osk_..." }  — shown once; store it in your secret manager
+# → { "success": true, "data": { "key": "osk_...", "prefix": "osk_...", "name": "API Key" } }
+#   the raw key is shown once — store it in your secret manager
 ```
 
 Send it on every request in any of three equivalent forms:
@@ -87,11 +88,12 @@ run insecurely.
 
 ## What the agent gets
 
-Ten data and action tools, generated from your metadata:
+Eleven tools, generated from your metadata:
 
 | Tool | What it does |
 |:---|:---|
 | `list_objects` / `describe_object` | Discover which objects exist and their fields |
+| `validate_expression` | Check a CEL expression against an object's schema before authoring it into a formula, validation, or flow condition |
 | `query_records` / `get_record` | Read data (list queries are capped at 50 rows per page by default) |
 | `aggregate_records` | Grouped aggregation (registered when the active driver supports it) |
 | `create_record` / `update_record` / `delete_record` | Write data |

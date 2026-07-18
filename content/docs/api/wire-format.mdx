@@ -254,10 +254,6 @@ The response is the `DeleteDataResponse` envelope: `{ object, id, success }`.
 }
 ```
 
-<Callout type="info">
-**Soft Delete:** If the object enables soft delete (`softDelete: { enabled: true }` in its definition), the record is moved to the trash / recycle bin instead of being permanently deleted.
-</Callout>
-
 ---
 
 ## 6. Get Metadata
@@ -365,7 +361,7 @@ Field-level failures carry a `fields` array.
 
 ```json
 {
-  "error": "[Security] Access denied: operation 'update' on object 'task' is not permitted for roles [standard_user]",
+  "error": "[Security] Access denied: operation 'update' on object 'task' is not permitted for positions [standard_user]",
   "code": "PERMISSION_DENIED",
   "object": "task"
 }

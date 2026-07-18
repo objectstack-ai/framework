@@ -202,8 +202,9 @@ export const ValidateTaskData: Hook = {
 ## 4. Error Logging and Monitoring
 
 There is no global `onError` lifecycle event — the hook `HookEvent` enum only
-covers `before*` / `after*` of `find`, `insert`, `update`, `delete` (and their
-bulk variants). Each `Hook` does expose an `onError` *strategy* field
+covers `before*` / `after*` of `find`, `insert`, `update`, `delete`. Bulk
+(`multi: true`) writes fire these same events, not separate `*Many` variants.
+Each `Hook` does expose an `onError` *strategy* field
 (`'abort'` — the default — or `'log'`) that decides whether a handler failure
 aborts the operation or is merely logged. For structured error logging, wrap the
 risky work in a try/catch inside the handler and log there:
