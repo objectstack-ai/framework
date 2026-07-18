@@ -8,7 +8,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { printHeader, printKV, printStep, printError } from '../utils/format.js';
-import { readEnvWithDeprecation } from '@objectstack/types';
+import { readEnvWithDeprecation, isMcpServerEnabled } from '@objectstack/types';
 
 /**
  * Resolve the persistent default database URL for `objectstack dev`.
@@ -284,6 +284,25 @@ export default class Dev extends Command {
           const actual = String(msg.port);
           if (actual !== requestedPort) {
             console.log(chalk.dim(`  ↪ server bound to port ${actual} (requested ${requestedPort})`));
+          }
+          // ── MCP connect hint (#3167) ────────────────────────────────
+          // The app IS an MCP server: the dispatcher serves /api/v1/mcp
+          // per-request, default-on (isMcpServerEnabled). Print how a
+          // coding agent (Claude Code, Cursor, any MCP client) attaches so
+          // the "AI builds the app it's running" loop is discoverable at the
+          // moment it's most useful — dev boot. An opted-out deployment
+          // (OS_MCP_SERVER_ENABLED=false) advertises nothing, mirroring the
+          // connect-UI / discovery gates that follow the same switch.
+          if (isMcpServerEnabled()) {
+            const base =
+              typeof msg.url === 'string' && msg.url ? msg.url.replace(/\/+$/, '') : `http://localhost:${actual}`;
+            const name = path.basename(process.cwd()) || 'objectstack';
+            console.log();
+            console.log(chalk.cyan('  🤖 MCP server — connect a coding agent:'));
+            console.log(`     Endpoint  ${base}/api/v1/mcp`);
+            console.log(`     Skill     ${base}/api/v1/mcp/skill`);
+            console.log(chalk.dim(`     Connect   claude mcp add --transport http ${name} ${base}/api/v1/mcp`));
+            console.log(chalk.dim('     Disable   OS_MCP_SERVER_ENABLED=false'));
           }
         }
       });
