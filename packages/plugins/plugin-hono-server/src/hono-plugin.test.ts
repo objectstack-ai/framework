@@ -210,36 +210,40 @@ describe('HonoServerPlugin', () => {
         });
 
         it('should disable CORS when cors option is false', async () => {
+            corsConfigCapture.last = undefined;
+
             const plugin = new HonoServerPlugin({
                 cors: false
             });
 
             await plugin.init(context as PluginContext);
 
-            const serverInstance = (HonoHttpServer as any).mock.instances[0];
-            const rawApp = serverInstance.getRawApp();
-
-            // CORS middleware should NOT be registered
-            expect(rawApp.use).not.toHaveBeenCalled();
+            // CORS middleware must NOT be configured. (Assert on the CORS config,
+            // not the raw `use` count: the perf-timing middleware registers its
+            // own `use('*')` by default to catch the `X-OS-Debug-Timing` header.)
+            expect(corsConfigCapture.last).toBeUndefined();
         });
 
         it('should disable CORS when CORS_ENABLED env is false', async () => {
             const originalEnv = process.env.OS_CORS_ENABLED;
             process.env.OS_CORS_ENABLED = 'false';
+            corsConfigCapture.last = undefined;
 
-            const plugin = new HonoServerPlugin();
-            await plugin.init(context as PluginContext);
+            try {
+                const plugin = new HonoServerPlugin();
+                await plugin.init(context as PluginContext);
 
-            const serverInstance = (HonoHttpServer as any).mock.instances[0];
-            const rawApp = serverInstance.getRawApp();
-
-            expect(rawApp.use).not.toHaveBeenCalled();
-
-            // Restore environment
-            if (originalEnv !== undefined) {
-                process.env.OS_CORS_ENABLED = originalEnv;
-            } else {
-                delete process.env.OS_CORS_ENABLED;
+                // CORS not configured — see the note above re: the perf-timing
+                // middleware's own `use('*')`.
+                expect(corsConfigCapture.last).toBeUndefined();
+            } finally {
+                // Restore environment even if the assertion fails, so a leaked
+                // `OS_CORS_ENABLED=false` can't disable CORS in later tests.
+                if (originalEnv !== undefined) {
+                    process.env.OS_CORS_ENABLED = originalEnv;
+                } else {
+                    delete process.env.OS_CORS_ENABLED;
+                }
             }
         });
 

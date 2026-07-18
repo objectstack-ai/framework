@@ -283,3 +283,64 @@ export async function measureServerTiming<T>(
 export function countServerTiming(name: string, dur: number, unit?: string): void {
     store.getStore()?.count(name, dur, unit);
 }
+
+// --- Disclosure gate (WHO may see the timing) -------------------------
+
+/**
+ * Per-request disclosure gate — the policy counterpart to the collector.
+ *
+ * The {@link PerfTiming} collector only MEASURES; whether the measured
+ * `Server-Timing` header is returned to the client is a separate decision. When
+ * perf-tuning is turned on GLOBALLY (env flag / plugin option) the operator has
+ * opted the whole environment in, so the gate opens up front and every response
+ * carries the header. When it is turned on PER-REQUEST — the caller sends an
+ * `X-OS-Debug-Timing` header — the header must stay withheld until the request
+ * proves an admin/service identity: phase durations are a mild
+ * backend-fingerprinting surface, so an ordinary user must never be able to pull
+ * them just by sending a header. The request path flips the gate open with
+ * {@link allowPerfDisclosure} once it has resolved a privileged principal.
+ *
+ * Keeping this out of {@link PerfTiming} preserves the collector's invariant
+ * ("it only measures, it never decides whether to emit").
+ */
+export interface PerfDisclosureGate {
+    /** Whether the collected timing may be disclosed to the client. */
+    allowed: boolean;
+}
+
+/**
+ * The disclosure gate lives in its OWN global-registry-pinned
+ * `AsyncLocalStorage`, for the same cross-module-copy reason as the collector
+ * store above: the middleware seeds the gate and the dispatcher (a different
+ * package, possibly a different module copy) flips it open — both must see the
+ * one store.
+ */
+const GATE_KEY = Symbol.for('@objectstack/observability:perf-disclosure-gate');
+const globalGate = globalThis as unknown as Record<symbol, AsyncLocalStorage<PerfDisclosureGate> | undefined>;
+const gateStore: AsyncLocalStorage<PerfDisclosureGate> =
+    globalGate[GATE_KEY] ?? (globalGate[GATE_KEY] = new AsyncLocalStorage<PerfDisclosureGate>());
+
+/**
+ * Run `fn` with `gate` as the ambient disclosure gate for the async call chain.
+ * The caller keeps its reference to `gate` and reads `gate.allowed` after `fn`
+ * settles to decide whether to emit the header.
+ */
+export function runWithPerfDisclosure<T>(gate: PerfDisclosureGate, fn: () => T): T {
+    return gateStore.run(gate, fn);
+}
+
+/**
+ * Open the ambient disclosure gate — the request has proven it may see its own
+ * `Server-Timing` header (admin/service identity). A no-op when no gate is
+ * active (perf-tuning off, or already-global mode with no gate to flip), so the
+ * call site stays branch-free.
+ */
+export function allowPerfDisclosure(): void {
+    const g = gateStore.getStore();
+    if (g) g.allowed = true;
+}
+
+/** Whether the ambient disclosure gate is open. `false` when none is active. */
+export function isPerfDisclosureAllowed(): boolean {
+    return gateStore.getStore()?.allowed ?? false;
+}

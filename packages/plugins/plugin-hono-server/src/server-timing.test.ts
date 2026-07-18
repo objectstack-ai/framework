@@ -1,8 +1,8 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { HonoServerPlugin } from './hono-plugin';
-import { countServerTiming } from '@objectstack/observability';
+import { HonoServerPlugin, isDebugTimingRequested } from './hono-plugin';
+import { countServerTiming, allowPerfDisclosure } from '@objectstack/observability';
 import type { PluginContext } from '@objectstack/core';
 
 /**
@@ -25,16 +25,28 @@ async function setup(opts: { serverTiming?: boolean } = {}) {
     await (plugin as any).init(fakeCtx());
     const server = (plugin as any).server;
     server.get('/ping', (_req: any, res: any) => res.json({ ok: true }));
+    // Simulates the request path proving an admin/service identity mid-dispatch:
+    // the dispatcher calls `allowPerfDisclosure()` after resolving the principal.
+    server.get('/admin', (_req: any, res: any) => {
+        allowPerfDisclosure();
+        return res.json({ ok: true });
+    });
     const app = server.getRawApp();
     return { plugin, server, app };
 }
 
 describe('Server-Timing (perf-tuning) middleware', () => {
-    const prev = process.env.OS_SERVER_TIMING;
-    beforeEach(() => { delete process.env.OS_SERVER_TIMING; });
+    const prevServer = process.env.OS_SERVER_TIMING;
+    const prevPerf = process.env.OS_PERF_TIMING;
+    beforeEach(() => {
+        delete process.env.OS_SERVER_TIMING;
+        delete process.env.OS_PERF_TIMING;
+    });
     afterEach(() => {
-        if (prev === undefined) delete process.env.OS_SERVER_TIMING;
-        else process.env.OS_SERVER_TIMING = prev;
+        if (prevServer === undefined) delete process.env.OS_SERVER_TIMING;
+        else process.env.OS_SERVER_TIMING = prevServer;
+        if (prevPerf === undefined) delete process.env.OS_PERF_TIMING;
+        else process.env.OS_PERF_TIMING = prevPerf;
     });
 
     it('is OFF by default — no Server-Timing header', async () => {
@@ -85,5 +97,66 @@ describe('Server-Timing (perf-tuning) middleware', () => {
         const { app } = await setup({ serverTiming: false });
         const res = await app.request('/ping');
         expect(res.headers.get('Server-Timing')).toBeNull();
+    });
+
+    it('is enabled globally via OS_PERF_TIMING=1 (issue #2408 env alias)', async () => {
+        process.env.OS_PERF_TIMING = '1';
+        const { app } = await setup();
+        const res = await app.request('/ping');
+        expect(res.headers.get('Server-Timing')).toMatch(/total;dur=/);
+    });
+
+    describe('per-request gating via X-OS-Debug-Timing', () => {
+        it('withholds the header for the debug header ALONE (unverified caller)', async () => {
+            // Global mode off; the caller asks for timing but never proves an
+            // admin/service identity → no disclosure.
+            const { app } = await setup();
+            const res = await app.request('/ping', { headers: { 'X-OS-Debug-Timing': '1' } });
+            expect(res.status).toBe(200);
+            expect(res.headers.get('Server-Timing')).toBeNull();
+        });
+
+        it('emits the header once an admin/service identity is proven', async () => {
+            const { app } = await setup();
+            const res = await app.request('/admin', { headers: { 'X-OS-Debug-Timing': '1' } });
+            expect(res.status).toBe(200);
+            const header = res.headers.get('Server-Timing');
+            expect(header).toBeTruthy();
+            expect(header).toMatch(/(^|, )total;dur=[\d.]+/);
+            expect(header).toContain('serialize;dur=');
+        });
+
+        it('does NOT emit for an admin when no debug header is sent (opt-in only)', async () => {
+            // Global mode off + no debug header → the collector never opens, even
+            // though the handler would grant disclosure.
+            const { app } = await setup();
+            const res = await app.request('/admin');
+            expect(res.headers.get('Server-Timing')).toBeNull();
+        });
+
+        it('stays hard-disabled under serverTiming: false even for an admin', async () => {
+            const { app } = await setup({ serverTiming: false });
+            const res = await app.request('/admin', { headers: { 'X-OS-Debug-Timing': '1' } });
+            expect(res.headers.get('Server-Timing')).toBeNull();
+        });
+
+        it('global mode discloses to everyone regardless of the debug header', async () => {
+            const { app } = await setup({ serverTiming: true });
+            const res = await app.request('/ping'); // no debug header, non-admin
+            expect(res.headers.get('Server-Timing')).toMatch(/total;dur=/);
+        });
+    });
+});
+
+describe('isDebugTimingRequested', () => {
+    it('accepts common truthy spellings', () => {
+        for (const v of ['1', 'true', 'TRUE', 'yes', 'on', ' On ']) {
+            expect(isDebugTimingRequested(v)).toBe(true);
+        }
+    });
+    it('rejects falsy / absent / other values', () => {
+        for (const v of [undefined, null, '', '0', 'false', 'no', 'off', 'maybe']) {
+            expect(isDebugTimingRequested(v)).toBe(false);
+        }
     });
 });

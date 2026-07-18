@@ -5,7 +5,7 @@ import {
     shouldDenyAnonymous, ANONYMOUS_DENY_STATUS, ANONYMOUS_DENY_CODE, ANONYMOUS_DENY_MESSAGE,
 } from '@objectstack/core';
 import { isMcpServerEnabled } from '@objectstack/types';
-import { measureServerTiming } from '@objectstack/observability';
+import { measureServerTiming, allowPerfDisclosure } from '@objectstack/observability';
 import { CoreServiceName } from '@objectstack/spec/system';
 import { readServiceSelfInfo } from '@objectstack/spec/api';
 import { MCP_OAUTH_SCOPES } from '@objectstack/spec/ai';
@@ -39,6 +39,27 @@ function randomUUID(): string {
 /** A `sys_`-prefixed object is a system table — off-limits to external MCP agents. */
 function isSystemObjectName(name: string): boolean {
     return /^sys_/i.test(name);
+}
+
+/**
+ * Whether a resolved principal may see a PER-REQUEST `Server-Timing` header
+ * (#2408 perf-tuning gating). The header exposes internal phase durations — a
+ * mild backend-fingerprinting surface — so when timing is opened per-request via
+ * `X-OS-Debug-Timing` it is disclosed only to an admin/service identity:
+ *
+ *  - `isSystem` — internal/engine self-calls,
+ *  - `principalKind` `service` / `system` — service tokens & the system seed,
+ *  - `posture` `PLATFORM_ADMIN` / `TENANT_ADMIN` — the derived admin rungs.
+ *
+ * Ordinary human/guest/agent callers get `false`, so sending the debug header
+ * yields no header for them. Global (env/option) perf mode bypasses this — it
+ * opened the disclosure gate up front for the whole environment.
+ */
+export function isPerfDisclosurePrincipal(ec: ExecutionContext | undefined): boolean {
+    if (!ec) return false;
+    if (ec.isSystem === true) return true;
+    if (ec.principalKind === 'service' || ec.principalKind === 'system') return true;
+    return ec.posture === 'PLATFORM_ADMIN' || ec.posture === 'TENANT_ADMIN';
 }
 
 export interface HttpProtocolContext {
@@ -230,10 +251,17 @@ export class HttpDispatcher {
      * overhead (session lookup, org-scope resolution). A no-op wrapper when
      * perf-tuning is off, so it costs nothing on the normal path.
      */
-    private timedResolveExecutionContext(
+    private async timedResolveExecutionContext(
         opts: Parameters<typeof resolveExecutionContext>[0],
     ): Promise<ExecutionContext> {
-        return measureServerTiming('auth', () => resolveExecutionContext(opts), 'Identity/session');
+        const ec = await measureServerTiming('auth', () => resolveExecutionContext(opts), 'Identity/session');
+        // Perf-tuning disclosure gate (#2408): when timing was opened
+        // per-request via `X-OS-Debug-Timing`, the `Server-Timing` header stays
+        // withheld until the request proves an admin/service identity — never
+        // leak phase timings to an ordinary caller. A no-op when perf-tuning is
+        // off or already global (no gate, or gate already open).
+        if (isPerfDisclosurePrincipal(ec)) allowPerfDisclosure();
+        return ec;
     }
 
     private success(data: any, meta?: any) {

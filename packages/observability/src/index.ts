@@ -52,5 +52,9 @@ export {
     startServerTiming,
     measureServerTiming,
     countServerTiming,
+    runWithPerfDisclosure,
+    allowPerfDisclosure,
+    isPerfDisclosureAllowed,
     type ServerTimingMark,
+    type PerfDisclosureGate,
 } from './perf-timing.js';

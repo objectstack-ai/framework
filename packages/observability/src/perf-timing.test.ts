@@ -10,6 +10,10 @@ import {
     startServerTiming,
     measureServerTiming,
     countServerTiming,
+    runWithPerfDisclosure,
+    allowPerfDisclosure,
+    isPerfDisclosureAllowed,
+    type PerfDisclosureGate,
 } from './perf-timing.js';
 
 describe('formatServerTiming', () => {
@@ -206,5 +210,63 @@ describe('ambient collector', () => {
             recordServerTiming('after-await', 1);
         });
         expect(t.marks().map((m) => m.name)).toContain('after-await');
+    });
+});
+
+describe('disclosure gate', () => {
+    it('isPerfDisclosureAllowed() is false with no active gate', () => {
+        expect(isPerfDisclosureAllowed()).toBe(false);
+    });
+
+    it('allowPerfDisclosure() is a no-op with no active gate (does not throw)', () => {
+        allowPerfDisclosure();
+        expect(isPerfDisclosureAllowed()).toBe(false);
+    });
+
+    it('reflects the seeded state inside runWithPerfDisclosure', () => {
+        const closed: PerfDisclosureGate = { allowed: false };
+        runWithPerfDisclosure(closed, () => {
+            expect(isPerfDisclosureAllowed()).toBe(false);
+        });
+        const open: PerfDisclosureGate = { allowed: true };
+        runWithPerfDisclosure(open, () => {
+            expect(isPerfDisclosureAllowed()).toBe(true);
+        });
+    });
+
+    it('allowPerfDisclosure() opens a closed gate the caller still holds', async () => {
+        const gate: PerfDisclosureGate = { allowed: false };
+        await runWithPerfDisclosure(gate, async () => {
+            await new Promise((r) => setTimeout(r, 1));
+            allowPerfDisclosure(); // after an await — same ALS scope
+        });
+        // The caller reads its own reference once the scope settles.
+        expect(gate.allowed).toBe(true);
+    });
+
+    it('leaves the gate closed when disclosure is never granted', async () => {
+        const gate: PerfDisclosureGate = { allowed: false };
+        await runWithPerfDisclosure(gate, async () => {
+            await new Promise((r) => setTimeout(r, 1));
+        });
+        expect(gate.allowed).toBe(false);
+    });
+
+    it('pins the gate store to a global-registry symbol (shared across module copies)', () => {
+        const key = Symbol.for('@objectstack/observability:perf-disclosure-gate');
+        expect((globalThis as Record<symbol, unknown>)[key]).toBeDefined();
+    });
+
+    it('is independent of the timing collector scope', () => {
+        // A collector can be active without a gate, and vice versa.
+        const t = new PerfTiming();
+        runWithPerfTiming(t, () => {
+            expect(isPerfDisclosureAllowed()).toBe(false);
+        });
+        const gate: PerfDisclosureGate = { allowed: true };
+        runWithPerfDisclosure(gate, () => {
+            expect(currentPerfTiming()).toBeUndefined();
+            expect(isPerfDisclosureAllowed()).toBe(true);
+        });
     });
 });

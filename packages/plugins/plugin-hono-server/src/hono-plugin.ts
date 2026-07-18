@@ -14,7 +14,12 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { createOriginMatcher, hasWildcardPattern, isLocalhostOrigin } from './pattern-matcher';
 import { readEnvWithDeprecation } from '@objectstack/types';
-import { PerfTiming, runWithPerfTiming } from '@objectstack/observability';
+import {
+    PerfTiming,
+    runWithPerfTiming,
+    runWithPerfDisclosure,
+    type PerfDisclosureGate,
+} from '@objectstack/observability';
 
 export interface StaticMount {
     root: string;
@@ -63,13 +68,23 @@ export interface HonoPluginOptions {
     cors?: HonoCorsOptions | false;
 
     /**
-     * Enable per-request performance timing via the `Server-Timing` response
-     * header ("perf-tuning mode"). OFF by default — the header discloses
-     * internal phase durations (total / body-parse / handler), which is handy
-     * for profiling but is also a backend-fingerprinting surface, so it is
-     * opt-in. Can also be enabled with the `OS_SERVER_TIMING=true` environment
-     * variable.
-     * @default false
+     * Per-request performance timing via the `Server-Timing` response header
+     * ("perf-tuning mode"). The header discloses internal phase durations
+     * (total / auth / db / hooks / serialize), which is handy for profiling but
+     * is also a mild backend-fingerprinting surface, so disclosure is gated:
+     *
+     *  - **GLOBAL** — `serverTiming: true`, or `OS_SERVER_TIMING=true` /
+     *    `OS_PERF_TIMING=1`: every response carries the header (an environment
+     *    under active investigation).
+     *  - **PER-REQUEST** — always available unless hard-disabled: a caller sends
+     *    `X-OS-Debug-Timing: 1` and the header is returned ONLY after the request
+     *    resolves an admin/service identity (the dispatcher opens the disclosure
+     *    gate). Ordinary users can never pull timings just by sending the header.
+     *  - `serverTiming: false` hard-disables BOTH paths (no middleware).
+     *
+     * `undefined` (the default) leaves global mode off but keeps the
+     * admin-gated per-request path available.
+     * @default undefined
      */
     serverTiming?: boolean;
 }
@@ -121,6 +136,16 @@ export function foldWildcardSuperUser(objects: Record<string, any>): void {
             acc.allowDelete = true;
         }
     }
+}
+
+/**
+ * Whether a request opted into per-request perf timing via `X-OS-Debug-Timing`.
+ * Accepts the common truthy spellings; anything else (including absent) is off.
+ */
+export function isDebugTimingRequested(value: string | undefined | null): boolean {
+    if (!value) return false;
+    const v = value.trim().toLowerCase();
+    return v === '1' || v === 'true' || v === 'yes' || v === 'on';
 }
 
 /** Minimal schema shape the managed-write clamp needs. */
@@ -217,20 +242,45 @@ export class HonoServerPlugin implements Plugin {
         ctx.logger.debug('HTTP server service registered', { serviceName: 'http.server' });
 
         // ─── Server-Timing (perf-tuning mode) ─────────────────────────────────
-        // Opt-in per-request performance timing exposed via the `Server-Timing`
+        // Per-request performance timing exposed via the `Server-Timing`
         // response header. Registered FIRST (before CORS) so the `total` mark
         // brackets the whole request and the ambient timing collector is
         // established — via AsyncLocalStorage — for every downstream layer
-        // (CORS, route handler, body parse) to record sub-phases into.
-        const serverTimingEnabled =
-            this.options.serverTiming ?? (process.env.OS_SERVER_TIMING === 'true');
-        if (serverTimingEnabled) {
+        // (CORS, route handler, body parse, SQL driver, hooks) to record
+        // sub-phases into.
+        //
+        // Two ways to turn it on (see the `serverTiming` option JSDoc):
+        //   • GLOBAL   — `serverTiming: true` / `OS_SERVER_TIMING=true` /
+        //                `OS_PERF_TIMING=1`: the header is returned to EVERY
+        //                caller. The disclosure gate opens up front.
+        //   • PER-REQUEST — the caller sends `X-OS-Debug-Timing: 1`; the header
+        //                is returned ONLY after the dispatcher resolves an
+        //                admin/service identity and opens the gate, so an
+        //                ordinary user can never fingerprint the backend by
+        //                sending the header alone.
+        // `serverTiming: false` hard-disables both paths (no middleware).
+        if (this.options.serverTiming !== false) {
+            const globalTiming =
+                this.options.serverTiming === true ||
+                process.env.OS_SERVER_TIMING === 'true' ||
+                process.env.OS_PERF_TIMING === '1' ||
+                process.env.OS_PERF_TIMING === 'true';
             const rawApp = this.server.getRawApp();
             rawApp.use('*', async (c, next) => {
+                const perRequest = isDebugTimingRequested(c.req.header('X-OS-Debug-Timing'));
+                // Nothing asked for timing on this request — a single header
+                // read, then straight through. Zero collector overhead.
+                if (!globalTiming && !perRequest) return next();
+
                 const timing = new PerfTiming();
+                // Global mode opens the gate for everyone; the per-request path
+                // starts closed and is opened only if an admin/service identity
+                // is proven during dispatch (`allowPerfDisclosure`).
+                const gate: PerfDisclosureGate = { allowed: globalTiming };
                 const endTotal = timing.start('total', 'Total server time');
-                await runWithPerfTiming(timing, () => next());
+                await runWithPerfTiming(timing, () => runWithPerfDisclosure(gate, () => next()));
                 endTotal();
+                if (!gate.allowed) return; // per-request, unverified caller — withhold
                 const header = timing.toHeader();
                 // `append` (not `set`) so we coexist with any upstream proxy
                 // that already added a Server-Timing entry.
