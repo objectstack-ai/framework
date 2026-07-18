@@ -139,7 +139,9 @@ export const SysDeviceCode = ObjectSchema.create({
     trackHistory: false,
     searchable: false,
     apiEnabled: true,
-    apiMethods: ['get', 'create', 'update', 'delete'],
+    // #1591 — reads only: writes are refused by the identity write guard
+    // (ADR-0092 D2) and owned by better-auth. HTTP answers 405 before the 403.
+    apiMethods: ['get'],
     trash: false,
     mru: false,
   },

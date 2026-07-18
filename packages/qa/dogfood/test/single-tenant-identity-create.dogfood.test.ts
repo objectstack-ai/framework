@@ -9,14 +9,16 @@
  * now optional; this proves the create path works single-tenant.
  *
  * ADR-0092 update: `sys_team` is `managedBy: 'better-auth'`, so its generic
- * data-API insert is now REJECTED fail-closed for user contexts by the
- * identity write guard. The canonical user surfaces are better-auth's team
- * endpoints (see sys_team.actions), which the schema itself gates to
- * multi-org mode — single-org hides every team-mutation affordance. The
- * ADR-0057 property (optional `organization_id`) therefore matters for the
- * writers that remain legitimate single-tenant: SYSTEM-context writes.
- * sys_business_unit is plugin-security's table (not better-auth-managed) and
- * keeps the generic create path.
+ * data-API insert is now REJECTED fail-closed for user contexts. As of #1591
+ * `sys_team.enable.apiMethods` no longer advertises `create`, so the rejection
+ * lands at the HTTP exposure gate (ADR-0049) as a clean 405 — before the
+ * engine's identity-write-guard 403 backstop even runs. The canonical user
+ * surfaces are better-auth's team endpoints (see sys_team.actions), which the
+ * schema itself gates to multi-org mode — single-org hides every
+ * team-mutation affordance. The ADR-0057 property (optional `organization_id`)
+ * therefore matters for the writers that remain legitimate single-tenant:
+ * SYSTEM-context writes. sys_business_unit is plugin-security's table (not
+ * better-auth-managed) and keeps the generic create path.
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
@@ -42,14 +44,16 @@ describe('ADR-0057: org-scoped identity creatable single-tenant', () => {
   });
 
   it('sys_team: generic insert is guarded for users; org_id stays optional for system writes', async () => {
-    // ADR-0092 D2 — sys_team is managedBy:'better-auth', so a USER-context
-    // insert through the generic data API is rejected fail-closed (the
-    // canonical surfaces are better-auth's team endpoints, which the schema
-    // gates to multi-org mode — in single-org the affordances are hidden).
+    // #1591 — sys_team is managedBy:'better-auth' and no longer advertises
+    // `create` in enable.apiMethods, so a USER-context insert through the
+    // generic data API is refused at the HTTP exposure gate (ADR-0049) with a
+    // clean 405, before the engine's identity-write-guard 403 backstop runs.
+    // The canonical surfaces are better-auth's team endpoints, which the
+    // schema gates to multi-org mode — in single-org the affordances are hidden.
     const direct = await stack.apiAs(token, 'POST', '/data/sys_team', { name: 'Tiger Team' });
-    expect(direct.status).toBe(403);
+    expect(direct.status).toBe(405);
     const denied: any = await direct.json();
-    expect(denied.code).toBe('PERMISSION_DENIED');
+    expect(denied.code).toBe('OBJECT_API_METHOD_NOT_ALLOWED');
 
     // ADR-0057's actual regression target — `organization_id` is OPTIONAL at
     // the schema level, so a single-tenant (no org row) write does not die

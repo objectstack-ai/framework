@@ -171,7 +171,12 @@ export const SysTeam = ObjectSchema.create({
     trackHistory: true,
     searchable: true,
     apiEnabled: true,
-    apiMethods: ['get', 'list', 'create', 'update', 'delete'],
+    // Generic writes are refused by the plugin-auth identity write guard
+    // (ADR-0092 D2) and better-auth owns create/update/delete via the
+    // team actions above — so the generic data API exposes reads only.
+    // The HTTP layer now answers 405 (api-exposure) before the engine's
+    // 403 backstop. See #1591.
+    apiMethods: ['get', 'list'],
     trash: true,
     mru: false,
   },

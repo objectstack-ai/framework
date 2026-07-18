@@ -749,7 +749,13 @@ export const SysUser = ObjectSchema.create({
     trackHistory: true,
     searchable: true,
     apiEnabled: true,
-    apiMethods: ['get', 'list', 'create', 'update', 'delete'],
+    // #1591 — create/delete are refused by the identity write guard
+    // (ADR-0092 D2) and owned by better-auth (Invite / Create User / admin
+    // actions), so they are not exposed. `update` stays: it is the ONE
+    // generic write opened on an identity table (ADR-0092 D4), server-side
+    // clamped to the profile-field whitelist ({name, image}) by the guard —
+    // `userActions.edit: true` above declares the affordance.
+    apiMethods: ['get', 'list', 'update'],
     trash: true,
     mru: true,
   },

@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { SchemaRegistry, applySystemFields, computeFQN, parseFQN, RESERVED_NAMESPACES } from './registry';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { SchemaRegistry, applySystemFields, reconcileManagedApiMethods, computeFQN, parseFQN, RESERVED_NAMESPACES } from './registry';
 
 describe('SchemaRegistry', () => {
     let registry: SchemaRegistry;
@@ -719,5 +719,77 @@ describe('applySystemFields', () => {
         expect(stored.fields.organization_id.reference).toBe('sys_organization');
         expect(stored.fields.created_at).toMatchObject({ system: true, readonly: true });
         expect(stored.fields.updated_by).toMatchObject({ system: true, readonly: true });
+    });
+});
+
+// ==========================================
+// reconcileManagedApiMethods — #1591 / ADR-0092
+// Registration-time consistency: a better-auth-managed object may not
+// advertise generic write verbs it doesn't grant.
+// ==========================================
+describe('reconcileManagedApiMethods', () => {
+    const managed = (extra: any = {}): any => ({
+        name: 'sys_thing',
+        managedBy: 'better-auth',
+        enable: { apiEnabled: true, apiMethods: ['get', 'list', 'create', 'update', 'delete'] },
+        ...extra,
+    });
+
+    it('strips create/update/delete from a better-auth object with no write affordances', () => {
+        const warn = vi.fn();
+        const out = reconcileManagedApiMethods(managed(), { warn });
+        expect(out).not.toBe(managed()); // new object
+        expect(out.enable.apiMethods).toEqual(['get', 'list']);
+        // Warning names the object and the stripped verbs.
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(warn.mock.calls[0][0]).toContain('sys_thing');
+        expect(warn.mock.calls[0][0]).toContain('create');
+    });
+
+    it('keeps update when userActions.edit grants the edit affordance (sys_user case)', () => {
+        const warn = vi.fn();
+        const out = reconcileManagedApiMethods(
+            managed({ userActions: { edit: true }, enable: { apiEnabled: true, apiMethods: ['get', 'list', 'create', 'update', 'delete'] } }),
+            { warn },
+        );
+        // update survives (edit affordance granted); create/delete still stripped.
+        expect(out.enable.apiMethods).toEqual(['get', 'list', 'update']);
+        expect(warn).toHaveBeenCalledTimes(1);
+    });
+
+    it('is a no-op (same reference, no warning) when nothing needs stripping', () => {
+        const warn = vi.fn();
+        const already: any = managed({ enable: { apiEnabled: true, apiMethods: ['get', 'list'] } });
+        const out = reconcileManagedApiMethods(already, { warn });
+        expect(out).toBe(already);
+        expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('never touches read verbs', () => {
+        const out = reconcileManagedApiMethods(
+            managed({ enable: { apiEnabled: true, apiMethods: ['get', 'delete'] } }),
+            { warn: vi.fn() },
+        );
+        expect(out.enable.apiMethods).toEqual(['get']);
+    });
+
+    it('leaves non-better-auth objects untouched (platform bucket keeps full CRUD)', () => {
+        const warn = vi.fn();
+        const platform: any = {
+            name: 'sys_business_unit',
+            managedBy: 'platform',
+            enable: { apiEnabled: true, apiMethods: ['get', 'list', 'create', 'update', 'delete'] },
+        };
+        const out = reconcileManagedApiMethods(platform, { warn });
+        expect(out).toBe(platform);
+        expect(out.enable.apiMethods).toEqual(['get', 'list', 'create', 'update', 'delete']);
+        expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('applies on registerObject (the contradiction cannot be stored)', () => {
+        const reg = new SchemaRegistry({ multiTenant: false });
+        reg.registerObject(managed(), 'sys', 'sys', 'own');
+        const stored = (reg as any).objectContributors.get('sys_thing')[0].definition;
+        expect(stored.enable.apiMethods).toEqual(['get', 'list']);
     });
 });
