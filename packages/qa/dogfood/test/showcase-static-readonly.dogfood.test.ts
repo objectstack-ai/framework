@@ -2,17 +2,25 @@
 //
 // @proof: readonly-static-write
 //
-// #2948 / #3003 — static `readonly: true` is SERVER-enforced on UPDATE, not a
-// UI-only affordance. The #3003 field report: an approval-flow object declared
-// `approval_status` / `approval_stage` as `readonly: true`, the create/edit
-// forms never rendered them — and a logged-in, non-admin user forged all of
-// them (plus an amount column) with one direct REST PATCH from the same
-// session, self-approving a 4-stage approval. The strip added for #2948
-// (`stripReadonlyFields`, objectql/engine.ts) closes exactly that: on a
-// non-system UPDATE, caller-supplied writes to statically-readonly fields are
-// silently dropped (HTTP 200, persisted value kept) — symmetric with the
-// `readonlyWhen` strip. INSERT is deliberately exempt (a create may seed a
-// readonly column: defaultValue, import, migration), matching `readonlyWhen`.
+// #2948 / #3003 (UPDATE) + #3043 (INSERT) — static `readonly: true` is
+// SERVER-enforced on BOTH write paths, not a UI-only affordance. The #3003
+// field report: an approval-flow object declared `approval_status` /
+// `approval_stage` as `readonly: true`, the create/edit forms never rendered
+// them — and a logged-in, non-admin user forged all of them (plus an amount
+// column) with one direct REST PATCH from the same session, self-approving a
+// 4-stage approval. #3043 is the INSERT face of the same gap: the create path
+// used to be EXEMPT, so the same non-admin could skip the draft entirely and
+// POST a record already `approval_status:'approved'` — a step SHORTER than
+// #3003, and one the UPDATE strip never reached. It is now closed on both
+// paths: UPDATE in the engine (`stripReadonlyFields`, objectql/engine.ts,
+// #2948) and INSERT at the DataProtocol create INGRESS
+// (metadata-protocol/protocol.ts `stripReadonlyForInsert`, #3043 — the single
+// seam every external REST/GraphQL/MCP create funnels through, while trusted
+// internal engine.insert writers are untouched). On a non-system INSERT or
+// UPDATE, caller-supplied writes to statically-readonly fields are silently
+// dropped (HTTP 2xx; a stripped INSERT field falls back to its `defaultValue`).
+// System-context writes (import, seed replay, migration) stay exempt, as does
+// `readonlyWhen` on INSERT (a conditional lock needs a prior record).
 //
 // Proven here on the REAL showcase app over HTTP: `showcase_contact.lead_score`
 // is the stand-in for the #3003 approval/status/amount columns — readonly,
@@ -26,7 +34,7 @@ const OBJ = '/data/showcase_contact';
 const idOf = (b: any) => b?.id ?? b?.record?.id ?? b?.data?.id ?? b?.recordId;
 const recordOf = (b: any) => b?.record ?? b?.data ?? b;
 
-describe('showcase: static readonly write enforcement (#2948 / #3003)', () => {
+describe('showcase: static readonly write enforcement (#2948 / #3003 / #3043)', () => {
   let stack: VerifyStack;
   let token: string;
   let contactId: string;
@@ -36,25 +44,30 @@ describe('showcase: static readonly write enforcement (#2948 / #3003)', () => {
     await stack.signIn();
     token = await stack.signUp('ro-worker@verify.test');
 
-    // INSERT exemption (documented contract, symmetric with `readonlyWhen`):
-    // a create MAY seed a readonly column — the scoring pipeline, an import,
-    // or a migration legitimately writes the initial value.
+    // #3043: a non-system INSERT that forges the readonly column is admitted
+    // (HTTP 2xx, silent — like the UPDATE strip) but the forged value must NOT
+    // persist. The create itself still succeeds — only the readonly key is
+    // dropped from the payload, so the editable fields land.
     const created = await stack.apiAs(token, 'POST', OBJ, {
       name: 'Readonly Probe',
       email: 'ro-probe@verify.test',
-      lead_score: 10,
+      lead_score: 10, // forged: the UI never renders this on the create form
     });
-    expect(created.status).toBeLessThan(300);
+    expect(created.status, 'create succeeds; the readonly key is dropped, not rejected').toBeLessThan(300);
     contactId = idOf(await created.json());
     expect(contactId).toBeTruthy();
   }, 60_000);
 
   afterAll(async () => { await stack?.stop(); });
 
-  it('INSERT may seed the readonly field (documented exemption)', async () => {
+  it('INSERT forging the readonly field is silently stripped — the forged value never persists (#3043)', async () => {
     const res = await stack.apiAs(token, 'GET', `${OBJ}/${contactId}`);
     expect(res.status).toBe(200);
-    expect(recordOf(await res.json()).lead_score, 'insert-seeded value persisted').toBe(10);
+    const rec = recordOf(await res.json());
+    expect(rec.name, 'editable field from the create payload landed').toBe('Readonly Probe');
+    // No `defaultValue` is declared for `lead_score`, so the stripped field is
+    // simply absent — the caller-forged 10 is gone.
+    expect(rec.lead_score ?? null, 'insert-forged readonly value must NOT persist').toBeNull();
   });
 
   it('a direct PATCH forging the readonly field is silently stripped — sibling editable fields still land', async () => {
@@ -68,7 +81,7 @@ describe('showcase: static readonly write enforcement (#2948 / #3003)', () => {
     expect(forge.status, 'strip is silent — the request succeeds').toBe(200);
 
     const after = recordOf(await (await stack.apiAs(token, 'GET', `${OBJ}/${contactId}`)).json());
-    expect(after.lead_score, 'forged readonly value must NOT persist').toBe(10);
+    expect(after.lead_score ?? null, 'forged readonly value must NOT persist').toBeNull();
     expect(after.notes, 'editable field from the same payload still lands').toBe(
       'legitimate edit in the same payload',
     );
@@ -79,6 +92,6 @@ describe('showcase: static readonly write enforcement (#2948 / #3003)', () => {
     expect(forge.status).toBe(200);
 
     const after = recordOf(await (await stack.apiAs(token, 'GET', `${OBJ}/${contactId}`)).json());
-    expect(after.lead_score, 'readonly value survives an all-forged payload').toBe(10);
+    expect(after.lead_score ?? null, 'readonly value unchanged by an all-forged payload').toBeNull();
   });
 });
