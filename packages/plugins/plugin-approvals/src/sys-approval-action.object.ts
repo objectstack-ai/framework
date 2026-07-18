@@ -92,8 +92,9 @@ export const SysApprovalAction = ObjectSchema.create({
       // Keep in sync with `ApprovalActionKind` (spec/contracts). reassign /
       // remind / request_info / comment are thread interactions — they never
       // move the flow. revise / resubmit (ADR-0044) DO move it: send back for
-      // revision and the later resubmission.
-      ['submit', 'approve', 'reject', 'recall', 'escalate', 'reassign', 'remind', 'request_info', 'comment', 'revise', 'resubmit'],
+      // revision and the later resubmission. ooo_substitute (#1322 M1) is a
+      // system-recorded reroute of an out-of-office approver — no flow movement.
+      ['submit', 'approve', 'reject', 'recall', 'escalate', 'reassign', 'remind', 'request_info', 'comment', 'revise', 'resubmit', 'ooo_substitute'],
       {
         label: 'Action',
         required: true,

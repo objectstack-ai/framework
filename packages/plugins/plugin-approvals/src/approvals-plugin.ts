@@ -5,6 +5,7 @@ import { SysApprovalRequest } from './sys-approval-request.object.js';
 import { SysApprovalAction } from './sys-approval-action.object.js';
 import { SysApprovalApprover } from './sys-approval-approver.object.js';
 import { SysApprovalToken } from './sys-approval-token.object.js';
+import { SysApprovalDelegation } from './sys-approval-delegation.object.js';
 import { renderConfirmPage, renderResultPage } from './action-link-pages.js';
 import {
   ApprovalService,
@@ -70,7 +71,7 @@ export class ApprovalsServicePlugin implements Plugin {
       scope: 'system',
       defaultDatasource: 'cloud',
       namespace: 'sys',
-      objects: [SysApprovalRequest, SysApprovalAction, SysApprovalApprover, SysApprovalToken],
+      objects: [SysApprovalRequest, SysApprovalAction, SysApprovalApprover, SysApprovalToken, SysApprovalDelegation],
       // ADR-0029 D7 — contribute the Approvals entries into the Setup app's
       // `group_approvals` slot. This plugin owns these objects (K2.b), so it
       // ships their menu too; when the plugin isn't installed the slot is empty.
@@ -82,6 +83,7 @@ export class ApprovalsServicePlugin implements Plugin {
           items: [
             { id: 'nav_approval_requests', type: 'object', label: 'Requests', objectName: 'sys_approval_request', icon: 'inbox', requiresObject: 'sys_approval_request' },
             { id: 'nav_approval_actions', type: 'object', label: 'Action History', objectName: 'sys_approval_action', icon: 'history', requiresObject: 'sys_approval_action' },
+            { id: 'nav_approval_delegations', type: 'object', label: 'Delegations (OOO)', objectName: 'sys_approval_delegation', icon: 'user-clock', requiresObject: 'sys_approval_delegation' },
           ],
         },
       ],

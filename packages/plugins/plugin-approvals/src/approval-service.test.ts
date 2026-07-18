@@ -1076,3 +1076,150 @@ describe('record-lock hook (node era)', () => {
     expect(engine._hooks['beforeUpdate']).toHaveLength(0);
   });
 });
+
+// ── Out-of-office auto-skip (#1322 M1/M4) ─────────────────────────────
+//
+// When a resolved individual approver has declared an active OOO delegation,
+// the slot is rerouted to the delegate at resolution time (never a background
+// job), audited as `ooo_substitute`, and both parties are notified. Group /
+// graph approvers (position/team/department/tier) are left untouched.
+describe('ApprovalService — out-of-office delegation (#1322)', () => {
+  // Mid-window instant for the issue's own example (leave 5/26–5/30).
+  const OOO_NOW = new Date('2026-05-27T10:00:00Z').getTime();
+  let engine: ReturnType<typeof makeFakeEngine>;
+  let svc: ApprovalService;
+  let emitted: any[];
+
+  function seedDelegation(rows: Array<Record<string, any>>) {
+    engine._tables['sys_approval_delegation'] = rows.map((r, i) => ({
+      id: `del${i}`,
+      organization_id: 't1',
+      valid_from: '2026-05-26T00:00:00Z',
+      valid_until: '2026-05-30T00:00:00Z',
+      reason: 'Annual leave',
+      ...r,
+    }));
+  }
+
+  beforeEach(() => {
+    engine = makeFakeEngine();
+    emitted = [];
+    svc = new ApprovalService({ engine: engine as any, clock: { now: () => new Date(OOO_NOW) } });
+    svc.attachMessaging({ emit: async (m: any) => { emitted.push(m); } });
+  });
+
+  it('type:user — reroutes an out-of-office approver to the delegate', async () => {
+    seedDelegation([{ delegator_id: 'alice', delegate_id: 'bob' }]);
+    const req = await svc.openNodeRequest(openInput(['alice']), CTX);
+    expect(req.pending_approvers).toEqual(['bob']);
+  });
+
+  it('records an ooo_substitute audit action with "A → B — reason"', async () => {
+    seedDelegation([{ delegator_id: 'alice', delegate_id: 'bob' }]);
+    await svc.openNodeRequest(openInput(['alice']), CTX);
+    const sub = engine._tables['sys_approval_action'].find((a: any) => a.action === 'ooo_substitute');
+    expect(sub).toBeTruthy();
+    expect(sub.comment).toBe('alice → bob — Annual leave');
+    expect(sub.actor_id).toBeNull(); // system-recorded reroute, no human actor
+  });
+
+  it('notifies both the delegate and the skipped approver', async () => {
+    seedDelegation([{ delegator_id: 'alice', delegate_id: 'bob' }]);
+    await svc.openNodeRequest(openInput(['alice']), CTX);
+    const to = emitted.find(e => e.topic === 'approval.ooo_substituted');
+    const from = emitted.find(e => e.topic === 'approval.ooo_skipped');
+    expect(to?.audience).toEqual(['bob']);
+    expect(from?.audience).toEqual(['alice']);
+  });
+
+  it('does not reroute before valid_from (window not yet open)', async () => {
+    seedDelegation([{ delegator_id: 'alice', delegate_id: 'bob', valid_from: '2026-05-28T00:00:00Z' }]);
+    const req = await svc.openNodeRequest(openInput(['alice']), CTX);
+    expect(req.pending_approvers).toEqual(['alice']);
+    expect(engine._tables['sys_approval_action'].some((a: any) => a.action === 'ooo_substitute')).toBe(false);
+  });
+
+  it('does not reroute at/after valid_until (half-open window)', async () => {
+    seedDelegation([{ delegator_id: 'alice', delegate_id: 'bob', valid_until: '2026-05-27T10:00:00Z' }]);
+    const req = await svc.openNodeRequest(openInput(['alice']), CTX);
+    expect(req.pending_approvers).toEqual(['alice']);
+  });
+
+  it('type:field — reroutes the user stored in the record field', async () => {
+    seedDelegation([{ delegator_id: 'alice', delegate_id: 'bob' }]);
+    const input = {
+      ...openInput([]),
+      record: { id: 'opp1', reviewer: 'alice' },
+      config: { approvers: [{ type: 'field', value: 'reviewer' }], behavior: 'first_response', lockRecord: true },
+    };
+    const req = await svc.openNodeRequest(input as any, CTX);
+    expect(req.pending_approvers).toEqual(['bob']);
+  });
+
+  it('type:manager — reroutes when the resolved manager is out of office', async () => {
+    engine._tables['sys_user'] = [{ id: 'carol', manager_id: 'alice' }];
+    seedDelegation([{ delegator_id: 'alice', delegate_id: 'bob' }]);
+    const input = {
+      ...openInput([]),
+      record: { id: 'opp1', owner_id: 'carol' },
+      config: { approvers: [{ type: 'manager', value: 'owner_id' }], behavior: 'first_response', lockRecord: true },
+    };
+    const req = await svc.openNodeRequest(input as any, CTX);
+    expect(req.pending_approvers).toEqual(['bob']);
+  });
+
+  it('follows a delegation chain A → B → C', async () => {
+    seedDelegation([
+      { delegator_id: 'alice', delegate_id: 'bob' },
+      { delegator_id: 'bob', delegate_id: 'carol' },
+    ]);
+    const req = await svc.openNodeRequest(openInput(['alice']), CTX);
+    expect(req.pending_approvers).toEqual(['carol']);
+    expect(engine._tables['sys_approval_action'].filter((a: any) => a.action === 'ooo_substitute')).toHaveLength(2);
+  });
+
+  it('stops on a cycle A → B → A without looping', async () => {
+    seedDelegation([
+      { delegator_id: 'alice', delegate_id: 'bob' },
+      { delegator_id: 'bob', delegate_id: 'alice' },
+    ]);
+    const req = await svc.openNodeRequest(openInput(['alice']), CTX);
+    expect(req.pending_approvers).toEqual(['bob']);
+  });
+
+  it('ignores a self-delegation (A → A)', async () => {
+    seedDelegation([{ delegator_id: 'alice', delegate_id: 'alice' }]);
+    const req = await svc.openNodeRequest(openInput(['alice']), CTX);
+    expect(req.pending_approvers).toEqual(['alice']);
+    expect(engine._tables['sys_approval_action'].some((a: any) => a.action === 'ooo_substitute')).toBe(false);
+  });
+
+  it('leaves approvers unchanged when there is no active delegation', async () => {
+    const req = await svc.openNodeRequest(openInput(['alice']), CTX);
+    expect(req.pending_approvers).toEqual(['alice']);
+  });
+
+  it('does not OOO-substitute group-routed (position) approvers', async () => {
+    engine._tables['sys_user_position'] = [{ id: 'up1', user_id: 'alice', position: 'sales_manager', organization_id: 't1' }];
+    seedDelegation([{ delegator_id: 'alice', delegate_id: 'bob' }]);
+    const input = {
+      ...openInput([]),
+      config: { approvers: [{ type: 'position', value: 'sales_manager' }], behavior: 'first_response', lockRecord: true },
+    };
+    const req = await svc.openNodeRequest(input as any, CTX);
+    // Position-routed leave is ADR-0091's job, not this path: the holder stays.
+    expect(req.pending_approvers).toEqual(['alice']);
+  });
+
+  it('respects tenant scope: a rule scoped to another org does not apply', async () => {
+    seedDelegation([{ delegator_id: 'alice', delegate_id: 'bob', organization_id: 't2' }]);
+    const req = await svc.openNodeRequest(openInput(['alice']), CTX);
+    expect(req.pending_approvers).toEqual(['alice']);
+  });
+
+  it('applies a cross-tenant (null org) rule regardless of request tenant', async () => {
+    seedDelegation([{ delegator_id: 'alice', delegate_id: 'bob', organization_id: null }]);
+    const req = await svc.openNodeRequest(openInput(['alice']), CTX);
+    expect(req.pending_approvers).toEqual(['bob']);
+  });
+});

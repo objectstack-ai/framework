@@ -21,6 +21,7 @@ import type {
   ApprovalStatus,
   SharingExecutionContext,
 } from '@objectstack/spec/contracts';
+import { isGrantActive } from '@objectstack/core';
 
 /**
  * Node-era approval runtime (ADR-0019).
@@ -99,6 +100,23 @@ export type ActionTokenOutcome =
   | { ok: false; reason: 'invalid' | 'expired' | 'consumed' | 'not_pending' | 'not_approver'; request?: ApprovalRequestRow };
 
 const SYSTEM_CTX = { isSystem: true, positions: [], permissions: [] } as const;
+
+/**
+ * Max hops when following an OOO delegation chain (#1322 M1): A out → B, B out
+ * → C, … Bounds the walk so a mis-configured chain can't loop or resolve
+ * unboundedly; a cycle or self-reference also stops it early.
+ */
+const OOO_MAX_CHAIN = 8;
+
+/** One OOO delegation hop applied while resolving an approver (#1322 M1/M4). */
+interface OooSubstitution {
+  /** The approver who was skipped (out of office). */
+  from: string;
+  /** The delegate the slot was routed to. */
+  to: string;
+  /** The delegator's declared reason, if any. */
+  reason: string | null;
+}
 
 function uid(prefix: string): string {
   const g: any = globalThis as any;
@@ -296,9 +314,24 @@ export class ApprovalService implements IApprovalService {
    *
    * `role` is accepted as the deprecated spelling of `org_membership_level`
    * (ADR-0090 D3) for one window: it resolves identically and logs a warning.
+   *
+   * **Out-of-office (#1322 M1):** individually-routed approvers — the ones that
+   * resolve to a specific person (`user` / `field` / `manager`) — are passed
+   * through {@link ApprovalService.applyOooDelegation}, which reroutes them onto
+   * an active delegate when the resolved user has declared OOO. Group/graph
+   * approvers (`team` / `department` / `position` / `org_membership_level`) are
+   * left untouched: a group still has its other members, and position-routed
+   * leave is already covered by ADR-0091 job delegation. Pass an `opts.now` /
+   * `opts.substitutions` collector to record the hops for audit + notification.
    */
-  private async expandApprovers(step: any, record?: any, organizationId?: string | null): Promise<string[]> {
+  private async expandApprovers(
+    step: any,
+    record?: any,
+    organizationId?: string | null,
+    opts?: { now?: number; substitutions?: OooSubstitution[] },
+  ): Promise<string[]> {
     if (!step || !Array.isArray(step.approvers)) return [];
+    const now = opts?.now ?? this.clock.now().getTime();
     const out: string[] = [];
     for (const a of step.approvers) {
       if (!a) continue;
@@ -314,8 +347,14 @@ export class ApprovalService implements IApprovalService {
           { deprecated: a.type, canonical: type },
         );
       }
-      if (type === 'user') { out.push(String(a.value)); continue; }
-      if (type === 'field' && record) { out.push(String((record as any)[a.value] ?? '')); continue; }
+      if (type === 'user') {
+        for (const u of await this.applyOooDelegation(String(a.value), now, organizationId, opts?.substitutions)) out.push(u);
+        continue;
+      }
+      if (type === 'field' && record) {
+        for (const u of await this.applyOooDelegation(String((record as any)[a.value] ?? ''), now, organizationId, opts?.substitutions)) out.push(u);
+        continue;
+      }
       try {
         if (type === 'team') {
           const users = await this.expandTeamUsers(String(a.value));
@@ -333,7 +372,10 @@ export class ApprovalService implements IApprovalService {
           const subject = (record as any)[a.value] ?? (record as any).owner_id;
           if (subject) {
             const mgr = await this.lookupManager(String(subject));
-            if (mgr) { out.push(mgr); continue; }
+            if (mgr) {
+              for (const u of await this.applyOooDelegation(mgr, now, organizationId, opts?.substitutions)) out.push(u);
+              continue;
+            }
           }
         }
       } catch { /* fall through */ }
@@ -458,6 +500,74 @@ export class ApprovalService implements IApprovalService {
     } catch { return null; }
   }
 
+  /**
+   * Out-of-office auto-skip (#1322 M1). Given an individually-routed approver
+   * id, follow any active `sys_approval_delegation` chain and return the id the
+   * slot should actually go to — the delegate acts under their own identity, so
+   * no impersonation is involved. Returns `[userId]` unchanged when there is no
+   * active delegation. Each hop is appended to `collector` (when supplied) so
+   * the caller can audit + notify (M4).
+   *
+   * The chain (A out → B, B out → C, …) is bounded by {@link OOO_MAX_CHAIN} and
+   * stops on a self-reference or a cycle, so a mis-declared loop degrades to the
+   * last reachable delegate rather than hanging.
+   */
+  private async applyOooDelegation(
+    userId: string,
+    now: number,
+    organizationId?: string | null,
+    collector?: OooSubstitution[],
+  ): Promise<string[]> {
+    const start = String(userId ?? '').trim();
+    if (!start) return [];
+    let current = start;
+    const visited = new Set<string>([current]);
+    for (let hop = 0; hop < OOO_MAX_CHAIN; hop++) {
+      const del = await this.lookupActiveDelegation(current, now, organizationId);
+      if (!del) break;
+      const to = String(del.delegate_id ?? '').trim();
+      if (!to || to === current || visited.has(to)) break; // no-op / self / cycle
+      collector?.push({ from: current, to, reason: del.reason != null ? String(del.reason) : null });
+      visited.add(to);
+      current = to;
+    }
+    return [current];
+  }
+
+  /**
+   * The active OOO delegation for a delegator at `now`, or null. Validity is the
+   * shared `isGrantActive` half-open window (ADR-0091 D2), enforced here at
+   * resolution time — never by a background job. When several rows are active,
+   * the one expiring soonest wins (the most specific coverage window).
+   */
+  private async lookupActiveDelegation(
+    delegatorId: string,
+    now: number,
+    organizationId?: string | null,
+  ): Promise<any | null> {
+    if (!delegatorId) return null;
+    let rows: any[] = [];
+    try {
+      rows = await this.engine.find('sys_approval_delegation', {
+        filter: { delegator_id: delegatorId },
+        fields: ['id', 'delegator_id', 'delegate_id', 'valid_from', 'valid_until', 'reason', 'organization_id'],
+        limit: 50,
+        context: SYSTEM_CTX,
+      } as any);
+    } catch { return null; } // table absent on minimal stacks — no OOO, resolve as-is
+    const active = (rows ?? []).filter((r: any) =>
+      isGrantActive(r, now)
+      // A null-org rule applies across tenants; a scoped rule only within its tenant.
+      && (organizationId == null || r.organization_id == null || String(r.organization_id) === String(organizationId)));
+    if (!active.length) return null;
+    active.sort((a: any, b: any) => {
+      const au = a.valid_until ? Date.parse(String(a.valid_until)) : Number.POSITIVE_INFINITY;
+      const bu = b.valid_until ? Date.parse(String(b.valid_until)) : Number.POSITIVE_INFINITY;
+      return au - bu;
+    });
+    return active[0];
+  }
+
   /** Mirror a request status onto a business-object field, if configured. */
   private async mirrorStatusField(object: string, recordId: string, field: string, status: string): Promise<void> {
     try {
@@ -512,9 +622,15 @@ export class ApprovalService implements IApprovalService {
     }
 
     const ctxOrg = (context as any)?.organizationId ?? (context as any)?.tenantId ?? input.organizationId ?? null;
-    const approvers = await this.expandApprovers({ approvers: input.config.approvers }, input.record, ctxOrg);
+    const nowDate = this.clock.now();
+    // OOO auto-skip (#1322 M1): reroute individually-routed approvers who are
+    // out of office. Collected hops drive the audit + notification below (M4).
+    const substitutions: OooSubstitution[] = [];
+    const approvers = await this.expandApprovers(
+      { approvers: input.config.approvers }, input.record, ctxOrg, { now: nowDate.getTime(), substitutions },
+    );
 
-    const now = this.clock.now().toISOString();
+    const now = nowDate.toISOString();
     const id = uid('areq');
     const processName = `flow:${input.flowName ?? input.nodeId}`;
     // Display labels ride the config snapshot (no schema migration needed);
@@ -557,6 +673,42 @@ export class ApprovalService implements IApprovalService {
       step_name: input.nodeId, step_index: 0, action: 'submit',
       actor_id: input.submitterId ?? context.userId ?? null, comment: null, created_at: now,
     }, { context: SYSTEM_CTX });
+
+    // OOO substitution audit + notification (#1322 M4). Each hop that rerouted
+    // an approver away from an out-of-office user is recorded on the request's
+    // audit trail (a system action, no human actor) and notified to both the
+    // delegate — who now owns the slot — and the skipped approver.
+    for (const sub of substitutions) {
+      await this.engine.insert('sys_approval_action', {
+        id: uid('aact'), request_id: id, organization_id: ctxOrg,
+        step_name: input.nodeId, step_index: 0, action: 'ooo_substitute',
+        actor_id: null,
+        comment: `${sub.from} → ${sub.to}${sub.reason ? ` — ${sub.reason}` : ''}`,
+        created_at: now,
+      }, { context: SYSTEM_CTX });
+      await this.notify({
+        topic: 'approval.ooo_substituted',
+        audience: [sub.to],
+        source: { object: 'sys_approval_request', id },
+        dedupKey: `approval-ooo-${id}-${sub.to}`,
+        payload: {
+          title: 'Approval routed to you (out-of-office cover)',
+          message: `You are covering an approval on ${input.object}/${input.recordId} while ${sub.from} is out of office.`,
+          actionUrl: '/system/approvals',
+        },
+      });
+      await this.notify({
+        topic: 'approval.ooo_skipped',
+        audience: [sub.from],
+        source: { object: 'sys_approval_request', id },
+        dedupKey: `approval-ooo-skip-${id}-${sub.from}`,
+        payload: {
+          title: 'Approval routed to your delegate',
+          message: `An approval on ${input.object}/${input.recordId} was routed to ${sub.to} while you are out of office.`,
+          actionUrl: '/system/approvals',
+        },
+      });
+    }
 
     // Record lock (when `lockRecord !== false`) is enforced by the beforeUpdate
     // hook keyed on the now-pending request; no extra write needed here.

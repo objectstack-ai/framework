@@ -2516,6 +2516,25 @@ export class ObjectStackClient {
     },
 
     /**
+     * Hand a pending-approver slot to someone else (#1322 M2 — self-service
+     * task delegation). `to` is the new approver; `from` defaults to the
+     * caller. Records a `reassign` audit action and notifies the new approver.
+     * (Standing out-of-office delegation is CRUD on `sys_approval_delegation`
+     * via the generic data API, so it needs no dedicated helper here.)
+     */
+    reassign: async (
+      requestId: string,
+      input: { to: string; from?: string; actorId?: string; comment?: string },
+    ): Promise<{ request: ApprovalRequestRow }> => {
+      const route = this.getRoute('approvals');
+      const res = await this.fetch(`${this.baseUrl}${route}/requests/${encodeURIComponent(requestId)}/reassign`, {
+        method: 'POST',
+        body: JSON.stringify({ to: input.to, from: input.from, actorId: input.actorId, comment: input.comment })
+      });
+      return this.unwrapResponse<{ request: ApprovalRequestRow }>(res);
+    },
+
+    /**
      * Audit trail (the immutable action log) for an approval request.
      */
     listActions: async (requestId: string): Promise<ApprovalActionRow[]> => {
