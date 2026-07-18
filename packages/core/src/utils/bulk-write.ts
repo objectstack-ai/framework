@@ -26,6 +26,17 @@
  *    can reassemble output in input order even though rows are processed in
  *    batches (and a batch's flush may be interleaved with other, immediate,
  *    per-row work such as updates).
+ *
+ * Delivery semantics: **at-least-once**. Transient retry and per-row
+ * degradation both RE-RUN a write whose outcome was unknown — e.g. a turso
+ * `fetch failed` that arrived *after* the row was already committed
+ * (framework#3149), or a result-count mismatch that voids the batch
+ * (framework#3151). A caller that needs exactly-once must make its
+ * `writeBatch`/`writeOne` idempotent; both receive an `attempt` counter for
+ * exactly this — see the natural-key recheck the seed loader and import
+ * runner perform on `attempt > 1`. `writeBatch` MUST also resolve exactly one
+ * record per input row, in input order: a short / long / non-array return is
+ * rejected as a failed batch (framework#3151), never silently backfilled.
  */
 
 export interface BulkWriteRowResult<TRecord = any> {
@@ -162,6 +173,25 @@ export async function bulkWrite<TRow, TRecord = any>(
     const batch = rows.slice(start, start + batchSize);
     try {
       const records = await withRetry(() => opts.writeBatch(batch), retryOpts);
+      // Contract guard (framework#3151): `writeBatch` must resolve one record
+      // per input row. A short / long / non-array return breaks the positional
+      // correlation below, so backfilling it would report phantom successes
+      // (`record: undefined`) or drop records. Treat the whole batch as failed
+      // and fall through to per-row degradation (each row re-attempted via
+      // `writeOne`, which under an idempotent caller rechecks before writing).
+      // The message deliberately avoids any transient signature so this never
+      // reads as a retryable blip — and it is thrown *outside* `withRetry`, so
+      // the batch is not retried on it.
+      if (!Array.isArray(records) || records.length !== batch.length) {
+        throw Object.assign(
+          new Error(
+            `bulkWrite: writeBatch returned ${
+              Array.isArray(records) ? `${records.length} record(s)` : String(typeof records)
+            } for a ${batch.length}-row batch — treating batch as failed`,
+          ),
+          { code: 'ERR_BULK_RESULT_MISMATCH' },
+        );
+      }
       for (let i = 0; i < batch.length; i++) {
         results[start + i] = { index: start + i, ok: true, record: records[i] };
       }

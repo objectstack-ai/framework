@@ -112,6 +112,50 @@ describe('bulkWrite', () => {
     expect(writeOne).not.toHaveBeenCalled();
     expect(results[0]).toMatchObject({ index: 0, ok: false });
   });
+
+  it('rejects a short writeBatch return as a failed batch and degrades to per-row (#3151)', async () => {
+    // Driver dropped a row from its RETURNING set: 2-row batch, 1 record back.
+    const writeBatch = vi.fn(async (batch: { n: number }[]) => batch.slice(1).map((r) => ({ id: `r${r.n}` })));
+    const writeOne = vi.fn(async (row: { n: number }) => ({ id: `r${row.n}` }));
+
+    const results = await bulkWrite([{ n: 1 }, { n: 2 }], { batchSize: 10, writeBatch, writeOne, sleep: noopSleep });
+
+    expect(writeBatch).toHaveBeenCalledTimes(1); // mismatch is NOT transient — no batch retry
+    expect(writeOne).toHaveBeenCalledTimes(2);   // degraded to per-row instead of phantom success
+    expect(results.every((r) => r.ok)).toBe(true);
+    expect(results.map((r) => r.record)).toEqual([{ id: 'r1' }, { id: 'r2' }]);
+  });
+
+  it('rejects a non-array writeBatch return and degrades to per-row (#3151)', async () => {
+    const writeBatch = vi.fn(async () => undefined as unknown as { id: string }[]);
+    const writeOne = vi.fn(async (row: { n: number }) => ({ id: `r${row.n}` }));
+
+    const results = await bulkWrite([{ n: 1 }, { n: 2 }], { batchSize: 10, writeBatch, writeOne, sleep: noopSleep });
+
+    expect(writeOne).toHaveBeenCalledTimes(2);
+    expect(results.every((r) => r.ok)).toBe(true);
+  });
+
+  it('rejects an over-long writeBatch return and degrades to per-row (#3151)', async () => {
+    const writeBatch = vi.fn(async (batch: { n: number }[]) => [...batch, { n: 999 }].map((r) => ({ id: `r${r.n}` })));
+    const writeOne = vi.fn(async (row: { n: number }) => ({ id: `r${row.n}` }));
+
+    const results = await bulkWrite([{ n: 1 }, { n: 2 }], { batchSize: 10, writeBatch, writeOne, sleep: noopSleep });
+
+    expect(writeOne).toHaveBeenCalledTimes(2);
+    expect(results.every((r) => r.ok)).toBe(true);
+  });
+
+  it('surfaces ERR_BULK_RESULT_MISMATCH on a single-row batch with the wrong return count (#3151)', async () => {
+    const writeBatch = vi.fn(async () => [] as { id: string }[]); // empty for a 1-row batch
+    const writeOne = vi.fn(async () => ({ id: 'unused' }));
+
+    const results = await bulkWrite([{ n: 1 }], { batchSize: 10, writeBatch, writeOne, sleep: noopSleep });
+
+    expect(writeOne).not.toHaveBeenCalled(); // single-row batch failure IS the row's final result
+    expect(results[0].ok).toBe(false);
+    expect((results[0].error as { code?: string })?.code).toBe('ERR_BULK_RESULT_MISMATCH');
+  });
 });
 
 describe('withTransientRetry', () => {
