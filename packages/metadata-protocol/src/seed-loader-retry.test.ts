@@ -180,6 +180,55 @@ describe('seed batched path — idempotent retry after commit-then-lost-response
   });
 });
 
+describe('seed batched path — partial-success engine (framework#3172)', () => {
+  it('a bad row is a per-row verdict: good rows insert once, no degradation re-run', async () => {
+    const { engine, store } = createFaithfulEngine();
+    const metadata = createMetadata();
+
+    // Engine with insertMany (partial success): the bad row comes back as a
+    // per-row error, good rows as records — one call, no thrown batch error.
+    let insertManyCalls = 0;
+    (engine as any).insertMany = vi.fn(async (obj: string, rows: any[], opts: any) => {
+      insertManyCalls++;
+      const outcomes = [];
+      for (const r of rows) {
+        if (r.sku === 'BAD') {
+          outcomes.push({ ok: false, error: new Error('validation failed: bad widget') });
+        } else {
+          outcomes.push({ ok: true, record: await (engine.insert as any)(obj, r, opts) });
+        }
+      }
+      return outcomes;
+    });
+
+    const result = await new SeedLoaderService(engine, metadata, createLogger()).load({
+      seeds: [{
+        object: 'my_app_widget',
+        externalId: 'sku',
+        mode: 'insert',
+        env: ['prod', 'dev', 'test'],
+        records: [
+          { name: 'Good A', sku: 'W-A' },
+          { name: 'Bad', sku: 'BAD' },
+          { name: 'Good B', sku: 'W-B' },
+        ],
+      }] as any,
+      config: CONFIG,
+    });
+
+    expect(insertManyCalls).toBe(1);
+    expect(result.summary.totalInserted).toBe(2);
+    expect(result.summary.totalErrored).toBe(1);
+    expect(store.my_app_widget.map((r: any) => r.sku).sort()).toEqual(['W-A', 'W-B']);
+    // The good rows were written exactly once — no whole-batch degradation
+    // re-ran them through engine.insert (single-row form).
+    const singleInsertCalls = (engine.insert as any).mock.calls.filter(
+      ([obj, data]: [string, any]) => obj === 'my_app_widget' && !Array.isArray(data),
+    );
+    expect(singleInsertCalls).toHaveLength(2); // only the two calls made INSIDE insertMany's mock
+  });
+});
+
 describe('seed batched path — summary recompute failure is a warning, not an error (framework#3147)', () => {
   it('records the rows as inserted (not errored) and does not re-insert on ERR_SUMMARY_RECOMPUTE', async () => {
     const { engine, store } = createFaithfulEngine();

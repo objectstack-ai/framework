@@ -173,6 +173,60 @@ describe('bulkWrite', () => {
     expect(seen).toEqual([1, 2]); // attempt 1 threw, attempt 2 succeeded
   });
 
+  it('writeBatchPartial: per-row failures are final verdicts — no writeOne degradation (#3172)', async () => {
+    const writeBatchPartial = vi.fn(async (batch: { n: number; bad?: boolean }[]) =>
+      batch.map((r) => (r.bad
+        ? { ok: false, error: new Error('validation failed: bad row') }
+        : { ok: true, record: { id: `r${r.n}` } })));
+    const writeBatch = vi.fn();
+    const writeOne = vi.fn();
+
+    const results = await bulkWrite(
+      [{ n: 1 }, { n: 2, bad: true }, { n: 3 }],
+      { batchSize: 10, writeBatchPartial, writeBatch, writeOne, sleep: noopSleep },
+    );
+
+    expect(writeBatchPartial).toHaveBeenCalledTimes(1);
+    expect(writeBatch).not.toHaveBeenCalled();  // partial path replaces writeBatch
+    expect(writeOne).not.toHaveBeenCalled();    // per-row failure ≠ batch failure
+    expect(results[0]).toMatchObject({ index: 0, ok: true, record: { id: 'r1' } });
+    expect(results[1].ok).toBe(false);
+    expect(results[2]).toMatchObject({ index: 2, ok: true, record: { id: 'r3' } });
+  });
+
+  it('writeBatchPartial: a THROWN error still degrades to writeOne, with transient retry first (#3172)', async () => {
+    let attempts = 0;
+    const writeBatchPartial = vi.fn(async (batch: { n: number }[]) => {
+      attempts++;
+      if (attempts === 1) throw new Error('fetch failed'); // transient → retried
+      if (attempts === 2) throw new Error('CHECK constraint failed'); // logical → degrade
+      return batch.map((r) => ({ ok: true, record: { id: `r${r.n}` } }));
+    });
+    const writeOne = vi.fn(async (row: { n: number }) => ({ id: `r${row.n}` }));
+
+    const results = await bulkWrite(
+      [{ n: 1 }, { n: 2 }],
+      { batchSize: 10, writeBatchPartial, writeBatch: vi.fn(), writeOne, sleep: noopSleep },
+    );
+
+    expect(writeBatchPartial).toHaveBeenCalledTimes(2); // transient retry happened
+    expect(writeOne).toHaveBeenCalledTimes(2);          // then per-row degradation
+    expect(results.every((r) => r.ok)).toBe(true);
+  });
+
+  it('writeBatchPartial: a wrong-length outcome array is rejected as a failed batch (#3172)', async () => {
+    const writeBatchPartial = vi.fn(async () => [{ ok: true, record: { id: 'only-one' } }]);
+    const writeOne = vi.fn(async (row: { n: number }) => ({ id: `r${row.n}` }));
+
+    const results = await bulkWrite(
+      [{ n: 1 }, { n: 2 }],
+      { batchSize: 10, writeBatchPartial, writeBatch: vi.fn(), writeOne, sleep: noopSleep },
+    );
+
+    expect(writeOne).toHaveBeenCalledTimes(2); // degraded instead of trusting the short array
+    expect(results.every((r) => r.ok)).toBe(true);
+  });
+
   it('passes an attempt counter to writeOne during degradation (#3149)', async () => {
     const seen: number[] = [];
     const writeBatch = vi.fn(async () => { throw new Error('logical'); }); // force degradation
