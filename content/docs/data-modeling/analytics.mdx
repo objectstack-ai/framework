@@ -60,7 +60,7 @@ export const SalesDataset = defineDataset({
   // Aggregatable values — defined ONCE here; referenced everywhere by name.
   measures: [
     { name: 'opp_count', aggregate: 'count' },
-    { name: 'revenue', aggregate: 'sum', field: 'amount', format: '$0,0', certified: true },
+    { name: 'revenue', aggregate: 'sum', field: 'amount', format: '$0,0' },
     { name: 'won_amount', aggregate: 'sum', field: 'amount', filter: { stage: 'closed_won' } },
     // Derived measure — references OTHER measures by name only (no raw fields/SQL).
     { name: 'win_rate', derived: { op: 'ratio', of: ['won_amount', 'revenue'] }, format: '0.0%' },
@@ -81,8 +81,9 @@ export default defineStack({
 
 - **No raw SQL, no hand-authored joins.** The author declares *which*
   relationships to include; the compiler derives the join from the object graph.
-- **`certified: true`** marks a human-blessed metric — the review checkpoint.
-  Reviewing AI output collapses to "did it use certified measures correctly."
+- **Metric certification** — a `certified` flag that marks a measure as a
+  human-blessed governance checkpoint — is a design goal of ADR-0021 but is **not
+  yet implemented**; `DatasetMeasureSchema` has no `certified` field today.
 - **Derived measures** are first-class but *closed*: they reference other
   measures by name only (`ratio` / `sum` / `difference` / `product`).
 - **RLS / tenant scoping is enforced by the runtime**, per joined object — never
@@ -191,6 +192,8 @@ steps so it could be verified safely:
    presentation schemas themselves were kept — only their inline query fields
    went away.
 
-Author new analytics directly in dataset form; reach for a **named** dataset when
-a metric is shared or must be certified, and an inline anonymous dataset for a
-one-off single-object KPI.
+Author new analytics directly in dataset form: define the metric once as a
+**named** dataset registered in your stack, then bind reports, dashboard widgets,
+and list-view charts to it **by name**. Presentations reference a dataset by its
+`name` string — the shipped presentation schemas carry no inline/anonymous
+dataset shape, so even a one-off single-object KPI is a small named dataset.

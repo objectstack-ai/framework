@@ -99,7 +99,7 @@ In shared-database multi-tenancy, **most metadata types must not be per-org cust
 | `view`, `dashboard`, `report`, `email_template` | ✅ | Pure rendering. Per-org customization is safe. |
 | `flow` | ✅ | Per-org overlays are allowed for automation definitions. |
 | `agent` | ❌ | Agents are platform-owned and closed to third parties (ADR-0063 §2) — no per-org agent fork. |
-| `permission`, `role`, `profile` | ✅ | Per-org overlays are allowed; tenant-level controls layer on top. |
+| `permission`, `position` | ✅ | Per-org overlays are allowed; tenant-level controls layer on top. |
 | `object`, `field` | ❌ | Defines the table schema. Overriding would break existing data. |
 | `datasource` | ❌ | Connection strings; multi-tenant isolation is enforced at a higher layer. |
 

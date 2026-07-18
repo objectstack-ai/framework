@@ -137,7 +137,7 @@ flowchart TD
 | `email` | Email address with validation | `email`, `contact_email` |
 | `url` | Web URL with validation | `website`, `linkedin_url` |
 | `phone` | Phone number | `phone`, `mobile` |
-| `password` | One-way hashed credential (owned by auth subsystem) | `user_password` |
+| `password` | Masked on read; stored plaintext at rest (not hashed) — prefer `secret` for real credentials | `user_password` |
 | `secret` | Reversible encrypted-at-rest value, masked on read | `api_key`, `db_password` |
 
 ### Number Types
