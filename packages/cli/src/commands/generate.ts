@@ -25,7 +25,6 @@ const ${toCamelCase(name)}: Data.Object = {
   name: '${toSnakeCase(name)}',
   label: '${toTitleCase(name)}',
   pluralLabel: '${toTitleCase(name)}s',
-  ownership: 'own',
   fields: {
     name: {
       type: 'text',

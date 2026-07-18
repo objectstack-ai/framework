@@ -880,6 +880,33 @@ describe('ObjectSchema.create()', () => {
     })).toThrow();
   });
 
+  // #3175 — `ownership` (record-ownership model) is now a declared field.
+  // Before, the registry read it via `(schema as any).ownership` while
+  // ObjectSchema.create() rejected it as an unknown key; these lock the two ends
+  // together.
+  describe('ownership record-model field (#3175)', () => {
+    it('accepts the record-ownership opt-out values the registry reads', () => {
+      for (const ownership of ['user', 'org', 'none'] as const) {
+        const obj = ObjectSchema.create({ name: 'catalog', ownership, fields: { title: { type: 'text' } } });
+        expect(obj.ownership).toBe(ownership);
+      }
+    });
+
+    it('leaves ownership undefined when omitted (registry defaults to user-owned)', () => {
+      const obj = ObjectSchema.create({ name: 'lead', fields: { title: { type: 'text' } } });
+      expect(obj.ownership).toBeUndefined();
+    });
+
+    it('rejects the retired `own`/`extend` contribution-kind value with guidance', () => {
+      expect(() => ObjectSchema.create({
+        name: 'demo',
+        // @ts-expect-error — 'own' is the package-contribution kind, not a record-ownership value
+        ownership: 'own',
+        fields: { title: { type: 'text' } },
+      })).toThrow(/record-ownership model|registerObject/);
+    });
+  });
+
   // ADR-0032 "no silent failure" for metadata shape (issue #1535): unknown
   // top-level keys used to be stripped silently, shipping dead metadata.
   describe('unknown-key rejection (#1535)', () => {

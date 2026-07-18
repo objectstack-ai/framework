@@ -664,6 +664,31 @@ const ObjectSchemaBase = z.object({
   ),
 
   /**
+   * Record-ownership model — who a *record* belongs to. Drives the registry's
+   * `owner_id` auto-provisioning (`packages/objectql/src/registry.ts` →
+   * `applySystemFields`):
+   *
+   *   - `user` (default) — per-record owner: injects the reassignable `owner_id`
+   *     lookup, engaging owner-scoped RLS, "My" views, owner reports and
+   *     first-admin bootstrap.
+   *   - `org` / `none` — no per-record owner (Dataverse-style catalog / junction
+   *     tables); `owner_id` is NOT injected. (Platform-managed tables — `managedBy`
+   *     set, or the `sys_` namespace — skip owner injection regardless.)
+   *
+   * NOTE: this is the RECORD-ownership model, DISTINCT from the package
+   * *contribution* kind (`own` | `extend`, {@link ObjectOwnershipEnum}) that lives
+   * on the registry's contributor record and is set via `registerObject` — do not
+   * conflate the two despite the shared word.
+   */
+  ownership: z.enum(['user', 'org', 'none'], {
+    error:
+      "`ownership` is the record-ownership model — one of 'user' (default) | 'org' | 'none'. " +
+      "The package-contribution kind 'own'/'extend' is set via registerObject, not on the object schema.",
+  }).optional().describe(
+    "Record-ownership model: user (default — injects reassignable owner_id) | org | none (no per-record owner, skips owner_id). Distinct from the package own/extend contribution kind.",
+  ),
+
+  /**
    * Per-object override of the generic CRUD affordances that the UI
    * surfaces. Each flag overrides the default derived from
    * {@link managedBy} via {@link resolveCrudAffordances}. Useful for the
