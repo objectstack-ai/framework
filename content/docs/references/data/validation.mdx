@@ -21,7 +21,11 @@ record** — it must be decidable from the incoming write (and, on update, the p
 
 no I/O. Everything advertised here runs on the write path (see
 
-`objectql/src/validation/rule-validator.ts`); nothing is a silent no-op.
+`objectql/src/validation/rule-validator.ts`) — insert, single-id update, and multi-row
+
+(`multi: true`) update, where the evaluator runs once per matched row (#3106). One known gap:
+
+rules declaring `events: ['delete']` are not yet evaluated on delete (tracked separately).
 
 The system supports these validation types:
 
