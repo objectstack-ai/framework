@@ -32,7 +32,9 @@
 // objects) and is annotated inline.
 
 import { describe, it, expect, vi } from 'vitest';
-import { SecurityPlugin } from './security-plugin.js';
+import { derivePosture } from '@objectstack/core';
+import { SecurityPlugin, hasPlatformAdminCapability } from './security-plugin.js';
+import { PermissionEvaluator } from './permission-evaluator.js';
 import { defaultPermissionSets } from './objects/default-permission-sets.js';
 import { RLS_DENY_FILTER } from './rls-compiler.js';
 import type { PermissionSet } from '@objectstack/spec/security';
@@ -443,5 +445,165 @@ describe('authz Layer-0 matrix gate — ADR-0095 D1 (post-extraction)', () => {
     const single = { ...OBJECTS.task, orgScoping: false };
     expect(await readFilter(single, ROLES.member)).toBeNull();
     expect(await writeFilter(single, ROLES.member)).toEqual([{ created_by: 'u1' }]);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ADR-0099 P0 — probe vs carried-rung equivalence gate (#3211 M1)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// ADR-0099 D1 makes the CARRIED `ctx.posture` rung the single tier-adjudication
+// input; the capability probe (`hasPlatformAdminCapability`, today's Layer 0
+// exemption evidence) demotes to a resolver-less fallback that MAY ONLY NARROW.
+// The P1 flip lands behind THIS gate: for every seeded principal shape the two
+// derivations must agree; where they disagree the cell is pinned as a
+// KNOWN DIVERGENCE and the flip is a per-delta-adjudicated NARROWING (#3211 G1).
+//
+// The two evidence sources are NOT the same question:
+//   probe — does the RESOLVED SET CONTENT carry a platform-exclusive capability?
+//   rung  — does the principal hold an UNSCOPED `admin_full_access` GRANT
+//           (`sys_user_permission_set` row with organization_id == null —
+//           the #2949 rule, `resolve-authz-context.ts` step 6d)?
+// Seeded shapes agree (the unscoped grant is the only seeded path to those
+// capabilities). Adversarial shapes below document the divergence class.
+describe('ADR-0099 P0 — probe vs carried-rung equivalence (#3211 M1)', () => {
+  const evaluator = new PermissionEvaluator();
+  const byName = (...names: string[]): PermissionSet[] =>
+    ALL_SETS.filter((ps) => names.includes(ps.name));
+  const probe = (sets: PermissionSet[]): boolean =>
+    hasPlatformAdminCapability(evaluator.getSystemPermissions(sets));
+
+  // Every seeded principal shape: the resolved sets the middleware would see,
+  // and the grant evidence the resolver would see (per resolve-authz-context 6d).
+  const SEEDED_SHAPES = [
+    {
+      shape: 'platform_admin — UNSCOPED admin_full_access grant',
+      sets: byName('admin_full_access', 'member_default'),
+      evidence: { isPlatformAdmin: true, isTenantAdmin: false },
+    },
+    {
+      shape: 'org_admin — organization_admin capability, no platform grant',
+      sets: byName('organization_admin', 'member_default'),
+      evidence: { isPlatformAdmin: false, isTenantAdmin: true },
+    },
+    {
+      shape: 'member — additive baseline only',
+      sets: byName('member_default'),
+      evidence: { isPlatformAdmin: false, isTenantAdmin: false },
+    },
+    {
+      shape: 'permissive-business-RLS holder (W1 fixture set)',
+      sets: byName('public_reader', 'member_default'),
+      evidence: { isPlatformAdmin: false, isTenantAdmin: false },
+    },
+  ] as const;
+
+  it.each(SEEDED_SHAPES)('[D1 equivalence] $shape: probe agrees with the carried rung', ({ sets, evidence }) => {
+    expect(probe(sets as PermissionSet[])).toBe(derivePosture(evidence) === 'PLATFORM_ADMIN');
+  });
+
+  // ── KNOWN DIVERGENCE (a) — scoped admin_full_access grant ─────────────────
+  // A grant of `admin_full_access` SCOPED to one org (organization_id != null)
+  // merges the set's CONTENTS into the principal's resolved sets (the probe's
+  // input is identical to a true platform admin's), but the resolver does NOT
+  // count a scoped grant as platform-admin evidence (#2949) → rung = MEMBER.
+  // TODAY: probe true → such a principal crosses the Layer 0 wall wherever the
+  // object posture permits. AFTER P1: rung authoritative → walled to its org.
+  // This is the P1 NARROWING delta — adjudicated at #3211 G1, release-noted,
+  // and recoverable by granting the UNSCOPED admin_full_access instead.
+  it('[KNOWN DIVERGENCE (a)] scoped admin_full_access grant: probe=true, rung=MEMBER', () => {
+    const sets = byName('admin_full_access', 'member_default'); // contents identical to the unscoped holder
+    const evidence = { isPlatformAdmin: false, isTenantAdmin: false }; // scoped grant → not counted (#2949)
+    expect(probe(sets)).toBe(true);
+    expect(derivePosture(evidence)).toBe('MEMBER');
+  });
+
+  // ── KNOWN DIVERGENCE (b) — piecemeal platform-exclusive capability ────────
+  // An admin-authored custom set granting a platform-exclusive capability
+  // (`studio.access` here) WITHOUT the unscoped admin_full_access grant:
+  // probe true / rung MEMBER. Same P1 narrowing class as (a). Note the probe
+  // needs the superuser bit TOO before any exemption fires — this shape only
+  // reaches the wall if it ALSO composes viewAll/modifyAll from some set.
+  it('[KNOWN DIVERGENCE (b)] piecemeal studio.access without the unscoped grant: probe=true, rung=MEMBER', () => {
+    const studioOps: PermissionSet = {
+      name: 'studio_ops',
+      label: 'Studio Ops (piecemeal platform capability)',
+      objects: {},
+      systemPermissions: ['studio.access'],
+    } as any;
+    expect(probe([studioOps])).toBe(true);
+    expect(derivePosture({ isPlatformAdmin: false, isTenantAdmin: false })).toBe('MEMBER');
+  });
+
+  // ── [I3 — fallback may only narrow] rung ⊆ probe, never the reverse ───────
+  // The unscoped admin_full_access grant carries the platform-exclusive caps by
+  // seed definition, so rung=PLATFORM_ADMIN ⇒ probe=true over every shape above
+  // (seeded AND adversarial). The demoted probe can therefore only WIDEN relative
+  // to the rung — meaning the P1 flip (probe → rung) can only NARROW. The
+  // reverse implication is exactly what diverges (cells (a)/(b)).
+  it('[I3] rung=PLATFORM_ADMIN implies probe=true for every shape (flip can only narrow)', () => {
+    for (const { sets, evidence } of SEEDED_SHAPES) {
+      if (derivePosture(evidence) === 'PLATFORM_ADMIN') {
+        expect(probe(sets as PermissionSet[])).toBe(true);
+      }
+    }
+  });
+
+  // ── [I2 — nesting at the adjudication site] ───────────────────────────────
+  // ADR-0095 D2's nesting invariant, asserted over the LOCKED effective-filter
+  // matrix (not only at derivation): within each object column, visibility never
+  // widens as the ladder descends. Rank: all-rows (null/BYPASS) > org-scoped >
+  // owner/self-scoped > denied. Ties are allowed (equal visibility), widening is not.
+  it('[I2] visibility is monotonically non-widening down the ladder, per object column', () => {
+    const rank = (cell: unknown): number => {
+      const s = JSON.stringify(cell);
+      if (cell === null || s.includes('BYPASS')) return 3;               // all rows
+      if (s.includes('CRUD_DENY') || s.includes(DENY)) return 0;         // denied
+      if (s.includes('created_by') || s.includes('"id"')) return 1;      // owner/self-scoped
+      return 2;                                                          // org-scoped
+    };
+    const LADDER_ORDER = ['platform_admin', 'org_admin', 'member'] as const;
+    for (const [oName, col] of Object.entries(EXPECTED_MATRIX)) {
+      for (const side of ['read', 'write'] as const) {
+        for (let i = 1; i < LADDER_ORDER.length; i++) {
+          const higher = rank(col[LADDER_ORDER[i - 1]][side]);
+          const lower = rank(col[LADDER_ORDER[i]][side]);
+          expect(higher, `${oName}.${side}: ${LADDER_ORDER[i - 1]} ⊇ ${LADDER_ORDER[i]}`).toBeGreaterThanOrEqual(lower);
+        }
+      }
+    }
+  });
+
+  // ── [I4 staging — the P1 flip target, pinned] ─────────────────────────────
+  // TODAY the Layer 0 exemption is POSTURE-BLIND: a carried MEMBER rung on the
+  // ExecutionContext does not wall a scoped-grant holder (the probe path never
+  // consults it), and a carried PLATFORM_ADMIN rung is not required by a true
+  // admin. Both cells pin the PRE-FLIP behavior verbatim; under P1 the first
+  // cell FLIPS to the walled filter ({organization_id:'org-1'}) as the
+  // adjudicated narrowing, and the second MUST NOT change (rung authoritative).
+  it('[I4 staging / P1 flip target] carried MEMBER rung does NOT yet wall a scoped-grant holder (posture-blind today)', async () => {
+    const scopedHolder = {
+      userId: 'scoped-admin', tenantId: 'org-1',
+      positions: ['org_member'], permissions: ['admin_full_access'],
+      posture: 'MEMBER', // carried rung (what resolve-authz-context derives for a SCOPED grant)
+    };
+    expect(await readFilter(OBJECTS.private_obj, scopedHolder)).toBeNull(); // ← flips to {organization_id:'org-1'} at P1
+  });
+  it('[I4 staging / P1 invariant] a true platform admin with the carried PLATFORM_ADMIN rung stays exempt', async () => {
+    const carriedAdmin = { ...ROLES.platform_admin, posture: 'PLATFORM_ADMIN' };
+    expect(await readFilter(OBJECTS.private_obj, carriedAdmin)).toBeNull(); // ← must NOT change at P1
+  });
+
+  // ── [D3 dead branch] capability evidence can never derive EXTERNAL ────────
+  // The EXTERNAL rung activates only from `audience:'external'` (ADR-0090 D10)
+  // when the portal principal type ships; no combination of capability-grant
+  // evidence may reach it. (Full EXTERNAL × layer share-fixture cells live in
+  // posture-ladder.test.ts — the semantics lock — and extend at P3.)
+  it('[D3 dead branch] no capability-grant evidence derives EXTERNAL', () => {
+    for (const isPlatformAdmin of [true, false]) {
+      for (const isTenantAdmin of [true, false]) {
+        expect(derivePosture({ isPlatformAdmin, isTenantAdmin })).not.toBe('EXTERNAL');
+      }
+    }
   });
 });

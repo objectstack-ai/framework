@@ -1,10 +1,10 @@
 # ADR-0099: Posture-Adjudicated Tiering — one axis for tier decisions, the EXTERNAL rung's enforcement path, no explicit deny
 
-**Status**: Proposed (2026-07-17)
+**Status**: Accepted (2026-07-18; proposed 2026-07-17) — P0 equivalence gate landed with the acceptance (see the Acceptance addendum); P1/P2 flips gated on the #3211 G1 delta adjudication
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: [ADR-0095](./0095-authz-kernel-tenant-layer-and-posture-ladder.md) (the posture ladder + Layer 0 — Accepted, implemented; this ADR is its adjudication follow-through), [ADR-0066](./0066-unified-authorization-model.md) (superuser bypass ①; precedence), [ADR-0090](./0090-permission-model-v2-concept-convergence.md) (D10 principal taxonomy / `audience`, D11 external OWD), [ADR-0093](./0093-tenancy-mode-and-membership-lifecycle.md) (membership lifecycle — where an external principal type would come from), [ADR-0094](./0094-sys-permission-set-pure-projection.md) (one-authority precedent)
 **Composes with**: [ADR-0096](./0096-execution-surface-identity-admission.md) — 0096 governs **admission** (may this call reach the engine, as whom); this ADR governs **tiering** (given an admitted principal, which tier of rows each layer grants). Orthogonal axes, deliberately separate ADRs.
-**Tracking**: framework#2920 (B-track follow-through) · #2947→#2956 (posture carried on `ExecutionContext` — the unblocking prerequisite) · #2946 Finding 2 (the divergence class this ADR closes)
+**Tracking**: framework#3211 (P0–P2 implementation) · framework#2920 (B-track follow-through, closed) · #2947→#2956 (posture carried on `ExecutionContext` — the unblocking prerequisite) · #2946 Finding 2 (the divergence class this ADR closes)
 **Consumers**: `@objectstack/plugin-security` (Layer 0 exemption gate, superuser bypass, explain), `@objectstack/core` (`resolve-authz-context`, `posture-ladder`), `@objectstack/plugin-sharing` (EXTERNAL rung, when it activates), portal/external-identity work (ADR-0090 follow-up #6)
 
 ---
@@ -309,3 +309,27 @@ Strictly serial, each step behind the matrix:
   preference), `packages/spec/src/security/sharing.zod.ts:104` (`owner`-rule
   experimental marker), `packages/spec/src/kernel/execution-context.zod.ts`
   (`posture` field).
+
+## Acceptance addendum (2026-07-18)
+
+Accepted by the maintainer on 2026-07-18. The P0 equivalence gate landed with
+this acceptance (#3211 M1, `authz-matrix-gate.test.ts`), and its cells sharpen
+D1's behavior contract with one finding:
+
+- **Seeded shapes verify equivalent.** For every seeded principal shape
+  (unscoped `admin_full_access` holder, `organization_admin`, baseline member,
+  the W1 permissive-policy fixture) the capability probe and the carried rung
+  agree — D1's behavior-preserving claim holds across the seeded surface.
+- **Two adversarial shapes diverge (probe `true` / rung `MEMBER`),** pinned as
+  `KNOWN DIVERGENCE` cells: (a) a **scoped** `admin_full_access` grant — the
+  set's contents merge (probe sees the platform capabilities) but the resolver
+  counts only the *unscoped* grant (#2949 rule); (b) a custom set granting a
+  platform-exclusive capability piecemeal (e.g. `studio.access`) without the
+  unscoped grant. For these shapes the P1 flip is a **fail-safe narrowing**
+  (rung ⊆ probe by seed construction — the I3 cell asserts the implication, so
+  the flip can only withhold an exemption, never widen one), adjudicated
+  per delta at #3211 G1 with a release-notes callout, and recoverable by
+  granting the unscoped `admin_full_access`. This is the equivalence gate
+  doing its job as specified ("any cell where they disagree … must be
+  resolved before the flip") — the resolution is D1's rung authority, not a
+  probe repair.
