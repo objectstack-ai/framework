@@ -412,6 +412,44 @@ function isExpectedDataStatus(status: number): boolean {
     return status === 403 || status === 404 || status === 409 || status === 502 || status === 503;
 }
 
+/**
+ * Pure per-object API-exposure check: given an object's `enable` block, decide
+ * whether `operation` is denied on the *external* REST surface (ADR-0049 /
+ * #1889). Returns the `{ status, body }` to send, or `null` when allowed.
+ * Shared by the single-record routes (`enforceApiAccess`) and the cross-object
+ * batch route so both honour the SAME gate. A missing/loose `enable` block is
+ * default-allow — objects with no `enable` behave exactly as before.
+ */
+function apiAccessDenialFromEnable(
+    enable: any,
+    objectName: string,
+    operation: string,
+): { status: number; body: Record<string, unknown> } | null {
+    if (!enable) return null;
+    if (enable.apiEnabled === false) {
+        return {
+            status: 404,
+            body: {
+                error: `Object '${objectName}' is not exposed via the API`,
+                code: 'OBJECT_API_DISABLED',
+                object: objectName,
+            },
+        };
+    }
+    if (Array.isArray(enable.apiMethods) && enable.apiMethods.length > 0 && !enable.apiMethods.includes(operation)) {
+        return {
+            status: 405,
+            body: {
+                error: `API operation '${operation}' is not allowed on object '${objectName}'`,
+                code: 'OBJECT_API_METHOD_NOT_ALLOWED',
+                object: objectName,
+                allowed: enable.apiMethods,
+            },
+        };
+    }
+    return null;
+}
+
 /** Platform object backing async import jobs (see sys-import-job.object.ts). */
 const IMPORT_JOB_OBJECT = 'sys_import_job';
 /** Hard ceiling on rows per async import job (mirrors spec IMPORT_JOB_MAX_ROWS). */
@@ -1014,38 +1052,34 @@ export class RestServer {
     ): Promise<boolean> {
         const objectName = req?.params?.object;
         if (!objectName) return false;
-        let enable: any;
+        const items = await this.loadObjectItems(p, environmentId);
+        const obj = items.find((o: any) => o?.name === objectName);
+        if (!obj) return false; // unknown object → let the data path 404
+        const denial = apiAccessDenialFromEnable(obj.enable, objectName, operation);
+        if (denial) {
+            res.status(denial.status).json(denial.body);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Load the object metadata items for the current protocol/environment,
+     * coerced to a plain array. Returns `[]` when metadata is unavailable so
+     * callers fail OPEN (the data call itself needs the same metadata and will
+     * surface any real error). Shared by `enforceApiAccess` (one object) and the
+     * cross-object batch route (all ops, fetched once).
+     */
+    private async loadObjectItems(p: RestProtocol, environmentId: string | undefined): Promise<any[]> {
         try {
             const r: any = await (p as any).getMetaItems?.({
                 type: 'object',
                 ...(environmentId ? { environmentId } : {}),
             });
-            const items: any[] = Array.isArray(r?.items) ? r.items : Array.isArray(r) ? r : [];
-            const obj = items.find((o: any) => o?.name === objectName);
-            if (!obj) return false; // unknown object → let the data path 404
-            enable = obj.enable;
+            return Array.isArray(r?.items) ? r.items : Array.isArray(r) ? r : [];
         } catch {
-            return false; // metadata unavailable → don't block (data call needs it too)
+            return [];
         }
-        if (!enable) return false;
-        if (enable.apiEnabled === false) {
-            res.status(404).json({
-                error: `Object '${objectName}' is not exposed via the API`,
-                code: 'OBJECT_API_DISABLED',
-                object: objectName,
-            });
-            return true;
-        }
-        if (Array.isArray(enable.apiMethods) && enable.apiMethods.length > 0 && !enable.apiMethods.includes(operation)) {
-            res.status(405).json({
-                error: `API operation '${operation}' is not allowed on object '${objectName}'`,
-                code: 'OBJECT_API_METHOD_NOT_ALLOWED',
-                object: objectName,
-                allowed: enable.apiMethods,
-            });
-            return true;
-        }
-        return false;
     }
 
     /**
@@ -6007,11 +6041,14 @@ export class RestServer {
 
         const operations = batch.operations;
 
-        // POST /batch — cross-object transactional batch (issue #1604).
+        // POST /batch — cross-object transactional batch (issue #1604 / ADR-0034).
         // Runs heterogeneous create/update/delete across objects in ONE engine
-        // transaction (commit all or roll back all). Intra-batch references:
-        // a field value of `{ $ref: <earlier op index> }` resolves to that op's
-        // created id, so a child can reference its parent (master-detail).
+        // transaction (commit all or roll back all). Intra-batch references: a
+        // field value of `{ $ref: <earlier op index> }` resolves to that op's
+        // created id, so a child can reference its parent (master-detail). The
+        // request is validated against the spec contract, and each op is gated by
+        // the SAME per-object API-exposure rules (enable.apiEnabled / apiMethods)
+        // as the single-record routes before any transaction is opened.
         this.routeManager.register({
             method: 'POST',
             path: `${basePath}/batch`,
@@ -6025,18 +6062,75 @@ export class RestServer {
                         res.status(501).json({ error: 'Transactional batch not supported by this runtime' });
                         return;
                     }
-                    const ops: any[] = Array.isArray(req.body?.operations) ? req.body.operations : [];
+
+                    // Validate the request against the spec contract (Zod-First).
+                    const { CrossObjectBatchRequestSchema } = await import('@objectstack/spec/api');
+                    const parsed = (CrossObjectBatchRequestSchema as any).safeParse(req.body ?? {});
+                    if (!parsed.success) {
+                        res.status(400).json({ error: 'Invalid batch request', code: 'VALIDATION_FAILED', issues: parsed.error?.issues });
+                        return;
+                    }
+                    const ops: Array<{ object: string; action: 'create' | 'update' | 'delete'; id?: string; data?: Record<string, any> }> = parsed.data.operations;
+                    // All-or-nothing by construction: refuse a request that asks for
+                    // non-atomic semantics rather than silently applying atomically
+                    // (honest contract). Per-object partial batches use the
+                    // POST /data/:object/batch route instead.
+                    if (parsed.data.atomic === false) {
+                        res.status(400).json({ error: 'Cross-object batch is always atomic; use POST /data/:object/batch for non-atomic per-object batches', code: 'BATCH_NOT_ATOMIC' });
+                        return;
+                    }
                     const max = batch.maxBatchSize ?? 200;
                     if (ops.length === 0) { res.json({ results: [] }); return; }
                     if (ops.length > max) { res.status(400).json({ error: `Batch too large (max ${max})` }); return; }
 
+                    // update/delete need a target id — the schema can't express this
+                    // conditionally, so surface it as a 400 up front.
+                    for (const op of ops) {
+                        if ((op.action === 'update' || op.action === 'delete') && op.id == null && op.data?.id == null) {
+                            res.status(400).json({ error: `Operation '${op.action}' on '${op.object}' requires an id`, code: 'VALIDATION_FAILED' });
+                            return;
+                        }
+                    }
+
+                    // Enforce object-level API exposure (enable.apiEnabled /
+                    // apiMethods) for EVERY op BEFORE opening the transaction — the
+                    // batch write surface must honour the same per-object gate as the
+                    // single-record routes (ADR-0049 / #1889). Metadata is fetched
+                    // once; each distinct (object, action) is checked once.
+                    const p = await this.resolveProtocol(environmentId, req);
+                    const items = await this.loadObjectItems(p, environmentId);
+                    if (items.length > 0) {
+                        const byName = new Map<string, any>(items.map((o: any) => [o?.name, o]));
+                        const checked = new Set<string>();
+                        for (const op of ops) {
+                            const key = `${op.object} ${op.action}`;
+                            if (checked.has(key)) continue;
+                            checked.add(key);
+                            const obj = byName.get(op.object);
+                            if (!obj) continue; // unknown object → surfaced by the op inside the tx
+                            const denial = apiAccessDenialFromEnable(obj.enable, op.object, op.action);
+                            if (denial) { res.status(denial.status).json(denial.body); return; }
+                        }
+                    }
+
+                    // Resolve `{ $ref: <opIndex> }` values against results collected
+                    // so far. A ref MUST point at an earlier create whose id is known;
+                    // anything else is a 400 (never a silent null FK).
                     const resolveRefs = (data: any, out: any[]): any => {
                         if (!data || typeof data !== 'object') return data;
                         const result: any = Array.isArray(data) ? [] : {};
                         for (const [k, v] of Object.entries(data)) {
                             if (v && typeof v === 'object' && '$ref' in (v as any)) {
-                                const ref = out[(v as any).$ref];
-                                result[k] = (ref && (ref.id ?? ref._id)) ?? null;
+                                const idx = (v as any).$ref;
+                                const ref = typeof idx === 'number' ? out[idx] : undefined;
+                                const refId = ref && (ref.id ?? ref._id);
+                                if (refId == null) {
+                                    const err: any = new Error(`Unresolved $ref ${JSON.stringify(idx)} on field '${k}' — must reference an earlier create in the same batch`);
+                                    err.status = 400;
+                                    err.code = 'BATCH_UNRESOLVED_REF';
+                                    throw err;
+                                }
+                                result[k] = refId;
                             } else {
                                 result[k] = v;
                             }
@@ -6047,19 +6141,14 @@ export class RestServer {
                     const results = await ql.transaction(async (trxCtx: any) => {
                         const out: any[] = [];
                         for (const op of ops) {
-                            const action = String(op?.action || 'create');
-                            const object = String(op?.object || '');
-                            if (!object) throw new Error('Each operation requires an `object`');
                             const data = resolveRefs(op.data, out);
-                            if (action === 'create') {
-                                out.push(await ql.insert(object, data, { context: trxCtx }));
-                            } else if (action === 'update') {
+                            if (op.action === 'create') {
+                                out.push(await ql.insert(op.object, data, { context: trxCtx }));
+                            } else if (op.action === 'update') {
                                 const id = op.id ?? data?.id;
-                                out.push(await ql.update(object, { ...data, id }, { context: trxCtx }));
-                            } else if (action === 'delete') {
-                                out.push(await ql.delete(object, { where: { id: op.id }, context: trxCtx }));
-                            } else {
-                                throw new Error(`Unknown batch action: ${action}`);
+                                out.push(await ql.update(op.object, { ...data, id }, { context: trxCtx }));
+                            } else { // 'delete'
+                                out.push(await ql.delete(op.object, { where: { id: op.id }, context: trxCtx }));
                             }
                         }
                         return out;
@@ -6067,7 +6156,10 @@ export class RestServer {
 
                     res.json({ results });
                 } catch (error: any) {
-                    logError('[REST] Unhandled error:', error);
+                    // Log only genuine server faults; client 4xx (validation,
+                    // unresolved ref, atomic rollback of a bad op) are expected.
+                    const status = typeof error?.status === 'number' ? error.status : mapDataError(error).status;
+                    if (status >= 500) logError('[REST] Unhandled error:', error);
                     sendError(res, error);
                 }
             },
