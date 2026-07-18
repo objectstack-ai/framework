@@ -271,6 +271,28 @@ they can never pull timings, so this is safe to leave available on a live
 environment. This is the path to reach for when diagnosing "why is *this* request
 slow?" against a running environment.
 
+For a per-query breakdown, an admin sends `json` instead:
+
+```
+X-OS-Debug-Timing: json
+```
+
+which adds an **admin-only** `X-OS-Debug-Timing-Detail` response header — compact
+JSON listing the slowest SQL statements (by shape), the single slowest, and the
+query count:
+
+```json
+{"db":{"count":6,"totalMs":210.3,"slowest":{"sql":"select * from widgets where id = ?","dur":88.1},"queries":[{"sql":"select * from widgets where id = ?","dur":88.1}, …]}}
+```
+
+The statements are **parametrized** — knex's `?` placeholders, never the
+bindings — so the query *shape* (the useful part for spotting N round-trips) is
+exposed while literal row values never leave the server. The detail is
+**admin-only even under global mode**: an ordinary caller who sends `json` still
+gets the basic `Server-Timing` header (if global mode is on) but never the
+`X-OS-Debug-Timing-Detail` payload. The list is capped and the labels sanitized
+to header-safe ASCII.
+
 To hard-disable both paths (no middleware registered at all), set
 `serverTiming: false` explicitly.
 
@@ -285,7 +307,7 @@ out of the box:
 | `handler` | HTTP adapter | Route-handler execution. |
 | `serialize` | HTTP adapter | Response JSON encoding. |
 | `auth` | Dispatcher | Identity / session resolution — the prime suspect for unexplained data-API overhead. |
-| `db` | SQL driver | Total SQL time across the request; `desc` is the **query count** (folded from knex's per-query events, attributed to the originating request via `AsyncLocalStorage` so it is correct under concurrency). SQL text is never emitted. |
+| `db` | SQL driver | Total SQL time across the request; `desc` is the **query count** (folded from knex's per-query events, attributed to the originating request via `AsyncLocalStorage` so it is correct under concurrency). The basic header carries no SQL text; individual **parametrized** statements appear only in the admin-only `X-OS-Debug-Timing: json` detail payload. |
 | `hooks` | ObjectQL engine | Total business-hook execution time; `desc` is the hook count. |
 
 Each phase is recorded through a request-scoped collector that is a no-op when
@@ -336,5 +358,7 @@ countServerTiming('db', queryMs, 'queries'); // → db;dur=<sum>;desc="<n> queri
 - [ ] Alerts wired: error rate, p95 latency per route.
 - [ ] (Optional) `Server-Timing` verified in DevTools with global mode
       (`serverTiming: true` / `OS_PERF_TIMING=1`) on, confirmed **absent** for a
-      normal request, and confirmed the per-request `X-OS-Debug-Timing: 1` header
-      returns timing **only** to an admin/service caller.
+      normal request, confirmed the per-request `X-OS-Debug-Timing: 1` header
+      returns timing **only** to an admin/service caller, and confirmed
+      `X-OS-Debug-Timing: json` returns the `X-OS-Debug-Timing-Detail` payload
+      **only** to an admin (never to an ordinary caller, even under global mode).

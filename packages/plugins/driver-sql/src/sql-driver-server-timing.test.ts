@@ -100,4 +100,31 @@ describe('SqlDriver Server-Timing db span', () => {
         });
         expect(dbMark(t)?.desc).toBe('1 queries');
     });
+
+    describe('detail mode (admin-gated per-query SQL shapes)', () => {
+        it('records NO per-query detail when detail capture is off', async () => {
+            const t = new PerfTiming(); // detail not enabled
+            await runWithPerfTiming(t, async () => {
+                await knexInstance('orders').where({ status: 'open' }).select('*');
+            });
+            expect(dbMark(t)?.desc).toMatch(/^\d+ queries$/); // aggregate still recorded
+            expect(t.details('db')).toEqual([]); // …but no SQL shapes retained
+        });
+
+        it('records parametrized SQL (no bindings) when detail capture is on', async () => {
+            const t = new PerfTiming();
+            t.enableDetail();
+            await runWithPerfTiming(t, async () => {
+                await knexInstance('orders').where({ status: 'open' }).select('*');
+            });
+            const detail = t.details('db');
+            expect(detail.length).toBeGreaterThanOrEqual(1);
+            const sql = detail[0].label;
+            // Parametrized: carries a `?` placeholder, never the literal 'open'.
+            expect(sql).toContain('?');
+            expect(sql.toLowerCase()).toContain('select');
+            expect(sql).not.toContain('open');
+            expect(detail[0].dur).toBeGreaterThanOrEqual(0);
+        });
+    });
 });
