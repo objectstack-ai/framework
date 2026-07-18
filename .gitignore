@@ -63,6 +63,9 @@ packages/spec/json-schema/
 # Generated bundle size reports
 packages/spec/bundle-size-report.json
 
+# Throwaway build dir for `check:skill-examples` (extracted skill code blocks)
+packages/spec/.examples-build/
+
 # Generated SBOM (rebuilt during release)
 sbom.json
 

@@ -64,6 +64,7 @@ ObjectStack follows an **object-first translation model** inspired by Salesforce
 
 Configure i18n settings in your `objectstack.config.ts`:
 
+<!-- os:check -->
 ```typescript
 import { defineStack } from '@objectstack/spec';
 

@@ -199,3 +199,16 @@ jobs:
       # step above (reads the built dist).
       - name: Check @objectstack/spec public API surface
         run: pnpm --filter @objectstack/spec run check:api-surface
+
+      # Anti-drift for the skill EXAMPLES, not just the skill reference indexes
+      # (#3094). The TypeScript in skills/ is the first thing an AI copies when
+      # authoring metadata, yet nothing type-checked it — so it rotted silently
+      # (`ObjectSchema`/`Data`/`Field` imported from the wrong entry point, a
+      # `defineStack` key that no longer exists). Each block tagged with an
+      # `<!-- os:check -->` comment is extracted and run through `tsc --noEmit`
+      # against the built `@objectstack/spec` declarations — the exact surface a
+      # consumer's import resolves to — so a renamed export or tightened union
+      # fails here instead of in a third party's editor. Reads the built dist,
+      # so it runs after the build step alongside the other consumer gates.
+      - name: Check skills TypeScript examples compile
+        run: pnpm --filter @objectstack/spec run check:skill-examples
