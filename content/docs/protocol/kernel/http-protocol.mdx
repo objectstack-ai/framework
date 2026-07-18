@@ -655,7 +655,18 @@ Content-Type: application/json
 **Behavior:**
 - Maximum batch size: 200 operations by default (configurable via `maxBatchSize`)
 - The entire batch runs inside **one engine transaction** — if any operation
-  fails, all are rolled back (commit-all-or-nothing)
+  fails, all are rolled back (commit-all-or-nothing). The batch is always
+  atomic; an explicit `"atomic": false` is rejected with `400 BATCH_NOT_ATOMIC`
+  (use `POST /data/{object}/batch` for a non-atomic per-object batch)
+- Every operation is subject to the **same per-object API-exposure gate** as the
+  single-record routes, enforced before the transaction opens: an object with
+  `enable.apiEnabled: false` returns `404 OBJECT_API_DISABLED`, and an action
+  outside an object's `enable.apiMethods` whitelist returns
+  `405 OBJECT_API_METHOD_NOT_ALLOWED`
+- The request shape is validated: a malformed operation, an unknown action, or a
+  missing `object` returns `400`; `update` / `delete` require an `id`
+- A `{ "$ref": <index> }` that does not resolve to an earlier create's id
+  returns `400 BATCH_UNRESOLVED_REF` (never a silently-written null value)
 - Returns HTTP 501 if the underlying runtime does not support transactions
 
 ## Metadata API
