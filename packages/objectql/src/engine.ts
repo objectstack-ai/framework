@@ -2200,6 +2200,20 @@ export class ObjectQL implements IDataEngine {
     return opCtx.result;
   }
 
+  /**
+   * Insert one record or an array of records.
+   *
+   * At-least-once hook semantics (framework#3152): when this call is driven by
+   * `bulkWrite` (seed / import), a transient batch retry or a per-row
+   * degradation re-runs the whole insert, so a `beforeInsert` hook may fire
+   * MORE THAN ONCE for the same input row (a first attempt that failed in
+   * validation, then the degraded retry). Side-effecting `beforeInsert` hooks
+   * (notifications, external calls, counters) must therefore be idempotent.
+   * `afterInsert` hooks fire only on a successful write, so they are not
+   * re-run by a validation failure. Autonumbers are assigned only after
+   * validation passes, so a doomed attempt no longer consumes a sequence value
+   * (no number-range gaps from a rejected batch).
+   */
   async insert(object: string, data: any | any[], options?: DataEngineInsertOptions): Promise<any> {
     object = this.resolveObjectName(object);
     this.logger.debug('Insert operation starting', { object, isBatch: Array.isArray(data) });
@@ -2272,15 +2286,23 @@ export class ObjectQL implements IDataEngine {
         // have overridden fields or replaced `input.data` — take its data as-is.
         const rows = rowHookContexts.map((rowCtx) => rowCtx.input.data as Record<string, unknown>);
         for (const r of rows) {
-          await this.applyAutonumbers(object, r, opCtx.context, driverOwnsAutonumber);
-        }
-        for (const r of rows) {
           await this.encryptSecretFields(object, r, opCtx.context, driverOptions);
         }
         for (const r of rows) {
           normalizeMultiValueFields(schemaForValidation, r);
           validateRecord(schemaForValidation, r, 'insert');
           evaluateValidationRules(schemaForValidation as any, r, 'insert', { logger: this.logger, currentUser: this.buildEvalUser(opCtx.context) });
+        }
+        // Autonumbers are assigned AFTER validation (framework#3152): in the
+        // batch path a bulkWrite retry / per-row degradation re-runs the whole
+        // engine.insert, and a batch that dies in validation would otherwise
+        // have already consumed a sequence value for every good row on the
+        // failed attempt, leaving gaps. Required-validation exempts autonumber
+        // fields either way (they are engine-assigned), and a driver that owns
+        // autonumber assigns nothing here — so no validation rule can depend on
+        // the value, making this reorder safe.
+        for (const r of rows) {
+          await this.applyAutonumbers(object, r, opCtx.context, driverOwnsAutonumber);
         }
         if (isBatch) {
           if (driver.bulkCreate) {
