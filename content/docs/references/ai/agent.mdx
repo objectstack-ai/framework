@@ -85,7 +85,7 @@ const result = AIKnowledge.parse(data);
 | **permissions** | `string[]` | optional | Required permission-set capabilities |
 | **tenantId** | `string` | optional | Tenant/Organization ID |
 | **visibility** | `Enum<'global' \| 'organization' \| 'private'>` | ✅ | [EXPERIMENTAL — NOT ENFORCED, #1901] Intended listing scope. No runtime consumer yet; use access/permissions for real gating. |
-| **planning** | `{ strategy: Enum<'react' \| 'plan_and_execute' \| 'reflexion' \| 'tree_of_thought'>; maxIterations: integer; allowReplan: boolean }` | optional | Autonomous reasoning and planning configuration |
+| **planning** | `{ maxIterations: integer }` | optional | Autonomous reasoning and planning configuration |
 | **memory** | `{ longTerm?: object; reflectionInterval?: integer }` | optional | Agent memory management |
 | **guardrails** | `{ maxTokensPerInvocation?: integer; maxExecutionTimeSec?: integer; blockedTopics?: string[] }` | optional | Safety guardrails for the agent |
 | **structuredOutput** | `{ format: Enum<'json_object' \| 'json_schema' \| 'regex' \| 'grammar' \| 'xml'>; schema?: Record<string, any>; strict: boolean; retryOnValidationFailure: boolean; … }` | optional | Structured output format and validation configuration |

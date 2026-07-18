@@ -14,8 +14,8 @@ Field Type Enum
 ## TypeScript Usage
 
 ```typescript
-import { Address, ComputedFieldCache, CurrencyConfig, CurrencyValue, DataQualityRules, Field, FieldType, FileAttachmentConfig, LocationCoordinates, SelectOption, VectorConfig } from '@objectstack/spec/data';
-import type { Address, ComputedFieldCache, CurrencyConfig, CurrencyValue, DataQualityRules, Field, FieldType, FileAttachmentConfig, LocationCoordinates, SelectOption, VectorConfig } from '@objectstack/spec/data';
+import { Address, ComputedFieldCache, CurrencyConfig, CurrencyValue, DataQualityRules, Field, FieldType, LocationCoordinates, SelectOption } from '@objectstack/spec/data';
+import type { Address, ComputedFieldCache, CurrencyConfig, CurrencyValue, DataQualityRules, Field, FieldType, LocationCoordinates, SelectOption } from '@objectstack/spec/data';
 
 // Validate data
 const result = Address.parse(data);
@@ -139,10 +139,7 @@ const result = Address.parse(data);
 | **step** | `number` | optional | Step increment for slider (default: 1) |
 | **currencyConfig** | `{ precision?: integer; currencyMode?: Enum<'dynamic' \| 'fixed'>; defaultCurrency?: string }` | optional | Configuration for currency field type |
 | **dimensions** | `integer` | optional | Vector dimensionality (e.g., 1536 for OpenAI embeddings) |
-| **vectorConfig** | `{ dimensions: integer; distanceMetric?: Enum<'cosine' \| 'euclidean' \| 'dotProduct' \| 'manhattan'>; normalized?: boolean; indexed?: boolean; … }` | optional | Configuration for vector field type (AI/ML embeddings) |
-| **fileAttachmentConfig** | `{ minSize?: number; maxSize?: number; allowedTypes?: string[]; blockedTypes?: string[]; … }` | optional | Configuration for file and attachment field types |
 | **trackHistory** | `boolean` | optional | Render this field's value changes as human-readable entries on the record activity timeline (ADR-0052 §5b). Opt-in per field. |
-| **dependencies** | `string[]` | optional | Array of field names that this field depends on (for formulas, visibility rules, etc.) |
 | **group** | `string` | optional | Field group name for organizing fields in forms and layouts (e.g., "contact_info", "billing", "system") |
 | **visibleWhen** | `string \| { dialect: Enum<'cel' \| 'js' \| 'cron' \| 'template'>; source?: string; ast?: any; meta?: object }` | optional | Predicate (CEL) — field is shown only when TRUE (else hidden). e.g. P`record.type == 'invoice'` |
 | **readonlyWhen** | `string \| { dialect: Enum<'cel' \| 'js' \| 'cron' \| 'template'>; source?: string; ast?: any; meta?: object }` | optional | Predicate (CEL) — field is read-only when TRUE. e.g. P`record.status == 'paid'` |
@@ -219,40 +216,6 @@ const result = Address.parse(data);
 
 ---
 
-## FileAttachmentConfig
-
-### Properties
-
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| **minSize** | `number` | optional | Minimum file size in bytes |
-| **maxSize** | `number` | optional | Maximum file size in bytes (e.g., 10485760 = 10MB) |
-| **allowedTypes** | `string[]` | optional | Allowed file extensions (e.g., [".pdf", ".docx", ".jpg"]) |
-| **blockedTypes** | `string[]` | optional | Blocked file extensions (e.g., [".exe", ".bat", ".sh"]) |
-| **allowedMimeTypes** | `string[]` | optional | Allowed MIME types (e.g., ["image/jpeg", "application/pdf"]) |
-| **blockedMimeTypes** | `string[]` | optional | Blocked MIME types |
-| **virusScan** | `boolean` | ✅ | Enable virus scanning for uploaded files |
-| **virusScanProvider** | `Enum<'clamav' \| 'virustotal' \| 'metadefender' \| 'custom'>` | optional | Virus scanning service provider |
-| **virusScanOnUpload** | `boolean` | ✅ | Scan files immediately on upload |
-| **quarantineOnThreat** | `boolean` | ✅ | Quarantine files if threat detected |
-| **storageProvider** | `string` | optional | Object storage provider name (references ObjectStorageConfig) |
-| **storageBucket** | `string` | optional | Target bucket name |
-| **storagePrefix** | `string` | optional | Storage path prefix (e.g., "uploads/documents/") |
-| **imageValidation** | `{ minWidth?: number; maxWidth?: number; minHeight?: number; maxHeight?: number; … }` | optional | Image-specific validation rules |
-| **allowMultiple** | `boolean` | ✅ | Allow multiple file uploads (overrides field.multiple) |
-| **allowReplace** | `boolean` | ✅ | Allow replacing existing files |
-| **allowDelete** | `boolean` | ✅ | Allow deleting uploaded files |
-| **requireUpload** | `boolean` | ✅ | Require at least one file when field is required |
-| **extractMetadata** | `boolean` | ✅ | Extract file metadata (name, size, type, etc.) |
-| **extractText** | `boolean` | ✅ | Extract text content from documents (OCR/parsing) |
-| **versioningEnabled** | `boolean` | ✅ | Keep previous versions of replaced files |
-| **maxVersions** | `number` | optional | Maximum number of versions to retain |
-| **publicRead** | `boolean` | ✅ | Allow public read access to uploaded files |
-| **presignedUrlExpiry** | `number` | ✅ | Presigned URL expiration in seconds (default: 1 hour) |
-
-
----
-
 ## LocationCoordinates
 
 ### Properties
@@ -278,21 +241,6 @@ const result = Address.parse(data);
 | **color** | `string` | optional | Color code for badges/charts |
 | **default** | `boolean` | optional | Is default option |
 | **visibleWhen** | `string \| { dialect: Enum<'cel' \| 'js' \| 'cron' \| 'template'>; source?: string; ast?: any; meta?: object }` | optional | Per-option visibility predicate (CEL) — option is offered only when TRUE (else omitted). Same env as field visibleWhen (record + current_user). e.g. P`record.country == 'cn'` or P`'admin' in current_user.positions` |
-
-
----
-
-## VectorConfig
-
-### Properties
-
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| **dimensions** | `integer` | ✅ | Vector dimensionality (e.g., 1536 for OpenAI embeddings) |
-| **distanceMetric** | `Enum<'cosine' \| 'euclidean' \| 'dotProduct' \| 'manhattan'>` | ✅ | Distance/similarity metric for vector search |
-| **normalized** | `boolean` | ✅ | Whether vectors are normalized (unit length) |
-| **indexed** | `boolean` | ✅ | Whether to create a vector index for fast similarity search |
-| **indexType** | `Enum<'hnsw' \| 'ivfflat' \| 'flat'>` | optional | Vector index algorithm (HNSW for high accuracy, IVFFlat for large datasets) |
 
 
 ---
