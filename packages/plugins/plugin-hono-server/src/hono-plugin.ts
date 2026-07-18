@@ -80,6 +80,10 @@ export interface HonoPluginOptions {
      *    `X-OS-Debug-Timing: 1` and the header is returned ONLY after the request
      *    resolves an admin/service identity (the dispatcher opens the disclosure
      *    gate). Ordinary users can never pull timings just by sending the header.
+     *    `X-OS-Debug-Timing: json` additionally returns an admin-only
+     *    `X-OS-Debug-Timing-Detail` header — compact JSON listing the slowest
+     *    per-query SQL *shapes* (parametrized, no bindings) — never disclosed to
+     *    a non-admin, even under global mode.
      *  - `serverTiming: false` hard-disables BOTH paths (no middleware).
      *
      * `undefined` (the default) leaves global mode off but keeps the
@@ -139,13 +143,77 @@ export function foldWildcardSuperUser(objects: Record<string, any>): void {
 }
 
 /**
- * Whether a request opted into per-request perf timing via `X-OS-Debug-Timing`.
- * Accepts the common truthy spellings; anything else (including absent) is off.
+ * How much per-request timing the caller opted into via `X-OS-Debug-Timing`:
+ *  - `off`   — no header sent (or an unrecognized value).
+ *  - `basic` — `1` / `true` / `yes` / `on`: the `Server-Timing` header only.
+ *  - `json`  — `json` / `detail` / `verbose`: also the admin-only richer detail
+ *              payload (per-query SQL shapes, slowest query).
+ */
+export type DebugTimingMode = 'off' | 'basic' | 'json';
+
+/** Parse the `X-OS-Debug-Timing` request-header value into a {@link DebugTimingMode}. */
+export function debugTimingMode(value: string | undefined | null): DebugTimingMode {
+    if (!value) return 'off';
+    const v = value.trim().toLowerCase();
+    if (v === 'json' || v === 'detail' || v === 'verbose') return 'json';
+    if (v === '1' || v === 'true' || v === 'yes' || v === 'on') return 'basic';
+    return 'off';
+}
+
+/**
+ * Whether a request opted into per-request perf timing via `X-OS-Debug-Timing`
+ * (any recognized mode — basic or json).
  */
 export function isDebugTimingRequested(value: string | undefined | null): boolean {
-    if (!value) return false;
-    const v = value.trim().toLowerCase();
-    return v === '1' || v === 'true' || v === 'yes' || v === 'on';
+    return debugTimingMode(value) !== 'off';
+}
+
+/** Max individual queries listed in the detail payload (bounds header size). */
+const DETAIL_MAX_QUERIES = 20;
+/** Max characters kept per query label in the detail payload. */
+const DETAIL_MAX_LABEL = 300;
+
+/**
+ * Coerce a detail label (a parametrized SQL statement) to a header-safe,
+ * printable-ASCII string: non-token bytes and control chars become spaces so the
+ * JSON stays valid and the `X-OS-Debug-Timing-Detail` header can never carry a
+ * CR/LF (header-injection) or a non-latin1 byte the Fetch Headers API rejects.
+ */
+function sanitizeDetailLabel(s: string): string {
+    let out = '';
+    for (const ch of String(s)) {
+        const c = ch.codePointAt(0)!;
+        out += c >= 0x20 && c <= 0x7e ? ch : ' ';
+    }
+    return out.replace(/\s+/g, ' ').trim().slice(0, DETAIL_MAX_LABEL);
+}
+
+/**
+ * Build the admin-only `X-OS-Debug-Timing-Detail` payload (compact JSON) from a
+ * collector's captured `db` detail: the slowest queries by shape, the single
+ * slowest, and the captured count + total. Returns `''` when nothing was
+ * captured. SQL is parametrized (no bindings) and sanitized to printable ASCII.
+ */
+export function buildTimingDetail(timing: PerfTiming): string {
+    const db = timing.details('db');
+    if (db.length === 0) return '';
+    const round = (n: number) => Math.round(n * 100) / 100;
+    const sorted = [...db].sort((a, b) => b.dur - a.dur);
+    const queries = sorted.slice(0, DETAIL_MAX_QUERIES).map((d) => ({
+        sql: sanitizeDetailLabel(d.label),
+        dur: round(d.dur),
+    }));
+    const totalMs = round(db.reduce((sum, d) => sum + d.dur, 0));
+    const payload: Record<string, unknown> = {
+        db: {
+            count: db.length,
+            totalMs,
+            slowest: queries[0] ?? null,
+            queries,
+            ...(sorted.length > queries.length ? { truncated: sorted.length - queries.length } : {}),
+        },
+    };
+    return JSON.stringify(payload);
 }
 
 /** Minimal schema shape the managed-write clamp needs. */
@@ -267,12 +335,15 @@ export class HonoServerPlugin implements Plugin {
                 process.env.OS_PERF_TIMING === 'true';
             const rawApp = this.server.getRawApp();
             rawApp.use('*', async (c, next) => {
-                const perRequest = isDebugTimingRequested(c.req.header('X-OS-Debug-Timing'));
+                const mode = debugTimingMode(c.req.header('X-OS-Debug-Timing'));
                 // Nothing asked for timing on this request — a single header
                 // read, then straight through. Zero collector overhead.
-                if (!globalTiming && !perRequest) return next();
+                if (!globalTiming && mode === 'off') return next();
 
                 const timing = new PerfTiming();
+                // `json` opts into per-query DETAIL capture (parametrized SQL
+                // shapes) — recorded now, disclosed later only to an admin.
+                if (mode === 'json') timing.enableDetail();
                 // Global mode opens the gate for everyone; the per-request path
                 // starts closed and is opened only if an admin/service identity
                 // is proven during dispatch (`allowPerfDisclosure`).
@@ -285,6 +356,22 @@ export class HonoServerPlugin implements Plugin {
                 // `append` (not `set`) so we coexist with any upstream proxy
                 // that already added a Server-Timing entry.
                 if (header) c.res.headers.append('Server-Timing', header);
+                // Richer per-query detail is ADMIN-ONLY — even under global mode
+                // an ordinary caller must never see SQL shapes. Emit only when the
+                // principal was proven privileged (admin/service) AND detail was
+                // requested/captured.
+                if (gate.privileged && timing.detailEnabled) {
+                    const detail = buildTimingDetail(timing);
+                    // Guard the append: an exotic label the Fetch Headers API
+                    // still rejects must never break the response.
+                    if (detail) {
+                        try {
+                            c.res.headers.append('X-OS-Debug-Timing-Detail', detail);
+                        } catch {
+                            /* header rejected — skip the detail, keep the response */
+                        }
+                    }
+                }
             });
             ctx.logger.debug('Server-Timing (perf-tuning) middleware enabled');
         }

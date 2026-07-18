@@ -13,6 +13,8 @@ import {
     runWithPerfDisclosure,
     allowPerfDisclosure,
     isPerfDisclosureAllowed,
+    isPerfDisclosurePrivileged,
+    recordServerTimingDetail,
     type PerfDisclosureGate,
 } from './perf-timing.js';
 
@@ -213,9 +215,86 @@ describe('ambient collector', () => {
     });
 });
 
+describe('detail capture', () => {
+    it('is off by default — recordDetail is a no-op, details() empty', () => {
+        const t = new PerfTiming();
+        expect(t.detailEnabled).toBe(false);
+        t.recordDetail('db', 'select * from x where id = ?', 5);
+        expect(t.details('db')).toEqual([]);
+    });
+
+    it('captures per-event samples once enabled', () => {
+        const t = new PerfTiming();
+        t.enableDetail();
+        t.recordDetail('db', 'select a from t', 3);
+        t.recordDetail('db', 'select b from t where id = ?', 9);
+        const db = t.details('db');
+        expect(db).toHaveLength(2);
+        expect(db[1]).toEqual({ label: 'select b from t where id = ?', dur: 9 });
+    });
+
+    it('keeps categories separate and coerces bad durations to 0', () => {
+        const t = new PerfTiming();
+        t.enableDetail();
+        t.recordDetail('db', 'q', Number.NaN);
+        t.recordDetail('hooks', 'h', -4);
+        expect(t.details('db')).toEqual([{ label: 'q', dur: 0 }]);
+        expect(t.details('hooks')).toEqual([{ label: 'h', dur: 0 }]);
+    });
+
+    it('bounds retained samples at the cap', () => {
+        const t = new PerfTiming();
+        t.enableDetail();
+        for (let i = 0; i < 1200; i++) t.recordDetail('db', `q${i}`, 1);
+        expect(t.details('db').length).toBe(1000);
+    });
+
+    it('recordServerTimingDetail folds onto the ambient collector only when enabled', async () => {
+        const off = new PerfTiming();
+        await runWithPerfTiming(off, async () => {
+            recordServerTimingDetail('db', 'select 1', 2); // detail off → dropped
+        });
+        expect(off.details('db')).toEqual([]);
+
+        const on = new PerfTiming();
+        on.enableDetail();
+        await runWithPerfTiming(on, async () => {
+            recordServerTimingDetail('db', 'select 1 where id = ?', 2);
+        });
+        expect(on.details('db')).toEqual([{ label: 'select 1 where id = ?', dur: 2 }]);
+    });
+
+    it('recordServerTimingDetail is a no-op with no active collector', () => {
+        recordServerTimingDetail('db', 'select 1', 1); // must not throw
+    });
+});
+
 describe('disclosure gate', () => {
     it('isPerfDisclosureAllowed() is false with no active gate', () => {
         expect(isPerfDisclosureAllowed()).toBe(false);
+    });
+
+    it('privileged is false with no active gate, and allowPerfDisclosure sets both', () => {
+        expect(isPerfDisclosurePrivileged()).toBe(false);
+        const gate: PerfDisclosureGate = { allowed: false };
+        runWithPerfDisclosure(gate, () => {
+            expect(isPerfDisclosurePrivileged()).toBe(false);
+            allowPerfDisclosure();
+            expect(isPerfDisclosureAllowed()).toBe(true);
+            expect(isPerfDisclosurePrivileged()).toBe(true);
+        });
+        expect(gate.allowed).toBe(true);
+        expect(gate.privileged).toBe(true);
+    });
+
+    it('global-mode disclosure (allowed but not privileged) does not grant privilege', () => {
+        // The middleware seeds `{ allowed: true }` for global mode WITHOUT calling
+        // allowPerfDisclosure — so basic timing discloses but detail stays gated.
+        const gate: PerfDisclosureGate = { allowed: true };
+        runWithPerfDisclosure(gate, () => {
+            expect(isPerfDisclosureAllowed()).toBe(true);
+            expect(isPerfDisclosurePrivileged()).toBe(false);
+        });
     });
 
     it('allowPerfDisclosure() is a no-op with no active gate (does not throw)', () => {

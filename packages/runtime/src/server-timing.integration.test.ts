@@ -4,6 +4,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { LiteKernel } from '@objectstack/core';
 import { HonoServerPlugin } from '@objectstack/plugin-hono-server';
 import { SqlDriver } from '@objectstack/driver-sql';
+import { allowPerfDisclosure } from '@objectstack/observability';
 
 /**
  * End-to-end regression for the Server-Timing `db` span (issue #2408).
@@ -48,6 +49,14 @@ describe('Server-Timing db span over a real HTTP server (integration)', () => {
             const one = await driver.find('widgets', { where: { id: '1' } });
             res.json({ all: all.length, one: one.length });
         });
+        // Same queries, but the handler proves an admin/service identity — exactly
+        // what the dispatcher does after resolving the execution context.
+        httpServer.get('/widgets-admin', async (_req: any, res: any) => {
+            const all = await driver.find('widgets', {});
+            const one = await driver.find('widgets', { where: { id: '1' } });
+            allowPerfDisclosure();
+            res.json({ all: all.length, one: one.length });
+        });
         baseUrl = `http://127.0.0.1:${httpServer.getPort()}`;
     }, 30_000);
 
@@ -74,5 +83,34 @@ describe('Server-Timing db span over a real HTTP server (integration)', () => {
         const m = header!.match(/db;dur=[\d.]+;desc="(\d+) queries"/);
         expect(m, `expected a db span in: ${header}`).toBeTruthy();
         expect(Number(m![1])).toBeGreaterThanOrEqual(2);
+    });
+
+    it('returns the admin-only per-query detail header end-to-end (admin + json)', async () => {
+        const res = await fetch(`${baseUrl}/widgets-admin`, {
+            headers: { 'X-OS-Debug-Timing': 'json' },
+        });
+        expect(res.status).toBe(200);
+        // Basic header still present under global mode…
+        expect(res.headers.get('Server-Timing')).toContain('db;dur=');
+        // …plus the richer detail payload, gated to the proven admin.
+        const raw = res.headers.get('X-OS-Debug-Timing-Detail');
+        expect(raw, 'expected an admin detail header').toBeTruthy();
+        const detail = JSON.parse(raw!);
+        expect(detail.db.count).toBeGreaterThanOrEqual(2);
+        expect(typeof detail.db.slowest.sql).toBe('string');
+        // The parametrized id-lookup reached the header as a `?` placeholder —
+        // the real SQL shape, captured by the driver across a genuine request.
+        expect(detail.db.queries.some((q: any) => q.sql.includes('?'))).toBe(true);
+    });
+
+    it('withholds the detail header from a non-admin, even under global mode + json', async () => {
+        const res = await fetch(`${baseUrl}/widgets`, {
+            headers: { 'X-OS-Debug-Timing': 'json' },
+        });
+        expect(res.status).toBe(200);
+        // Global mode still discloses the basic header…
+        expect(res.headers.get('Server-Timing')).toBeTruthy();
+        // …but the SQL-shape detail is admin-only — the confidentiality invariant.
+        expect(res.headers.get('X-OS-Debug-Timing-Detail')).toBeNull();
     });
 });
