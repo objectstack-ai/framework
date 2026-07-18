@@ -574,26 +574,6 @@ describe('ADR-0099 P0 — probe vs carried-rung equivalence (#3211 M1)', () => {
     }
   });
 
-  // ── [I4 staging — the P1 flip target, pinned] ─────────────────────────────
-  // TODAY the Layer 0 exemption is POSTURE-BLIND: a carried MEMBER rung on the
-  // ExecutionContext does not wall a scoped-grant holder (the probe path never
-  // consults it), and a carried PLATFORM_ADMIN rung is not required by a true
-  // admin. Both cells pin the PRE-FLIP behavior verbatim; under P1 the first
-  // cell FLIPS to the walled filter ({organization_id:'org-1'}) as the
-  // adjudicated narrowing, and the second MUST NOT change (rung authoritative).
-  it('[I4 staging / P1 flip target] carried MEMBER rung does NOT yet wall a scoped-grant holder (posture-blind today)', async () => {
-    const scopedHolder = {
-      userId: 'scoped-admin', tenantId: 'org-1',
-      positions: ['org_member'], permissions: ['admin_full_access'],
-      posture: 'MEMBER', // carried rung (what resolve-authz-context derives for a SCOPED grant)
-    };
-    expect(await readFilter(OBJECTS.private_obj, scopedHolder)).toBeNull(); // ← flips to {organization_id:'org-1'} at P1
-  });
-  it('[I4 staging / P1 invariant] a true platform admin with the carried PLATFORM_ADMIN rung stays exempt', async () => {
-    const carriedAdmin = { ...ROLES.platform_admin, posture: 'PLATFORM_ADMIN' };
-    expect(await readFilter(OBJECTS.private_obj, carriedAdmin)).toBeNull(); // ← must NOT change at P1
-  });
-
   // ── [D3 dead branch] capability evidence can never derive EXTERNAL ────────
   // The EXTERNAL rung activates only from `audience:'external'` (ADR-0090 D10)
   // when the portal principal type ships; no combination of capability-grant
@@ -605,5 +585,94 @@ describe('ADR-0099 P0 — probe vs carried-rung equivalence (#3211 M1)', () => {
         expect(derivePosture({ isPlatformAdmin, isTenantAdmin })).not.toBe('EXTERNAL');
       }
     }
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ADR-0099 P1 — Layer 0 exemption reads the carried rung (#3211 M2)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// The flip: `computeLayeredRlsFilter`'s Layer 0 cross-tenant exemption now reads
+// the CARRIED `ctx.posture` rung as authoritative (#2956 plumbs it), with the
+// capability probe demoted to a fallback for contexts that carry no rung. These
+// cells assert the flipped behavior for the divergence class the P0 gate pinned:
+//   - carried MEMBER rung (a scoped `admin_full_access` holder — G1 delta (a)) is
+//     now WALLED to its org, where the posture-blind probe used to exempt it;
+//   - a carried PLATFORM_ADMIN rung stays exempt (rung authority, unchanged);
+//   - a carried TENANT_ADMIN rung stays walled (invariant I1);
+//   - a resolver-less context (no rung) still uses the probe — the internal
+//     paths (delegated-admin, sharing service, getReadFilter) are byte-for-byte
+//     unchanged until ADR-0096 D3 eliminates hand-built contexts;
+//   - a probe/rung disagreement logs a defect breadcrumb (I4) and enforces the
+//     narrower rung verdict.
+describe('ADR-0099 P1 — Layer 0 exemption reads the carried rung (#3211 M2)', () => {
+  // G1 delta (a): a SCOPED admin_full_access grant. Its set contents make the
+  // probe say platform-admin, but the resolver derives MEMBER (#2949), and that
+  // carried rung now governs — the holder is walled to its own org (the narrowing).
+  const scopedGrantHolder = {
+    userId: 'scoped-admin', tenantId: 'org-1',
+    positions: ['org_member'], permissions: ['admin_full_access'],
+    posture: 'MEMBER',
+  };
+
+  it('[P1 narrowing / delta (a)] carried MEMBER rung WALLS a scoped-grant holder (read)', async () => {
+    expect(await readFilter(OBJECTS.private_obj, scopedGrantHolder)).toEqual({ organization_id: 'org-1' });
+  });
+  it('[P1 narrowing / delta (a)] carried MEMBER rung WALLS a scoped-grant holder (write pre-image)', async () => {
+    expect(await writeFilter(OBJECTS.private_obj, scopedGrantHolder)).toEqual([{ organization_id: 'org-1' }]);
+  });
+
+  it('[P1 invariant] a true platform admin carrying PLATFORM_ADMIN stays exempt (read null)', async () => {
+    const carriedAdmin = { ...ROLES.platform_admin, posture: 'PLATFORM_ADMIN' };
+    expect(await readFilter(OBJECTS.private_obj, carriedAdmin)).toBeNull();
+  });
+
+  it('[P1 / I1] org_admin carrying TENANT_ADMIN stays walled (TENANT_ADMIN never crosses Layer 0)', async () => {
+    const tenantAdmin = { ...ROLES.org_admin, posture: 'TENANT_ADMIN' };
+    expect(await readFilter(OBJECTS.private_obj, tenantAdmin)).toEqual({ organization_id: 'org-1' });
+  });
+
+  // Fallback: NO carried rung (a delegated-admin / sharing-service / getReadFilter
+  // context built without the resolver) → the probe governs, exactly as pre-P1.
+  // The same scoped holder, sans `posture`, is exempt via the probe — behavior
+  // preserved on the internal paths.
+  it('[P1 fallback] a resolver-less context (no rung) uses the probe — behavior preserved', async () => {
+    const { posture: _drop, ...scopedNoRung } = scopedGrantHolder;
+    expect(await readFilter(OBJECTS.private_obj, scopedNoRung)).toBeNull();
+  });
+
+  // I4: enforcement and the probe disagree only on the divergence class; the gate
+  // logs a defect breadcrumb and enforces the (narrower) carried rung.
+  it('[P1 / I4] a probe↔rung disagreement logs a defect breadcrumb; carried rung wins', async () => {
+    const plugin = new SecurityPlugin();
+    const h = makeHarness({ ...OBJECTS.private_obj, orgScoping: true });
+    await plugin.init(h.ctx); await plugin.start(h.ctx);
+    const opCtx: any = {
+      object: OBJECTS.private_obj.objectName, operation: 'find',
+      ast: { where: undefined }, context: scopedGrantHolder,
+    };
+    await h.run(opCtx);
+    expect(opCtx.ast.where).toEqual({ organization_id: 'org-1' }); // narrower rung enforced
+    expect(h.ctx.logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('[authz/ADR-0099]'),
+      expect.objectContaining({ carriedPosture: 'MEMBER', probePlatformAdmin: true }),
+    );
+  });
+
+  // Agreement path: a true platform admin carrying PLATFORM_ADMIN — probe and rung
+  // agree, so NO defect breadcrumb is logged.
+  it('[P1 / I4] no breadcrumb when probe and rung agree (true platform admin)', async () => {
+    const plugin = new SecurityPlugin();
+    const h = makeHarness({ ...OBJECTS.private_obj, orgScoping: true });
+    await plugin.init(h.ctx); await plugin.start(h.ctx);
+    const opCtx: any = {
+      object: OBJECTS.private_obj.objectName, operation: 'find',
+      ast: { where: undefined }, context: { ...ROLES.platform_admin, posture: 'PLATFORM_ADMIN' },
+    };
+    await h.run(opCtx);
+    const authzWarn = (h.ctx.logger.warn as any).mock.calls.filter(
+      (c: any[]) => typeof c[0] === 'string' && c[0].includes('[authz/ADR-0099]'),
+    );
+    expect(authzWarn).toHaveLength(0);
   });
 });
