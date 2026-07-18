@@ -67,10 +67,18 @@ export interface BulkWriteOptions<TRow, TRecord = any> extends RetryOptions {
    * `batch[i]` positionally (this is how every `bulkCreate` implementation in
    * this repo already behaves: sql's single `INSERT ... VALUES (...), (...)
    * RETURNING *`, memory's `Promise.all`, mongodb's ordered `insertMany`).
+   *
+   * `ctx.attempt` is the 1-based attempt number. `attempt > 1` means a prior
+   * attempt's outcome is UNKNOWN (a transient blip that may have landed after
+   * commit) — an exactly-once caller should recheck by natural key and skip
+   * rows already present before re-writing (framework#3149).
    */
-  writeBatch: (batch: TRow[]) => Promise<TRecord[]>;
-  /** Write a single row — used only to degrade a failed batch. */
-  writeOne: (row: TRow) => Promise<TRecord>;
+  writeBatch: (batch: TRow[], ctx: { attempt: number }) => Promise<TRecord[]>;
+  /**
+   * Write a single row — used only to degrade a failed batch. `ctx.attempt`
+   * carries the same recheck signal as {@link writeBatch}.
+   */
+  writeOne: (row: TRow, ctx: { attempt: number }) => Promise<TRecord>;
 }
 
 const DEFAULT_BATCH_SIZE = 200;
@@ -136,11 +144,11 @@ interface ResolvedRetryOptions {
   sleep: (ms: number) => Promise<void>;
 }
 
-async function withRetry<T>(fn: () => Promise<T>, opts: ResolvedRetryOptions): Promise<T> {
+async function withRetry<T>(fn: (attempt: number) => Promise<T>, opts: ResolvedRetryOptions): Promise<T> {
   let lastError: unknown;
   for (let attempt = 1; attempt <= opts.maxRetries; attempt++) {
     try {
-      return await fn();
+      return await fn(attempt);
     } catch (err) {
       lastError = err;
       if (attempt >= opts.maxRetries || !opts.isTransientError(err)) throw err;
@@ -159,7 +167,7 @@ async function withRetry<T>(fn: () => Promise<T>, opts: ResolvedRetryOptions): P
  * transient-error backoff {@link bulkWrite} applies to batches — so a
  * network blip doesn't drop an update the way it used to drop an insert.
  */
-export async function withTransientRetry<T>(fn: () => Promise<T>, opts: RetryOptions = {}): Promise<T> {
+export async function withTransientRetry<T>(fn: (attempt: number) => Promise<T>, opts: RetryOptions = {}): Promise<T> {
   return withRetry(fn, {
     maxRetries: Math.max(1, opts.maxRetries ?? DEFAULT_MAX_RETRIES),
     backoffBaseMs: opts.backoffBaseMs ?? DEFAULT_BACKOFF_BASE_MS,
@@ -194,7 +202,7 @@ export async function bulkWrite<TRow, TRecord = any>(
   for (let start = 0; start < rows.length; start += batchSize) {
     const batch = rows.slice(start, start + batchSize);
     try {
-      const records = await withRetry(() => opts.writeBatch(batch), retryOpts);
+      const records = await withRetry((attempt) => opts.writeBatch(batch, { attempt }), retryOpts);
       // Contract guard (framework#3151): `writeBatch` must resolve one record
       // per input row. A short / long / non-array return breaks the positional
       // correlation below, so backfilling it would report phantom successes
@@ -233,7 +241,7 @@ export async function bulkWrite<TRow, TRecord = any>(
       for (let i = 0; i < batch.length; i++) {
         const idx = start + i;
         try {
-          const record = await withRetry(() => opts.writeOne(batch[i]), retryOpts);
+          const record = await withRetry((attempt) => opts.writeOne(batch[i], { attempt }), retryOpts);
           results[idx] = { index: idx, ok: true, record };
         } catch (err) {
           results[idx] = { index: idx, ok: false, error: err };

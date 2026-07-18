@@ -156,6 +156,37 @@ describe('bulkWrite', () => {
     expect(results[0].ok).toBe(false);
     expect((results[0].error as { code?: string })?.code).toBe('ERR_BULK_RESULT_MISMATCH');
   });
+
+  it('passes the 1-based attempt number to writeBatch across a transient retry (#3149)', async () => {
+    const seen: number[] = [];
+    let attempts = 0;
+    const writeBatch = vi.fn(async (batch: { n: number }[], ctx: { attempt: number }) => {
+      seen.push(ctx.attempt);
+      attempts++;
+      if (attempts === 1) throw new Error('fetch failed');
+      return batch.map((r) => ({ id: `r${r.n}` }));
+    });
+    const writeOne = vi.fn(async () => ({ id: 'x' }));
+
+    await bulkWrite([{ n: 1 }, { n: 2 }], { batchSize: 10, writeBatch, writeOne, sleep: noopSleep });
+
+    expect(seen).toEqual([1, 2]); // attempt 1 threw, attempt 2 succeeded
+  });
+
+  it('passes an attempt counter to writeOne during degradation (#3149)', async () => {
+    const seen: number[] = [];
+    const writeBatch = vi.fn(async () => { throw new Error('logical'); }); // force degradation
+    const writeOne = vi.fn(async (row: { n: number }, ctx: { attempt: number }) => {
+      seen.push(ctx.attempt);
+      if (ctx.attempt < 2 && row.n === 1) throw new Error('fetch failed'); // retry row 1 once
+      return { id: `r${row.n}` };
+    });
+
+    await bulkWrite([{ n: 1 }, { n: 2 }], { batchSize: 10, writeBatch, writeOne, sleep: noopSleep });
+
+    // row 1: attempt 1 (transient throw) → attempt 2 (ok); row 2: attempt 1 (ok)
+    expect(seen).toEqual([1, 2, 1]);
+  });
 });
 
 describe('withTransientRetry', () => {

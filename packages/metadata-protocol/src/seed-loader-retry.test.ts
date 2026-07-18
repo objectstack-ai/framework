@@ -71,6 +71,14 @@ function createMetadata(): IMetadataService {
         manager: { type: 'lookup', reference: 'my_app_employee' },
       },
     },
+    // A plain object (no self-ref) → the batched flushPendingInserts path.
+    my_app_widget: {
+      name: 'my_app_widget',
+      fields: {
+        name: { type: 'text' },
+        sku: { type: 'text' },
+      },
+    },
   };
   return {
     getObject: vi.fn(async (name: string) => objects[name]),
@@ -127,5 +135,47 @@ describe('seed self-ref sequential path — transient retry (framework#3150)', (
     expect(bobAttempts).toBe(2); // first threw, retried, succeeded
     expect(result.summary.totalErrored).toBe(0);
     expect((store.my_app_employee ?? []).map((r) => r.name).sort()).toEqual(['Alice', 'Bob']);
+  });
+});
+
+describe('seed batched path — idempotent retry after commit-then-lost-response (framework#3149)', () => {
+  it('does not duplicate rows when the batch insert commits but its response is lost', async () => {
+    const { engine, store } = createFaithfulEngine();
+    const metadata = createMetadata();
+
+    // First array insert writes both rows to the store, then throws a transient
+    // error (turso's commit-then-lost-response shape). The retry must recheck
+    // by externalId and NOT insert them again.
+    const realInsert = (engine.insert as any).getMockImplementation();
+    let arrayInsertCalls = 0;
+    (engine.insert as any).mockImplementation(async (obj: string, data: any, opts: any) => {
+      if (obj === 'my_app_widget' && Array.isArray(data)) {
+        arrayInsertCalls++;
+        if (arrayInsertCalls === 1) {
+          await realInsert(obj, data, opts); // commit lands
+          throw new Error('fetch failed');   // ...but the response is lost
+        }
+      }
+      return realInsert(obj, data, opts);
+    });
+
+    const result = await new SeedLoaderService(engine, metadata, createLogger()).load({
+      seeds: [{
+        object: 'my_app_widget',
+        externalId: 'sku',
+        mode: 'insert',
+        env: ['prod', 'dev', 'test'],
+        records: [{ name: 'Widget A', sku: 'W-A' }, { name: 'Widget B', sku: 'W-B' }],
+      }] as any,
+      config: CONFIG,
+    });
+
+    // The array insert ran once (attempt 1, which committed); the retry's
+    // recheck found both rows already present and did NOT re-insert.
+    expect(arrayInsertCalls).toBe(1);
+    expect(store.my_app_widget.filter((r) => r.sku === 'W-A')).toHaveLength(1);
+    expect(store.my_app_widget.filter((r) => r.sku === 'W-B')).toHaveLength(1);
+    expect(store.my_app_widget).toHaveLength(2); // no duplicates
+    expect(result.summary.totalErrored).toBe(0);
   });
 });
