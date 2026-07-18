@@ -215,6 +215,43 @@ internal timer (~5 min). Without a `job` service registered, SLA timers are
 **display-only** and no escalation ever fires.
 </Callout>
 
+### Out-of-office delegation
+
+An approval routes to a specific person, and people take leave. Declare an
+**out-of-office delegation** so an approver's individually-routed slots reroute
+to a backup while they're away — the approval never freezes:
+
+```bash
+curl -b cookies.txt -X POST \
+  https://your-app.example.com/api/v1/data/sys_approval_delegation \
+  -H "Content-Type: application/json" \
+  -d '{
+    "delegator_id": "usr_alice",
+    "delegate_id":  "usr_bob",
+    "valid_from":   "2026-05-26T00:00:00Z",
+    "valid_until":  "2026-05-30T00:00:00Z",
+    "reason":       "Annual leave"
+  }'
+```
+
+When a request opens, approvers that resolve to a **specific individual**
+(`type: user`, `type: field`, `type: manager`) are checked against active
+delegations and rerouted to the delegate. The window is half-open
+`[valid_from, valid_until)` (UTC), evaluated **at resolution time** — no
+background job — so a lapsed delegation simply stops applying. Chains
+(A → B → C) are followed and cycle-safe. The delegate acts under **their own
+identity**; the reroute is recorded as an `ooo_substitute` audit action and both
+the delegate and the skipped approver are notified.
+
+<Callout type="info">
+**Group-routed approvers are not rerouted.** `type: position` / `team` /
+`department` / `org_membership_level` keep their whole membership, so there is
+nothing to skip; a position-holder's leave is handled by position delegation
+(ADR-0091), not here. Out-of-office delegation is self-service — create your own
+row via the data API (Setup → Approvals → *Delegations (OOO)*). For a single
+in-flight request, `reassign` hands one slot to another user directly.
+</Callout>
+
 ### Error codes
 
 | Code | HTTP | Meaning |
