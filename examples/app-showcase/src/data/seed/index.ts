@@ -10,6 +10,7 @@ import { Category } from '../objects/category.object.js';
 import { BusinessUnit } from '../objects/business-unit.object.js';
 import { Team, ProjectMembership } from '../objects/team.object.js';
 import { Product, Invoice, InvoiceLine } from '../objects/invoice.object.js';
+import { ExpenseReport, ExpenseLine } from '../objects/expense-report.object.js';
 import { Contact } from '../objects/contact.object.js';
 import { Inquiry } from '../objects/inquiry.object.js';
 import { FieldZoo } from '../objects/field-zoo.object.js';
@@ -300,6 +301,41 @@ const invoiceLines = defineSeed(InvoiceLine, {
   ],
 });
 
+// Expense reports + lines — the filtered-rollup demo (framework#1868). Line
+// amounts, `billable`, and per-line `status` are chosen so the report's SIX
+// summaries show visibly DIFFERENT values on first boot: the unfiltered total
+// vs the approved-only sum vs the billable-only sum, etc. Drive the interactive
+// story in the app by flipping a line's status in the inline grid and watching
+// approved_amount / rejected_count move. Merchants are unique → externalId.
+const expenseReports = defineSeed(ExpenseReport, {
+  mode: 'upsert',
+  externalId: 'name',
+  records: [
+    { name: 'EXP-2001', employee: 'Ada Lovelace', status: 'submitted', submitted_on: cel`daysAgo(5)` },
+    { name: 'EXP-2002', employee: 'Linus Torvalds', status: 'approved', submitted_on: cel`daysAgo(12)` },
+    { name: 'EXP-2003', employee: 'Grace Hopper', status: 'draft' },
+  ],
+});
+
+const expenseLines = defineSeed(ExpenseLine, {
+  mode: 'upsert',
+  externalId: 'merchant',
+  records: [
+    // EXP-2001 → total 1500.50 · approved 960 · reimbursable 512 · rejected 0 · over$500 2
+    { merchant: 'United Airlines', expense_report: 'EXP-2001', category: 'travel', amount: 620, billable: false, status: 'approved', incurred_on: cel`daysAgo(9)` },
+    { merchant: 'Marriott Downtown', expense_report: 'EXP-2001', category: 'lodging', amount: 340, billable: false, status: 'approved', incurred_on: cel`daysAgo(8)` },
+    { merchant: 'Chipotle', expense_report: 'EXP-2001', category: 'meals', amount: 28.5, billable: false, status: 'submitted', incurred_on: cel`daysAgo(8)` },
+    { merchant: 'AWS', expense_report: 'EXP-2001', category: 'software', amount: 512, billable: true, status: 'submitted', incurred_on: cel`daysAgo(7)` },
+    // EXP-2002 → total 917 · approved 825 · reimbursable 825 · rejected 1 · over$500 1
+    { merchant: 'Delta Air Lines', expense_report: 'EXP-2002', category: 'travel', amount: 780, billable: true, status: 'approved', incurred_on: cel`daysAgo(15)` },
+    { merchant: 'Uber', expense_report: 'EXP-2002', category: 'travel', amount: 45, billable: true, status: 'approved', incurred_on: cel`daysAgo(14)` },
+    { merchant: 'Staples', expense_report: 'EXP-2002', category: 'supplies', amount: 92, billable: false, status: 'rejected', incurred_on: cel`daysAgo(14)` },
+    // EXP-2003 (draft) → total 225.75 · approved 0 · reimbursable 0 · rejected 0 · over$500 0
+    { merchant: 'Hilton Garden Inn', expense_report: 'EXP-2003', category: 'lodging', amount: 210, billable: false, status: 'submitted', incurred_on: cel`daysAgo(3)` },
+    { merchant: 'Starbucks', expense_report: 'EXP-2003', category: 'meals', amount: 15.75, billable: false, status: 'submitted', incurred_on: cel`daysAgo(2)` },
+  ],
+});
+
 // Inquiries so the staff triage list (inquiry views + Contact Form page)
 // renders on first boot — the "every view renders real data" principle. One
 // per status; the `closed` row doubles as live prey for InquiryPurgeFlow.
@@ -337,4 +373,4 @@ const announcements = defineSeed(Announcement, {
   ],
 });
 
-export const ShowcaseSeedData = [accounts, contacts, inquiries, products, projects, tasks, categories, businessUnits, orgUnits, teams, memberships, fieldZoo, invoices, invoiceLines, preferences, announcements];
+export const ShowcaseSeedData = [accounts, contacts, inquiries, products, projects, tasks, categories, businessUnits, orgUnits, teams, memberships, fieldZoo, invoices, invoiceLines, expenseReports, expenseLines, preferences, announcements];

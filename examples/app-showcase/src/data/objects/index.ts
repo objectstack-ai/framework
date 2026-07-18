@@ -7,6 +7,7 @@ export { Category } from './category.object.js';
 export { BusinessUnit } from './business-unit.object.js';
 export { Team, ProjectMembership } from './team.object.js';
 export { Product, Invoice, InvoiceLine } from './invoice.object.js';
+export { ExpenseReport, ExpenseLine } from './expense-report.object.js';
 export { FieldZoo } from './field-zoo.object.js';
 export { CascadingSelect } from './cascading-select.object.js';
 export { Preference } from './preference.object.js';
