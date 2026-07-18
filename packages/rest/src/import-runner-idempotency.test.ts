@@ -51,7 +51,12 @@ function makeProtocol(opts: { firstCall?: 'throw' | 'shortReturn' } = {}) {
   });
   const findData = vi.fn(async (args: { query?: { $filter?: Record<string, any> } }) => {
     const filter = args.query?.$filter ?? {};
-    return store.filter((row) => Object.entries(filter).every(([k, v]) => row[k] === v));
+    // Supports equality and { $in: [...] } — the id recheck (framework#3173)
+    // queries by pre-assigned id $in, like the real SQL driver does.
+    return store.filter((row) => Object.entries(filter).every(([k, v]) => {
+      if (v && typeof v === 'object' && Array.isArray((v as any).$in)) return (v as any).$in.includes(row[k]);
+      return row[k] === v;
+    }));
   });
   const p: ImportProtocolLike = { findData, createData, updateData: vi.fn(), createManyData };
   return { p, store, createManyData, createData };
@@ -91,17 +96,67 @@ describe('runImport — idempotent retry with natural keys (framework#3149)', ()
     expect(summary.errors).toBe(0);
   });
 
-  it('pure insert (no matchFields): retry is at-least-once — duplicates are the documented contract', async () => {
-    const { p, store } = makeProtocol({ firstCall: 'throw' });
+  it('pure insert (no matchFields): pre-assigned ids make the retry exactly-once too (#3173)', async () => {
+    const { p, store, createManyData } = makeProtocol({ firstCall: 'throw' });
 
-    await runImport({
+    const summary = await runImport({
       ...baseOpts, p, writeMode: 'insert', matchFields: [],
       rows: [{ name: 'x' }, { name: 'y' }],
     });
 
-    // No natural key to recheck against: the committed-then-retried batch is
-    // written twice. This pins the contract (exactly-once needs matchFields).
-    expect(store).toHaveLength(4);
+    // Previously pinned as at-least-once (4 rows). With pre-assigned row ids
+    // the retry rechecks by id and re-inserts nothing — no natural key needed.
+    expect(createManyData).toHaveBeenCalledTimes(1); // committed once; retry only rechecked
+    expect(store).toHaveLength(2);
+    expect(summary.created).toBe(2);
+    expect(summary.errors).toBe(0);
+  });
+
+  it('pure insert: legitimate duplicate rows survive the retry intact (each copy has its own id) (#3173)', async () => {
+    const { p, store } = makeProtocol({ firstCall: 'throw' });
+
+    const summary = await runImport({
+      ...baseOpts, p, writeMode: 'insert', matchFields: [],
+      rows: [{ name: 'same' }, { name: 'same' }], // two intentional copies
+    });
+
+    // A natural-key recheck could not tell the copies apart; the per-row id
+    // recheck keeps exactly the two intended rows — no loss, no duplication.
+    expect(store).toHaveLength(2);
+    expect(summary.created).toBe(2);
+    expect(summary.errors).toBe(0);
+  });
+
+  it('insertManyData (partial success): a bad row is a per-row verdict — good rows never re-run (framework#3172)', async () => {
+    const store: Array<Record<string, any>> = [];
+    const insertManyData = vi.fn(async (args: { records: any[] }) => ({
+      outcomes: args.records.map((r) => {
+        if (r.name === 'bad') return { ok: false, error: new Error('validation failed: bad name') };
+        const rec = { ...r };
+        store.push(rec);
+        return { ok: true, record: rec };
+      }),
+    }));
+    const createManyData = vi.fn();
+    const createData = vi.fn();
+    const p: ImportProtocolLike = {
+      findData: vi.fn(async () => []), createData, updateData: vi.fn(), createManyData, insertManyData,
+    };
+
+    const summary = await runImport({
+      ...baseOpts, p, writeMode: 'insert', matchFields: [],
+      rows: [{ name: 'good1' }, { name: 'bad' }, { name: 'good2' }],
+    });
+
+    expect(insertManyData).toHaveBeenCalledTimes(1); // one call, per-row verdicts
+    expect(createManyData).not.toHaveBeenCalled();   // partial path preferred
+    expect(createData).not.toHaveBeenCalled();       // NO degradation re-run for good rows
+    expect(summary.created).toBe(2);
+    expect(summary.errors).toBe(1);
+    expect(summary.results[0]).toMatchObject({ ok: true, action: 'created' });
+    expect(summary.results[1]).toMatchObject({ ok: false, action: 'failed' });
+    expect(summary.results[2]).toMatchObject({ ok: true, action: 'created' });
+    expect(store).toHaveLength(2);
   });
 
   it('marks rows created-with-warning on a summary recompute failure, without failing or duplicating (framework#3147)', async () => {

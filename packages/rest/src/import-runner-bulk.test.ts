@@ -53,8 +53,11 @@ describe('runImport — bulk create batching (framework#2678)', () => {
     expect(summary.created).toBe(250);
     expect(summary.results).toHaveLength(250);
     expect(summary.results.map((r) => r.row)).toEqual(Array.from({ length: 250 }, (_, i) => i + 1));
-    expect(summary.results[0]).toMatchObject({ ok: true, action: 'created', id: 'id_r0' });
-    expect(summary.results[249]).toMatchObject({ ok: true, action: 'created', id: 'id_r249' });
+    // Rows carry a pre-assigned id (framework#3173), echoed back by the mock.
+    expect(summary.results[0]).toMatchObject({ ok: true, action: 'created' });
+    expect(summary.results[0].id).toBeTruthy();
+    expect(summary.results[249]).toMatchObject({ ok: true, action: 'created' });
+    expect(summary.results[249].id).toBeTruthy();
   });
 
   it('retries a transient createManyData failure instead of dropping the batch', async () => {

@@ -1,5 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
+import { randomUUID } from 'node:crypto';
 import { coerceRow, firstMissingRequiredField, type RefResolver, type RefMatch } from './import-coerce.js';
 import type { ExportFieldMeta } from './export-format.js';
 import { bulkWrite, withTransientRetry, defaultIsTransientError, type BulkWriteRowResult } from '@objectstack/core';
@@ -76,6 +77,14 @@ export interface ImportProtocolLike {
    * record per input row, in the same order.
    */
   createManyData?(args: { object: string; records: any[]; context?: any; environmentId?: string }): Promise<{ records: any[] }>;
+  /**
+   * Optional partial-success bulk create (framework#3172). When present it is
+   * preferred over `createManyData`: one outcome per input row, in order — a
+   * row that fails validation is a per-row verdict, so a bad row never forces
+   * the whole-batch degradation that re-runs beforeInsert hooks on the good
+   * rows.
+   */
+  insertManyData?(args: { object: string; records: any[]; context?: any; environmentId?: string }): Promise<{ outcomes: Array<{ ok: boolean; record?: any; error?: unknown }> }>;
 }
 
 export interface RunImportOptions {
@@ -272,12 +281,19 @@ export function runImport(opts: RunImportOptions): Promise<ImportRunSummary> {
   // without `createManyData` never buffers — `canBulkCreate` is false and
   // creates fall back to the original inline per-row `createData` call.
   const canBulkCreate = typeof p.createManyData === 'function';
+  // Partial-success flush (framework#3172): preferred when the protocol
+  // offers it — a row that fails validation is a per-row verdict from one
+  // batch call, so a bad row never forces the whole-batch degradation that
+  // re-runs beforeInsert hooks on its siblings.
+  const canPartialCreate = typeof p.insertManyData === 'function';
   const pendingCreates: Array<{ index: number; rowNo: number; data: Record<string, any> }> = [];
   // bulkWrite is at-least-once: a retry (or a mismatch-driven degradation) may
-  // re-run a create whose prior attempt already committed. When the import has
-  // natural keys (matchFields), recheck before re-creating so a retry can't
-  // duplicate a row (framework#3149). A pure-insert import (no matchFields) has
-  // no natural key to recheck against and stays at-least-once by contract.
+  // re-run a create whose prior attempt already committed. Every buffered
+  // CREATE row is therefore pre-assigned a client-generated id at flush time
+  // (framework#3173) — stable across attempts — so a retry can recheck by id
+  // ($in) and re-insert only the rows that truly did not land. This is exact
+  // for EVERY write mode (including pure insert with legitimate duplicate
+  // rows, where a natural-key recheck could not distinguish copies).
   let lastBatchUncertain = false;
   // Set when a flush's write succeeded but its post-write roll-up summary
   // recompute exhausted retries (framework#3147). The rows ARE written; we mark
@@ -296,15 +312,42 @@ export function runImport(opts: RunImportOptions): Promise<ImportRunSummary> {
     }
     return null;
   };
-  const existingByMatch = async (data: Record<string, any>): Promise<Record<string, any> | null> => {
-    if (matchFields.length === 0) return null;
-    const found = await findExisting(data);
-    return found && typeof found === 'object' ? found : null; // ignore 'blank'/'none'/'ambiguous'
+  // Exact idempotency recheck (framework#3173): buffered CREATE rows carry a
+  // pre-assigned id, so "did the lost-response attempt actually commit?" is
+  // answered precisely by an id $in query — no natural key, no clocks, and
+  // legitimate duplicate rows (pure insert mode) resolve correctly because
+  // each copy has its own id.
+  const recheckByIds = async (chunk: Array<Record<string, any>>): Promise<Map<string, any>> => {
+    const ids = chunk.map((r) => r.id).filter((v) => v != null && v !== '');
+    if (ids.length === 0) return new Map();
+    const r = await p.findData({
+      ...findArgsBase({ $filter: { id: { $in: ids } }, $top: ids.length }),
+      object: objectName,
+    });
+    return new Map(findRows(r).map((rec: any) => [String(rec.id), rec]));
   };
   const flushPendingCreates = async (): Promise<void> => {
     if (pendingCreates.length === 0) return;
     flushSummaryStale = false;
     const batch = pendingCreates.splice(0, pendingCreates.length);
+    // Pre-assign ids once per row (framework#3173) — the closures below see
+    // the same row objects on every retry attempt, so the ids are stable. An
+    // id the user supplied explicitly is respected.
+    for (const b of batch) {
+      if (b.data.id == null || b.data.id === '') b.data.id = randomUUID();
+    }
+    // Recheck helper shared by both write paths: on attempt > 1 split the
+    // chunk into rows that already landed (by id) and rows still to create.
+    const splitByExisting = async (chunk: Array<Record<string, any>>) => {
+      const existingByIdx = new Map<number, Record<string, any>>();
+      const toCreate: Array<Record<string, any>> = [];
+      const found = await recheckByIds(chunk);
+      chunk.forEach((row, i) => {
+        const hit = row.id != null ? found.get(String(row.id)) : undefined;
+        if (hit) existingByIdx.set(i, hit); else toCreate.push(row);
+      });
+      return { existingByIdx, toCreate };
+    };
     const writeResults: BulkWriteRowResult[] = await bulkWrite(
       batch.map(b => b.data),
       {
@@ -313,17 +356,57 @@ export function runImport(opts: RunImportOptions): Promise<ImportRunSummary> {
         // the issue's suggested 100-500 rows/batch must not translate into
         // one oversized multi-row INSERT statement.
         batchSize: Math.min(progressEvery, MAX_CREATE_BATCH_SIZE),
+        // Partial-success path (framework#3172): per-row verdicts from one
+        // call; a bad row never degrades the batch.
+        ...(canPartialCreate ? {
+          writeBatchPartial: async (chunk: Array<Record<string, any>>, { attempt }: { attempt: number }) => {
+            let toCreate = chunk;
+            let existingByIdx = new Map<number, Record<string, any>>();
+            if (attempt > 1) {
+              ({ existingByIdx, toCreate } = await splitByExisting(chunk));
+            }
+            try {
+              let freshOutcomes: Array<{ ok: boolean; record?: any; error?: unknown }>;
+              if (toCreate.length === 0) {
+                freshOutcomes = [];
+              } else {
+                try {
+                  freshOutcomes = (await p.insertManyData!({
+                    object: objectName, records: toCreate, context: writeCtx,
+                    ...(environmentId ? { environmentId } : {}),
+                  })).outcomes;
+                } catch (e) {
+                  // Rows written but summary recompute failed: recover the
+                  // outcome array carried on the error (framework#3147).
+                  const recovered = recoverSummaryStale(e);
+                  if (!recovered) throw e;
+                  freshOutcomes = recovered as Array<{ ok: boolean; record?: any; error?: unknown }>;
+                }
+              }
+              if (!Array.isArray(freshOutcomes) || freshOutcomes.length !== toCreate.length) {
+                throw Object.assign(
+                  new Error(`insertManyData returned ${Array.isArray(freshOutcomes) ? `${freshOutcomes.length} outcome(s)` : String(typeof freshOutcomes)} for ${toCreate.length} row(s)`),
+                  { code: 'ERR_BULK_RESULT_MISMATCH' },
+                );
+              }
+              lastBatchUncertain = false;
+              let k = 0;
+              return chunk.map((_row, i) => existingByIdx.has(i)
+                ? { ok: true, record: existingByIdx.get(i)! }
+                : freshOutcomes[k++]);
+            } catch (e) {
+              lastBatchUncertain = isUncertainOutcome(e);
+              throw e;
+            }
+          },
+        } : {}),
         writeBatch: async (chunk, { attempt }) => {
           let toCreate = chunk;
-          const existingByIdx = new Map<number, Record<string, any>>();
-          if (attempt > 1 && matchFields.length > 0) {
+          let existingByIdx = new Map<number, Record<string, any>>();
+          if (attempt > 1) {
             // A prior attempt may have committed before its response was lost:
-            // recheck each row by matchFields and only create the ones missing.
-            toCreate = [];
-            for (let i = 0; i < chunk.length; i++) {
-              const hit = await existingByMatch(chunk[i]);
-              if (hit) existingByIdx.set(i, hit); else toCreate.push(chunk[i]);
-            }
+            // recheck by pre-assigned id and only create the missing rows.
+            ({ existingByIdx, toCreate } = await splitByExisting(chunk));
           }
           try {
             let createdRecords: any[];
@@ -362,8 +445,9 @@ export function runImport(opts: RunImportOptions): Promise<ImportRunSummary> {
           }
         },
         writeOne: async (row, { attempt }) => {
-          if ((attempt > 1 || lastBatchUncertain) && matchFields.length > 0) {
-            const hit = await existingByMatch(row);
+          if (attempt > 1 || lastBatchUncertain) {
+            const found = await recheckByIds([row]);
+            const hit = row.id != null ? found.get(String(row.id)) : undefined;
             if (hit) return hit; // already committed by a prior attempt
           }
           try {
