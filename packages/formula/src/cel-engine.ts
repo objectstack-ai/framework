@@ -325,6 +325,73 @@ export function firstTypeMismatch(
   }
 }
 
+/** cel-js temporal functions that return a calendar Timestamp (for #3183). */
+const TEMPORAL_FNS = new Set(['today', 'daysFromNow', 'daysAgo', 'now']);
+
+/** A cel-js AST node is `{ op, args }`; `args` is a node[], or a leaf string. */
+type CelNode = { op: string; args: unknown };
+
+function isCelNode(v: unknown): v is CelNode {
+  return typeof v === 'object' && v !== null && typeof (v as CelNode).op === 'string';
+}
+
+/** True when `node` is a call to a temporal function (`today()`/`daysFromNow(…)`/…). */
+function isTemporalCall(node: unknown): boolean {
+  return isCelNode(node) && node.op === 'call'
+    && Array.isArray(node.args) && typeof node.args[0] === 'string'
+    && TEMPORAL_FNS.has(node.args[0]);
+}
+
+/**
+ * If `node` is a field reference — `record.<f>` / `previous.<f>` (member access)
+ * or a bare `<f>` (flattened flow scope) — return the field name `<f>`, else null.
+ */
+function fieldRefName(node: unknown): string | null {
+  if (!isCelNode(node)) return null;
+  if (node.op === 'id' && typeof node.args === 'string') return node.args; // bare `<f>`
+  if (node.op === '.' && Array.isArray(node.args) && node.args.length === 2) {
+    const [base, member] = node.args;
+    if (isCelNode(base) && base.op === 'id'
+      && (base.args === 'record' || base.args === 'previous')
+      && typeof member === 'string') {
+      return member;
+    }
+  }
+  return null;
+}
+
+/**
+ * #3183 — field names compared with `==`/`!=` DIRECTLY against a temporal
+ * function (`today()`/`daysFromNow()`/`daysAgo()`/`now()`), found by walking the
+ * cel-js AST (never a regex on the source — no ReDoS). The caller filters these
+ * by field type; a `Field.date` reads back as a string and cel-js equality never
+ * matches it against a timestamp, so such a comparison silently misses. The
+ * `date(…)`/`datetime(…)`/`timestamp(…)` coercions are NOT temporal calls, so the
+ * fixed idiom `date(record.d) == today()` yields nothing. Returns `[]` on a parse
+ * fault (compile() reports those) or when there is no such comparison.
+ */
+export function temporalEqualityFields(source: string): string[] {
+  if (typeof source !== 'string' || !source.trim()) return [];
+  let ast: unknown;
+  try {
+    ast = (recordScopeEnv ??= buildScopedEnv([])).parse(source).ast;
+  } catch {
+    return [];
+  }
+  const out = new Set<string>();
+  const visit = (node: unknown): void => {
+    if (!isCelNode(node)) return;
+    if ((node.op === '==' || node.op === '!=') && Array.isArray(node.args) && node.args.length === 2) {
+      const [left, right] = node.args;
+      if (isTemporalCall(left)) { const f = fieldRefName(right); if (f) out.add(f); }
+      if (isTemporalCall(right)) { const f = fieldRefName(left); if (f) out.add(f); }
+    }
+    if (Array.isArray(node.args)) for (const child of node.args) visit(child);
+  };
+  visit(ast);
+  return [...out];
+}
+
 /** Coerce cel-js's BigInt-flavored return into spec-friendly JS values. */
 function coerce(value: unknown): unknown {
   if (typeof value === 'bigint') {

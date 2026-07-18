@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { celEngine } from './cel-engine';
+import { celEngine, temporalEqualityFields } from './cel-engine';
 import { CEL_STDLIB_FUNCTIONS } from './validate';
 import type { Expression } from '@objectstack/spec';
 
@@ -508,6 +508,38 @@ describe('celEngine', () => {
         if (!r.ok) unresolved.push(`${fn}: ${r.error.message.split('\n')[0]}`);
       }
       expect(unresolved, `advertised functions that fault at runtime:\n${unresolved.join('\n')}`).toEqual([]);
+    });
+  });
+
+  // #3183 — AST walk backing the date-equality guardrail. Returns field names
+  // compared with `==`/`!=` directly against a temporal function; the validator
+  // filters these by field type. AST-based, so no ReDoS on adversarial source.
+  describe('temporalEqualityFields (#3183)', () => {
+    it('finds the field on either side, for all four temporal functions', () => {
+      expect(temporalEqualityFields('record.due == today()')).toEqual(['due']);
+      expect(temporalEqualityFields('today() != record.due')).toEqual(['due']);
+      expect(temporalEqualityFields('record.due == daysFromNow(3)')).toEqual(['due']);
+      expect(temporalEqualityFields('record.due != daysAgo(7)')).toEqual(['due']);
+      expect(temporalEqualityFields('previous.due == now()')).toEqual(['due']);
+      expect(temporalEqualityFields('due == today()')).toEqual(['due']); // bare (flattened)
+    });
+
+    it('returns nothing for the working idioms or ordering comparisons', () => {
+      expect(temporalEqualityFields('date(record.due) == today()')).toEqual([]);
+      expect(temporalEqualityFields('record.due >= today()')).toEqual([]);
+      expect(temporalEqualityFields('daysBetween(today(), record.due) == 0')).toEqual([]);
+      expect(temporalEqualityFields('record.a == record.b')).toEqual([]);
+    });
+
+    it('de-duplicates and finds fields nested in a compound predicate', () => {
+      expect(temporalEqualityFields('record.due == today() || record.due == daysFromNow(1)')).toEqual(['due']);
+      expect(temporalEqualityFields('record.a == today() && b != now()').sort()).toEqual(['a', 'b']);
+    });
+
+    it('is linear on adversarial input (the CodeQL ReDoS repros) and returns []', () => {
+      // These would drive the previous regex O(n²); the AST walk parses or bails fast.
+      expect(temporalEqualityFields('$'.repeat(5000))).toEqual([]);
+      expect(temporalEqualityFields('now('.repeat(2000))).toEqual([]);
     });
   });
 });
