@@ -3471,6 +3471,8 @@
     "ViewKeyCollision (interface)",
     "ViewKind (type)",
     "ViewKindSchema (const)",
+    "ViewMetadata (type)",
+    "ViewMetadataSchema (const)",
     "ViewSchema (const)",
     "ViewScope (type)",
     "ViewScopeSchema (const)",

@@ -87,8 +87,22 @@ function unwrap(s: any, depth = 0): any {
 function shapeOf(s: any): Record<string, any> | null {
   const u = unwrap(s);
   const def = defOf(u);
-  if (def?.type !== 'object') return null;
-  return def.shape ?? u.shape ?? null;
+  if (def?.type === 'object') return def.shape ?? u.shape ?? null;
+  // #3095 — a metadata type may register a UNION of shapes rather than a single
+  // object (e.g. `view`: defineView container | ViewItem record | flattened
+  // personalization overlay). The liveness ledger governs the canonical
+  // authorable **container**, which is the first object-typed member of the
+  // union. Discriminated-union members (ViewItem) are skipped — their inner
+  // `config` is the same ListView/FormView surface already governed under the
+  // container's `list` / `form` children — so this walks the container shape.
+  if (def?.type === 'union' && Array.isArray(def.options)) {
+    for (const opt of def.options) {
+      const uo = unwrap(opt);
+      const od = defOf(uo);
+      if (od?.type === 'object') return od.shape ?? uo.shape ?? null;
+    }
+  }
+  return null;
 }
 function descOf(s: any): string {
   let cur = s;
