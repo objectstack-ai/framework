@@ -1186,6 +1186,46 @@ function unknownKeyError(objectName: unknown, unknownKeys: string[], knownKeys: 
 type NoExcessObjectKeys<T> = T &
   Record<Exclude<keyof T, keyof z.input<typeof ObjectSchemaBase>>, never>;
 
+/** Object names already warned about a generic `password` field (dedup per name). */
+const warnedPasswordObjects = new Set<string>();
+
+/**
+ * Non-fatal author-time diagnostic (ADR-0100): a `password`-typed field on a
+ * generic (non-`better-auth`) object gets defined-but-surprising semantics —
+ * masked-on-read but **plaintext at rest**, with no one-way hashing (that lives
+ * only in the auth subsystem). Steer authors to `secret` for reversible machine
+ * credentials, or to the auth subsystem for real login credentials.
+ *
+ * A warning, not an error: `password` now has a defined generic-path contract,
+ * and the field-zoo example intentionally exercises every field type — a hard
+ * error would be self-inflicted breakage. Deduped per object name so a schema
+ * imported many times warns once. `managedBy: 'better-auth'` objects are exempt.
+ */
+function warnGenericPasswordFields(
+  objectName: unknown,
+  fields: unknown,
+  managedBy: unknown,
+): void {
+  if (managedBy === 'better-auth') return;
+  if (!fields || typeof fields !== 'object') return;
+  const passwordFields = Object.entries(fields as Record<string, { type?: string }>)
+    .filter(([, def]) => def && def.type === 'password')
+    .map(([fieldName]) => fieldName);
+  if (passwordFields.length === 0) return;
+  const name = typeof objectName === 'string' && objectName.length > 0 ? objectName : '<unnamed>';
+  if (warnedPasswordObjects.has(name)) return;
+  warnedPasswordObjects.add(name);
+  console.warn(
+    `ObjectSchema.create('${name}'): field(s) ${passwordFields.map((f) => `\`${f}\``).join(', ')} ` +
+    "use type 'password' on a non-auth object. The generic CRUD path stores a " +
+    'password field as plaintext at rest and masks it to •••••••• on read (ADR-0100) — ' +
+    'it is NOT one-way hashed (that is owned by the auth subsystem, for its identity ' +
+    "tables only). Use `Field.secret(...)` for reversible machine credentials, or model " +
+    'login credentials on the auth user object. If this is intended, the masking contract ' +
+    'now applies and this warning is safe to ignore.',
+  );
+}
+
 /**
  * [ADR-0079] Back-compat alias normalization: an object authored with the
  * deprecated `displayNameField` key still parses by mapping it onto the
@@ -1296,6 +1336,11 @@ export const ObjectSchema = lazySchema(() => {
     if (unknownKeys.length > 0) {
       throw unknownKeyError(cfg.name, unknownKeys, knownKeys);
     }
+    // ADR-0100: warn (non-fatally) when a `password` field is declared on a
+    // generic, non-better-auth object — it is masked-on-read but plaintext at
+    // rest, not hashed. `create()` is the authoring surface (ADR-0077), so the
+    // steer lives here rather than in raw `.parse()`.
+    warnGenericPasswordFields(cfg.name, cfg.fields, cfg.managedBy);
     const withDefaults = {
       ...cfg,
       label: cfg.label ?? snakeCaseToLabel(cfg.name as string),

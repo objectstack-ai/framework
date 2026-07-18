@@ -9,14 +9,19 @@ import { ExpressionInputSchema } from '../shared/expression.zod';
  */
 import { lazySchema } from '../shared/lazy-schema';
 export const FieldType = z.enum([
-  // Core Text
+  // Core Text. 'password' on a generic (non-better-auth) object is plaintext at
+  // rest but masked to SECRET_MASK on read — the auth subsystem's one-way
+  // hashing applies only to its own identity tables, never to an authored
+  // 'password' field. Prefer 'secret' for reversible machine credentials. See
+  // ADR-0100.
   'text', 'textarea', 'email', 'url', 'phone', 'password',
   // Secret — reversible, encrypted-at-rest value (DB password, API key, token).
-  // UNLIKE 'password' (a one-way hash owned by the auth subsystem), a 'secret'
-  // is round-tripped: the engine encrypts it on write via the registered
-  // ICryptoProvider, stores the ciphertext handle in `sys_secret`, persists only
-  // an opaque ref on the row, and masks it on read. Fail-closed: no provider ⇒
-  // writes throw rather than persist cleartext. See ADR (secret field channel).
+  // UNLIKE 'password' (masked-on-read but plaintext at rest, or one-way hashed
+  // inside the auth subsystem), a 'secret' is round-tripped: the engine encrypts
+  // it on write via the registered ICryptoProvider, stores the ciphertext handle
+  // in `sys_secret`, persists only an opaque ref on the row, and masks it on
+  // read. Fail-closed: no provider ⇒ writes throw rather than persist cleartext.
+  // See ADR-0100.
   'secret',
   // Rich Content
   'markdown', 'html', 'richtext',

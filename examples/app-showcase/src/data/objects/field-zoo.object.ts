@@ -35,7 +35,7 @@ export const FieldZoo = ObjectSchema.create({
     f_email: Field.email({ label: 'Email', searchable: true }),
     f_url: Field.url({ label: 'URL' }),
     f_phone: Field.phone({ label: 'Phone' }),
-    f_password: Field.password({ label: 'Password (one-way hash)' }),
+    f_password: Field.password({ label: 'Password (masked on read)' }),
     f_secret: Field.secret({ label: 'Secret (encrypted at rest)' }),
 
     // ── Rich content ─────────────────────────────────────────────────────

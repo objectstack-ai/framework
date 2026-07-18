@@ -69,6 +69,27 @@ describe('@objectstack/platform-objects', () => {
     expect((object as any).tableName).toBeUndefined();
   });
 
+  describe('no shipped object declares a `password`-typed field (ADR-0100)', () => {
+    // The generic read path masks `password` fields to SECRET_MASK; better-auth
+    // objects are exempted so login reads see the stored value
+    // (collectMaskedReadFields). That exemption is a safety net, not a crutch:
+    // no identity object today even declares a `password`-typed field —
+    // sys_account.password is a hashed `text` column. If anyone retypes it to
+    // `password`, masking would apply through the better-auth adapter and silently
+    // break login; this pin fails first so that change is a deliberate decision.
+    it.each(systemObjects)('%s has no field of type `password`', (_exportName, object) => {
+      const fields = ((object as any).fields ?? {}) as Record<string, { type?: string }>;
+      const passwordFields = Object.entries(fields)
+        .filter(([, def]) => def?.type === 'password')
+        .map(([name]) => name);
+      expect(passwordFields).toEqual([]);
+    });
+
+    it('sys_account.password is a hashed `text` column, not a `password` field', () => {
+      expect((SysAccount as any).fields?.password?.type).toBe('text');
+    });
+  });
+
   describe('secure-by-default posture (ADR-0066 ④)', () => {
     // Raw secret / live-credential stores are opted OUT of the wildcard `'*'`
     // grant: only an explicit per-object grant or the posture-gated superuser

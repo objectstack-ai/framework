@@ -75,6 +75,7 @@ export {
   isSecretRef,
   parseSecretRef,
   collectSecretFields,
+  collectMaskedReadFields,
 } from './secret-fields.js';
 
 // Utilities

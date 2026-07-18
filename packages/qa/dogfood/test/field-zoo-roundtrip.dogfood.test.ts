@@ -103,11 +103,12 @@ const MATRIX: FieldCase[] = [
   { field: 'f_lookup', type: 'lookup', check: { kind: 'equal', write: 'acc_synthetic_0001' } },
   { field: 'f_master_detail', type: 'master_detail', check: { kind: 'equal', write: 'proj_synthetic_0001' } },
   { field: 'f_tree', type: 'tree', check: { kind: 'equal', write: 'cat_synthetic_0001' } },
-  // security — `secret` encrypts on write and masks on read; `password` is a
-  // credential type the generic CRUD path stores opaquely (auth owns hashing),
-  // so assert it merely persists rather than asserting a plaintext contract.
+  // security — both credential types mask on read (plaintext never echoes back
+  // over HTTP). `secret` is encrypted at rest; `password` on a generic object is
+  // plaintext at rest but masked to SECRET_MASK on read (ADR-0100 / #2036 — the
+  // generic path does NOT hash it; auth owns hashing for its identity tables).
   { field: 'f_secret', type: 'secret', check: { kind: 'masked', write: 'topsecret-value' } },
-  { field: 'f_password', type: 'password', check: { kind: 'present', write: 'p@ssw0rd!' } },
+  { field: 'f_password', type: 'password', check: { kind: 'masked', write: 'p@ssw0rd!' } },
   // NB: f_summary (roll-up) is intentionally absent — it's a computed
   // aggregate over related records, null on a childless fixture row; its
   // semantics are covered by dedicated roll-up tests, not value fidelity.

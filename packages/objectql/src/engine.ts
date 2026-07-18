@@ -19,6 +19,7 @@ import { IRealtimeService, RealtimeEventPayload } from '@objectstack/spec/contra
 import type { ICryptoProvider, CryptoHandle } from '@objectstack/spec/contracts';
 import {
   collectSecretFields,
+  collectMaskedReadFields,
   makeSecretRef,
   parseSecretRef,
   isSecretRef,
@@ -1363,19 +1364,28 @@ export class ObjectQL implements IDataEngine {
   }
 
   /**
-   * Encrypt any `secret`-typed fields on `row` in place before it reaches the
-   * driver. Each plaintext is wrapped by the ICryptoProvider, persisted as a
-   * `sys_secret` row, and replaced on `row` by an opaque ref. Cleartext never
-   * reaches the business table.
+   * Normalize credential fields on `row` in place before it reaches the driver.
+   *
+   * Two channels share the read mask ({@link SECRET_MASK}) but differ on write
+   * (see ADR-0100):
+   *
+   *  - **`secret`** — encrypted: each plaintext is wrapped by the ICryptoProvider,
+   *    persisted as a `sys_secret` row, and replaced on `row` by an opaque ref.
+   *    Cleartext never reaches the business table.
+   *  - **`password`** (generic, non-`better-auth`) — plaintext at rest: stored
+   *    verbatim, no encryption and no `sys_secret` row. Only the echoed-mask drop
+   *    below applies to it.
    *
    * Rules:
-   *  - No secret fields on the object ⇒ no-op (fast path, no crypto cost).
-   *  - `null`/`undefined` value ⇒ left as-is (clears the secret).
-   *  - Value already a ref (re-save of an unchanged ref) ⇒ left as-is.
-   *  - Value equal to the read mask ⇒ dropped, so a form round-trip that
-   *    echoes the mask does not overwrite the stored secret.
-   *  - **Fail-closed:** any other value with no CryptoProvider registered, or
-   *    no reachable `sys_secret` store, THROWS — never persists cleartext.
+   *  - Any masked field (secret or password) whose value equals the read mask ⇒
+   *    the key is dropped, so a form round-trip that echoes the mask does not
+   *    overwrite the stored value.
+   *  - No secret fields on the object ⇒ no further work (fast path, no crypto).
+   *  - `null`/`undefined` secret value ⇒ left as-is (clears the secret).
+   *  - Secret value already a ref (re-save of an unchanged ref) ⇒ left as-is.
+   *  - **Fail-closed:** any other secret value with no CryptoProvider registered,
+   *    or no reachable `sys_secret` store, THROWS — never persists cleartext.
+   *    (A `password` field needs no CryptoProvider — it is stored as-is.)
    */
   private async encryptSecretFields(
     object: string,
@@ -1385,6 +1395,17 @@ export class ObjectQL implements IDataEngine {
   ): Promise<void> {
     if (!row || typeof row !== 'object') return;
     const schema = this._registry.getObject(object);
+
+    // Echoed-mask drop for every field the read path masks (secret + generic
+    // password). The read path returns SECRET_MASK; a client that PATCHes it
+    // back means "unchanged", so drop the key rather than persist the literal
+    // mask. Doing this up front keeps the better-auth exemption in one place
+    // (collectMaskedReadFields) and covers objects that have a password field
+    // but no secret field. (#2036, ADR-0100)
+    for (const field of collectMaskedReadFields(schema)) {
+      if (field in row && row[field] === SECRET_MASK) delete row[field];
+    }
+
     const secretFields = collectSecretFields(schema);
     if (secretFields.length === 0) return;
 
@@ -1394,12 +1415,6 @@ export class ObjectQL implements IDataEngine {
 
       if (value === null || typeof value === 'undefined') continue; // clear
       if (isSecretRef(value)) continue; // already encrypted ref
-      if (value === SECRET_MASK) {
-        // The read path masks secrets to SECRET_MASK; a form that echoes it
-        // back means "unchanged". Drop the key so the stored secret survives.
-        delete row[field];
-        continue;
-      }
 
       if (!this.cryptoProvider) {
         throw new Error(
@@ -1446,20 +1461,23 @@ export class ObjectQL implements IDataEngine {
   }
 
   /**
-   * Mask `secret`-typed fields on read so plaintext never leaves the engine
-   * through the normal query path. A set secret becomes {@link SECRET_MASK};
-   * an unset one stays `null`. Privileged callers that genuinely need the
-   * plaintext use {@link resolveSecret} against the stored ref.
+   * Mask credential fields on read so plaintext never leaves the engine through
+   * the normal query path. Covers `secret` fields (always) and `password` fields
+   * on generic, non-`better-auth` objects (see {@link collectMaskedReadFields}
+   * and ADR-0100). A set value becomes {@link SECRET_MASK}; an unset one stays
+   * `null`. Privileged callers that genuinely need a secret's plaintext use
+   * {@link resolveSecret} against the stored ref; a `password` field is stored
+   * as plaintext at rest, so its cleartext is only ever reachable off this path.
    */
   private maskSecretFields(object: string, rows: any): void {
     if (!rows) return;
     const schema = this._registry.getObject(object);
-    const secretFields = collectSecretFields(schema);
-    if (secretFields.length === 0) return;
+    const maskedFields = collectMaskedReadFields(schema);
+    if (maskedFields.length === 0) return;
     const list = Array.isArray(rows) ? rows : [rows];
     for (const row of list) {
       if (!row || typeof row !== 'object') continue;
-      for (const field of secretFields) {
+      for (const field of maskedFields) {
         if (!(field in row)) continue;
         row[field] = row[field] == null ? null : SECRET_MASK;
       }

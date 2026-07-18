@@ -232,3 +232,91 @@ describe('objectql secret-field channel', () => {
     }
   });
 });
+
+// A generic (non-better-auth) object with a `password` field. Unlike `secret`,
+// it is plaintext at rest but masked on read — no crypto involved (ADR-0100).
+const deviceObject = {
+  name: 'device', label: 'Device',
+  fields: {
+    id: { name: 'id', label: 'ID', type: 'text' as const },
+    name: { name: 'name', label: 'Name', type: 'text' as const },
+    admin_password: { name: 'admin_password', label: 'Admin Password', type: 'password' as const },
+  },
+};
+
+// An identity table the auth subsystem owns: `managedBy: 'better-auth'` exempts
+// its `password` field from masking so better-auth's own reads see the value.
+const authUserObject = {
+  name: 'authy_user', label: 'Auth User', managedBy: 'better-auth' as const,
+  fields: {
+    id: { name: 'id', label: 'ID', type: 'text' as const },
+    password: { name: 'password', label: 'Password', type: 'password' as const },
+  },
+};
+
+async function buildPasswordEngine() {
+  // Deliberately NO CryptoProvider — a password field must not require one.
+  const engine = new ObjectQL();
+  const { driver, stores } = makeMemoryDriver();
+  engine.registerDriver(driver, true);
+  await engine.init();
+  engine.registry.registerObject(deviceObject as any);
+  engine.registry.registerObject(authUserObject as any);
+  return { engine, stores };
+}
+
+describe('objectql password-field masking (ADR-0100)', () => {
+  let ctx: Awaited<ReturnType<typeof buildPasswordEngine>>;
+  beforeEach(async () => { ctx = await buildPasswordEngine(); });
+
+  it('stores plaintext at rest (no crypto), but masks on find / findOne', async () => {
+    const created = await ctx.engine.insert('device', { name: 'router', admin_password: 'hunter2' });
+
+    // At rest: the driver row holds the verbatim plaintext, and nothing was
+    // written to sys_secret (no encryption channel for password).
+    const stored = ctx.stores.get('device')!.get(created.id) as any;
+    expect(stored.admin_password).toBe('hunter2');
+    expect(ctx.stores.get('sys_secret')?.size ?? 0).toBe(0);
+
+    // On read: the generic path never echoes the plaintext.
+    const viaFind = (await ctx.engine.find('device', { where: { id: created.id } }))[0] as any;
+    expect(viaFind.admin_password).toBe(SECRET_MASK);
+    const viaOne = await ctx.engine.findOne('device', { where: { id: created.id } }) as any;
+    expect(viaOne.admin_password).toBe(SECRET_MASK);
+  });
+
+  it('an unset password reads back as null, not the mask', async () => {
+    const created = await ctx.engine.insert('device', { name: 'router', admin_password: null });
+    const viaOne = await ctx.engine.findOne('device', { where: { id: created.id } }) as any;
+    expect(viaOne.admin_password).toBeNull();
+  });
+
+  it('echoing the read mask back does NOT overwrite the stored password', async () => {
+    const created = await ctx.engine.insert('device', { name: 'router', admin_password: 'keep-me' });
+
+    // Form round-trip: user renames the device, the masked field echoes back.
+    await ctx.engine.update('device', { id: created.id, name: 'gateway', admin_password: SECRET_MASK });
+
+    const stored = ctx.stores.get('device')!.get(created.id) as any;
+    expect(stored.name).toBe('gateway');
+    expect(stored.admin_password).toBe('keep-me'); // unchanged plaintext
+  });
+
+  it('updating with a real new value replaces the stored plaintext', async () => {
+    const created = await ctx.engine.insert('device', { name: 'router', admin_password: 'old-pw' });
+    await ctx.engine.update('device', { id: created.id, admin_password: 'new-pw' });
+
+    const stored = ctx.stores.get('device')!.get(created.id) as any;
+    expect(stored.admin_password).toBe('new-pw');
+    // And a read still masks it.
+    const viaOne = await ctx.engine.findOne('device', { where: { id: created.id } }) as any;
+    expect(viaOne.admin_password).toBe(SECRET_MASK);
+  });
+
+  it('better-auth identity tables are exempt: their password field is NOT masked on read', async () => {
+    const created = await ctx.engine.insert('authy_user', { password: 'hashed-by-auth' });
+    const viaOne = await ctx.engine.findOne('authy_user', { where: { id: created.id } }) as any;
+    // Masking here would break login — the auth subsystem must read its own value.
+    expect(viaOne.password).toBe('hashed-by-auth');
+  });
+});
