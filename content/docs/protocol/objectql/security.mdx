@@ -405,7 +405,7 @@ Combine OWD (`sharingModel: private`), an RLS `using` policy, FLS (`readable: fa
 
 ### Security by Default
 
-Leave registry-level `systemFields` injection enabled (the object default) so multi-tenant objects auto-stamp `organization_id` on create, and use field `defaultValue` to seed ownership fields — so records are never left unscoped. (`owner`/`audit` injection keys on `systemFields` are reserved for future expansion; only `tenant` is active today — see `packages/spec/src/data/object.zod.ts`.)
+Leave registry-level `systemFields` injection enabled (the object default) so multi-tenant objects auto-stamp `organization_id` on create, and use field `defaultValue` to seed ownership fields — so records are never left unscoped. (`systemFields` accepts two opt-out keys — `tenant` and `audit` — both active; `owner_id` provisioning is governed separately by the object-level `ownership` property. See `packages/spec/src/data/object.zod.ts`.)
 
 ---
 

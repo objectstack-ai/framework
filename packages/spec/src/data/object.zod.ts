@@ -695,7 +695,6 @@ const ObjectSchemaBase = z.object({
       z.literal(false),
       z.object({
         tenant: z.boolean().optional().describe('Inject the organization_id column. Default true (the column is always provisioned; the multi-tenant flag governs only its index).'),
-        owner: z.boolean().optional().describe('Unwired: owner_id provisioning is governed by the object-level `ownership` property (`user`/`org`/`none`), not this key. Reserved.'),
         audit: z.boolean().optional().describe('Inject the audit columns (created_at/created_by/updated_at/updated_by). Default true.'),
       }),
     ])
