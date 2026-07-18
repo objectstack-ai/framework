@@ -105,6 +105,7 @@ the open framework.
 // Object data (RLS-enforced as the caller)
 'list_objects'      // List objects (system sys_* objects hidden by default)
 'describe_object'   // Object schema: fields + features
+'validate_expression' // Check a CEL expression against a schema before authoring it
 'query_records'     // Filter / sort / paginate
 'get_record'        // Fetch one by id
 'create_record' / 'update_record' / 'delete_record'
