@@ -10,20 +10,25 @@ import { ExpressionInputSchema } from '../shared/expression.zod';
 import { lazySchema } from '../shared/lazy-schema';
 import { HookBodySchema } from './hook-body.zod';
 export const HookEvent = z.enum([
-  // Read Operations
+  // Read — one event per read, regardless of shape. `beforeFind`/`afterFind`
+  // fire for BOTH `find` and `findOne` (the event attaches to record
+  // materialization, not to the engine method — Rails' `after_find` model), so
+  // a single subscription covers every read path. There is deliberately no
+  // per-method read event (`findOne`/`count`/`aggregate`): read authorization
+  // and row filtering are the RLS/permission middleware's job, and field
+  // masking is field-level metadata — not something every author re-implements
+  // as a hook. See #3195.
   'beforeFind', 'afterFind',
-  'beforeFindOne', 'afterFindOne',
-  'beforeCount', 'afterCount',
-  'beforeAggregate', 'afterAggregate',
 
-  // Write Operations
+  // Write — before/after per mutation kind. These fire on BOTH single-id and
+  // bulk (`multi: true`) writes: a bulk update/delete runs the SAME
+  // `beforeUpdate`/`beforeDelete`/`afterUpdate`/`afterDelete` with the
+  // row-scoping predicate carried in `input` (there is no per-cardinality
+  // `*Many` event — one write event covers one row or many, Salesforce's
+  // bulk-first model). See #3195.
   'beforeInsert', 'afterInsert',
   'beforeUpdate', 'afterUpdate',
   'beforeDelete', 'afterDelete',
-  
-  // Bulk Operations (Query-based)
-  'beforeUpdateMany', 'afterUpdateMany',
-  'beforeDeleteMany', 'afterDeleteMany',
 ]);
 
 /**
@@ -171,16 +176,21 @@ export const HookContextSchema = lazySchema(() => z.object({
   /** Current Lifecycle Event */
   event: HookEvent,
 
-  /** 
+  /**
    * Input Parameters (Mutable)
    * Modify this to change the behavior of the operation.
-   * 
-   * - find: { query: QueryAST, options: DriverOptions }
+   *
+   * - find (also fires for findOne): { ast: QueryAST, options: DriverOptions }
    * - insert: { doc: Record, options: DriverOptions }
-   * - update: { id: ID, doc: Record, options: DriverOptions }
-   * - delete: { id: ID, options: DriverOptions }
-   * - updateMany: { query: QueryAST, doc: Record, options: DriverOptions }
-   * - deleteMany: { query: QueryAST, options: DriverOptions }
+   * - update (single id): { id: ID, data: Record, options: DriverOptions }
+   * - update (bulk, multi:true): { ast: QueryAST, data: Record, options: DriverOptions }
+   * - delete (single id): { id: ID, options: DriverOptions }
+   * - delete (bulk, multi:true): { ast: QueryAST, options: DriverOptions }
+   *
+   * A bulk (`multi: true`) update/delete fires the SAME `beforeUpdate`/
+   * `beforeDelete` events as a single-id write — the row-scoping predicate is
+   * carried in `input.ast` (no per-row `id`). There is no separate `*Many`
+   * event.
    */
   input: z.record(z.string(), z.unknown()).describe('Mutable input parameters'),
 

@@ -530,6 +530,52 @@ describe('ObjectQL Engine', () => {
         });
     });
 
+    describe('Read hooks on findOne + registration guard (#3195)', () => {
+        beforeEach(async () => {
+            engine.registerDriver(mockDriver, true);
+            await engine.init();
+            vi.mocked(SchemaRegistry.getObject).mockReturnValue({ name: 'task', fields: {} } as any);
+        });
+
+        it('findOne fires beforeFind and afterFind (one read event covers find and findOne)', async () => {
+            (mockDriver.findOne as any).mockResolvedValue({ id: 't1', name: 'raw' });
+            const events: string[] = [];
+            engine.registerHook('beforeFind', async () => { events.push('beforeFind'); }, { object: 'task' });
+            engine.registerHook('afterFind', async () => { events.push('afterFind'); }, { object: 'task' });
+
+            await engine.findOne('task', { where: { id: 't1' } } as any);
+
+            expect(events).toEqual(['beforeFind', 'afterFind']);
+        });
+
+        it('afterFind hook can transform the findOne result', async () => {
+            (mockDriver.findOne as any).mockResolvedValue({ id: 't1', name: 'raw' });
+            engine.registerHook('afterFind', async (ctx: any) => {
+                if (ctx.result) ctx.result.name = 'masked';
+            }, { object: 'task' });
+
+            const out = await engine.findOne('task', { where: { id: 't1' } } as any);
+
+            expect(out).toMatchObject({ id: 't1', name: 'masked' });
+        });
+
+        it('warns when a hook subscribes to an event the engine never dispatches', () => {
+            const warn = vi.spyOn((engine as any).logger, 'warn');
+            engine.registerHook('beforeFindOne', async () => {}, { object: 'task' });
+            expect(warn).toHaveBeenCalledWith(
+                expect.stringContaining("'beforeFindOne'"),
+                expect.objectContaining({ event: 'beforeFindOne' }),
+            );
+        });
+
+        it('does not warn for a dispatchable event', () => {
+            const warn = vi.spyOn((engine as any).logger, 'warn');
+            engine.registerHook('beforeUpdate', async () => {}, { object: 'task' });
+            const warnedForUpdate = warn.mock.calls.some((c) => String(c[0]).includes("'beforeUpdate'"));
+            expect(warnedForUpdate).toBe(false);
+        });
+    });
+
     describe('Update hooks — previous-record snapshot', () => {
         beforeEach(async () => {
             engine.registerDriver(mockDriver, true);
