@@ -765,17 +765,17 @@ export class AppPlugin implements Plugin {
                  const metadataNow = ctx.getService('metadata') as IMetadataService | undefined;
                  const loggerRef = ctx.logger;
                  const replayer = async (organizationId: string) => {
-                     if (!organizationId) return { inserted: 0, updated: 0, errors: [] as any[] };
+                     if (!organizationId) return { inserted: 0, updated: 0, skipped: 0, errors: [] as any[] };
                      const md = metadataNow ?? (ctx.getService('metadata') as IMetadataService | undefined);
                      if (!md) {
                          loggerRef.warn('[seed-replayer] metadata service unavailable');
-                         return { inserted: 0, updated: 0, errors: [] as any[] };
+                         return { inserted: 0, updated: 0, skipped: 0, errors: [] as any[] };
                      }
                      const datasetsNow = (() => {
                          try { return kernel?.getService?.('seed-datasets'); } catch { return merged; }
                      })() ?? merged;
                      if (!Array.isArray(datasetsNow) || datasetsNow.length === 0) {
-                         return { inserted: 0, updated: 0, errors: [] as any[] };
+                         return { inserted: 0, updated: 0, skipped: 0, errors: [] as any[] };
                      }
                      const seedLoader = new SeedLoaderService(ql, md, loggerRef);
                      const { SeedLoaderRequestSchema } = await import('@objectstack/spec/data');
@@ -796,6 +796,12 @@ export class AppPlugin implements Plugin {
                      return {
                          inserted: result.summary.totalInserted,
                          updated: result.summary.totalUpdated,
+                         // `skipped` lets a cloud host distinguish an all-skip
+                         // replay (data already present) from the zero-summary
+                         // early-returns above (which never ran the loader), so
+                         // it can stamp its seed-once record on progress rather
+                         // than re-replaying every cold boot (cloud#853).
+                         skipped: result.summary.totalSkipped,
                          errors: result.errors,
                      };
                  };
