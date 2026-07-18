@@ -1,7 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 /**
- * Secret-field channel — helpers for the `secret` FieldType.
+ * Credential-field channels — helpers for the `secret` and `password` FieldTypes.
  *
  * A `secret` field (DB password, API key, token) is **reversible**: the engine
  * encrypts it on write via the registered `ICryptoProvider`, persists the
@@ -10,8 +10,19 @@
  * the Settings subsystem (`sys_setting.value_enc → sys_secret.id`), generalized
  * to object fields.
  *
- * Contrast with `password` — a one-way hash owned by the auth subsystem, never
- * decrypted. The two never share a code path.
+ * A `password` field on a **generic** (non-`better-auth`) object is **plaintext
+ * at rest** but **masked on read** — the engine stores the value verbatim (no
+ * encryption, no `sys_secret` row) yet returns {@link SECRET_MASK} through the
+ * normal query path, so cleartext never leaves the engine. This closes #2036,
+ * where a `password` field round-tripped plaintext. See ADR-0100. The two types
+ * share only the read mask ({@link collectMaskedReadFields}); their write paths
+ * differ (secret encrypts, password is left untouched).
+ *
+ * The auth subsystem's own credentials are a third, separate channel: better-auth
+ * one-way hashes them into identity tables (`sys_account.password`, a hashed
+ * `text` column) off the generic CRUD path. Objects it owns carry
+ * `managedBy: 'better-auth'` and are exempt from password masking so login reads
+ * still see the stored hash.
  */
 
 import type { ServiceObject } from '@objectstack/spec/data';
@@ -56,6 +67,33 @@ export function collectSecretFields(schema: ServiceObject | undefined | null): s
   const out: string[] = [];
   for (const [name, def] of Object.entries(fields)) {
     if (def && def.type === 'secret') out.push(name);
+  }
+  return out;
+}
+
+/**
+ * Collect the names of fields that must be masked to {@link SECRET_MASK} on the
+ * generic read path: every `secret` field, plus every `password` field — the
+ * latter only when the object is **not** `managedBy: 'better-auth'`.
+ *
+ * The better-auth exemption is deliberate: the auth subsystem reads its identity
+ * rows through the engine's find/findOne, and masking a credential column there
+ * would break login. Today no identity object even declares a `password`-typed
+ * field (`sys_account.password` is a hashed `text` column), but the guard keeps
+ * masking safe if that ever changes. See ADR-0100.
+ *
+ * Returns an empty array when the schema has no fields or no maskable fields, so
+ * callers can fast-path on `length === 0`.
+ */
+export function collectMaskedReadFields(schema: ServiceObject | undefined | null): string[] {
+  const fields = (schema as any)?.fields as Record<string, { type?: string }> | undefined;
+  if (!fields) return [];
+  const isBetterAuth = (schema as any)?.managedBy === 'better-auth';
+  const out: string[] = [];
+  for (const [name, def] of Object.entries(fields)) {
+    if (!def) continue;
+    if (def.type === 'secret') out.push(name);
+    else if (def.type === 'password' && !isBetterAuth) out.push(name);
   }
   return out;
 }

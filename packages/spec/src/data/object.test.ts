@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { ObjectSchema, ObjectCapabilities, IndexSchema, ObjectFieldGroupSchema, ObjectExternalBindingSchema, ObjectAccessConfigSchema, LifecycleSchema, TenancyConfigSchema, resolveCrudAffordances, type ServiceObject } from './object.zod';
 
 describe('ObjectCapabilities', () => {
@@ -1406,5 +1406,58 @@ describe('userActions row predicates + resolveCrudAffordances (objectui#2614)', 
       userActions: { edit: { hideWhen: 'record.frozen == true' } },
     });
     expect(result.success).toBe(false);
+  });
+});
+
+// ADR-0100: a `password` field on a generic (non-better-auth) object is masked
+// on read but plaintext at rest — not hashed. create() warns (non-fatally) to
+// steer authors toward `secret` or the auth subsystem. The warning is deduped
+// per object name via a module-level Set, so each test uses a unique name.
+describe('ObjectSchema.create() password-field author warning (ADR-0100)', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('warns once when a password field is declared on a generic object', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    ObjectSchema.create({
+      name: 'adr0100_generic_pw',
+      fields: { admin_password: { type: 'password' } },
+    });
+    expect(warn).toHaveBeenCalledTimes(1);
+    const msg = warn.mock.calls[0]?.[0] as string;
+    expect(msg).toContain('adr0100_generic_pw');
+    expect(msg).toContain('admin_password');
+    expect(msg).toContain('ADR-0100');
+    expect(msg).toContain('secret');
+  });
+
+  it('is deduped: re-creating the same object name warns only once more session-wide', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const make = () => ObjectSchema.create({
+      name: 'adr0100_dedup_pw',
+      fields: { pw: { type: 'password' } },
+    });
+    make();
+    make();
+    make();
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('does NOT warn for a password field on a better-auth object', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    ObjectSchema.create({
+      name: 'adr0100_auth_pw',
+      managedBy: 'better-auth',
+      fields: { password: { type: 'password' } },
+    });
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('does NOT warn for a secret field (its channel is already defined)', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    ObjectSchema.create({
+      name: 'adr0100_secret_only',
+      fields: { api_key: { type: 'secret' } },
+    });
+    expect(warn).not.toHaveBeenCalled();
   });
 });
