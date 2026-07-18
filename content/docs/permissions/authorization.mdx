@@ -210,7 +210,7 @@ one of two doors, each writing only what it owns:
 | 2 · Distribution / install / upgrade / uninstall | Install-consent scopes (ADR-0025 — consent ≠ RBAC grants); namespaced, collision-free composition; provenance axis makes uninstall well-defined | ADR-0025/0028/0048/0086 |
 | 3 · Environment composition / assignment | Platform-owned assignment records (`sys_user_position` etc.); anti-escalation; union semantics | ADR-0057 D4 |
 | 4 · Runtime enforcement | The six-gate chain above; ~18 primitives enforced and CI-guarded | ADR-0056 D10 matrix |
-| 5 · Production / enterprise | ADR-0056 D8 dispositions settled (2026-07): compliance configs, data masking, and the global RLSConfig were **removed** (never enforced); field encryption stays honestly `[EXPERIMENTAL]` (roadmap); agent `visibility` is marked `[EXPERIMENTAL]` pending #1901. Enterprise authentication hardening staged per ADR-0069 | ADR-0049/0056 D8, ADR-0069 |
+| 5 · Production / enterprise | ADR-0056 D8 dispositions settled (2026-07): compliance configs, data masking, the global RLSConfig, and agent `visibility` were **removed** (never enforced — for `visibility`, correct owner/org enforcement is undesigned, so it was dropped rather than carried; re-introduce under #1901); field encryption stays honestly `[EXPERIMENTAL]` (roadmap — stable schema shape). Enterprise authentication hardening staged per ADR-0069 | ADR-0049/0056 D8, ADR-0069 |
 
 ## Explaining a decision (ADR-0090 D6)
 

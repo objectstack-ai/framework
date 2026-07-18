@@ -154,10 +154,10 @@ export const AUTHZ_CONFORMANCE: AuthzPrimitive[] = [
   // ── Experimental — declared, NOT enforced (ADR-0049/0056 D8) ───────────
   { id: 'field-encryption', summary: 'at-rest field encryption', state: 'experimental',
     note: 'no crypto provider reads the config; marked [EXPERIMENTAL] (D8). Deliberately KEPT (2026-07 D8 disposition): at-rest encryption is a real enterprise roadmap item with a stable schema shape — removing and re-adding would cost more (ADR-0087) than carrying it marked.' },
-  { id: 'agent-visibility', summary: 'AI agent `visibility` listing scope (#1901)', state: 'experimental',
-    note: 'Intentionally NOT enforced — the chat-access evaluator excludes it (service-ai agent-access.ts) and the agent list route does not filter by it. Schema + authoring form carry EXPERIMENTAL banners (2026-07) so authors are told `private` does not hide the agent; `access`/`permissions` ARE enforced at the chat route (#1884). Enforce when the agent listing surface gains owner/org semantics — #1901.' },
 
   // ── Removed — by ADR-0056 D8 "design+enforce or remove" (2026-07) ──────
+  { id: 'agent-visibility', summary: 'AI agent `visibility` listing scope (#1901)', state: 'removed',
+    note: 'REMOVED from spec (agent.zod.ts `visibility` deleted, #1901). Never enforced — the chat-access evaluator excluded it and the agent list route did not filter by it, so `private` never hid an agent. Unlike field-encryption it has NO stable schema shape to preserve: correct enforcement needs owner/org anchors that do not exist (agents carry no owner field; the `EXTERNAL` posture rung is never derived), so the semantics — not just the plumbing — are undesigned. Per D8 a security-shaped field that lies is dropped, not carried marked. `access`/`permissions` ARE enforced at the chat route (#1884); re-introduce `visibility` when the listing surface gains real owner/org semantics.' },
   { id: 'compliance-configs', summary: 'GDPR/HIPAA/PCI configs', state: 'removed',
     note: 'REMOVED from spec (system/compliance.zod.ts deleted). Compliance-grade config must never merely look live: a parsed-but-dead `gdpr:` block is a liability in an audit. A real compliance subsystem will be designed top-down (data-subject rights engine, retention enforcer) when scheduled.' },
   { id: 'data-masking', summary: 'role-based data masking', state: 'removed',

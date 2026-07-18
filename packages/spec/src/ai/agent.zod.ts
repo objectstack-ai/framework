@@ -167,17 +167,21 @@ export const AgentSchema = lazySchema(() => z.object({
   /** Permission-set capabilities required to use this agent */
   permissions: z.array(z.string()).optional().describe('Required permission-set capabilities'),
 
-  // `tenantId` removed in the 16.x line (#2377, ADR-0049): it had no runtime
-  // reader and did NOT scope the agent to a tenant — tenancy comes from the
-  // request context (resolveAuthzContext), not this field.
-  // ⚠️ EXPERIMENTAL — NOT ENFORCED (#1901, ADR-0049). The chat-access evaluator
-  // deliberately excludes `visibility` (agent-access.ts) and the agent list
-  // route does not filter by it — setting `private` does NOT hide the agent.
-  // Use `access` / `permissions` (both ENFORCED at the chat route, #1884) to
-  // actually restrict who can use an agent. Enforcement needs owner/org
-  // semantics on the listing surface first; tracked in #1901.
-  visibility: z.enum(['global', 'organization', 'private']).default('organization')
-    .describe('[EXPERIMENTAL — NOT ENFORCED, #1901] Intended listing scope. No runtime consumer yet; use access/permissions for real gating.'),
+  // Two agent-scoping fields were REMOVED as unenforced security properties
+  // (ADR-0049 / ADR-0056 D8 "design+enforce or remove"), not merely marked:
+  //   • `tenantId` — 16.x line (#2377): had no runtime reader and did NOT scope
+  //     the agent to a tenant. Tenancy comes from the request context
+  //     (resolveAuthzContext), never a field on the artifact.
+  //   • `visibility` (`global`/`organization`/`private`) — removed 2026-07 (#1901).
+  //     No runtime consumer ever read it: the chat-access evaluator excluded it
+  //     and the agent list route did not filter by it, so `private` never hid an
+  //     agent. Enforcing it correctly needs owner/org anchors that do not exist
+  //     yet (agents have no owner field; the `EXTERNAL` posture rung is never
+  //     derived — see #1901). Carrying a security-shaped field that lies is a
+  //     liability, so it was dropped rather than left marked. Restrict who can
+  //     use an agent with `access` / `permissions` — both ENFORCED at the chat
+  //     route (#1884). Re-introduce `visibility` when the listing surface gains
+  //     real owner/org semantics.
 
   /** Autonomous Reasoning */
   planning: z.object({

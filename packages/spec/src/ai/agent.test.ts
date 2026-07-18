@@ -755,7 +755,6 @@ describe('defineAgent', () => {
       instructions: 'Testing agent.',
     });
     expect(result.active).toBe(true);
-    expect(result.visibility).toBe('organization');
   });
 
   it('should accept agent with tools', () => {

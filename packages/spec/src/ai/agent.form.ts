@@ -53,7 +53,6 @@ export const agentForm = defineForm({
       collapsible: true,
       collapsed: true,
       fields: [
-        { field: 'visibility', helpText: 'EXPERIMENTAL — not enforced yet (#1901): setting "private" does not hide the agent. Use Access / Permissions below for real gating.' },
         { field: 'access', widget: 'string-tags', helpText: 'User IDs or role names who can chat with this agent' },
         { field: 'permissions', widget: 'string-tags', helpText: 'Required permissions to use this agent' },
         { field: 'guardrails', type: 'composite', helpText: 'Safety rules and content policies' },

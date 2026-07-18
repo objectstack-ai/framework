@@ -83,7 +83,6 @@ const result = AIKnowledge.parse(data);
 | **active** | `boolean` | ✅ |  |
 | **access** | `string[]` | optional | Who can chat with this agent |
 | **permissions** | `string[]` | optional | Required permission-set capabilities |
-| **visibility** | `Enum<'global' \| 'organization' \| 'private'>` | ✅ | [EXPERIMENTAL — NOT ENFORCED, #1901] Intended listing scope. No runtime consumer yet; use access/permissions for real gating. |
 | **planning** | `{ maxIterations: integer }` | optional | Autonomous reasoning and planning configuration |
 | **memory** | `{ longTerm?: object; reflectionInterval?: integer }` | optional | Agent memory management |
 | **guardrails** | `{ maxTokensPerInvocation?: integer; maxExecutionTimeSec?: integer; blockedTopics?: string[] }` | optional | Safety guardrails for the agent |
