@@ -171,6 +171,26 @@ console.log(
 );
 EOF
 
+  # Diagnostics for the ERR_PNPM_IGNORED_BUILDS failure class (#3124). The
+  # scaffolded app declares NO packageManager field (deliberately — see the
+  # header), so the `pnpm` that runs HERE is NOT this repo's pinned 10.31.0:
+  # with corepack enabled, corepack resolves the LATEST pnpm for a directory
+  # with no pin (11.x today). That divergence is the whole reason #3124's local
+  # repro (pnpm 10.31/10.33 both honor the allowlist) never reproduced the CI
+  # red — CI runs a stricter pnpm major. Print the resolved version, the
+  # build-approval config pnpm actually parsed, and the file it parsed it from,
+  # so any future red run answers "which pnpm, and did it see the approvals?"
+  # on its own. Never let a diagnostic fail the smoke (|| true).
+  log "pnpm environment inside the app (no packageManager pin — corepack resolves latest)"
+  ( cd "$APP_DIR"
+    echo "  pnpm --version: $(pnpm --version 2>&1)"
+    echo "  build-approval config pnpm resolved (onlyBuiltDependencies):"
+    pnpm config list 2>/dev/null | grep -iE 'only-built|built-dependencies|strict-dep-builds' | sed 's/^/    /' \
+      || echo "    (no build-related config keys reported)"
+    echo "  pnpm-workspace.yaml as written:"
+    sed 's/^/    /' pnpm-workspace.yaml
+  ) || true
+
   log "Installing (pnpm, tarball-pinned)"
   (cd "$APP_DIR" && pnpm install --no-frozen-lockfile)
 
