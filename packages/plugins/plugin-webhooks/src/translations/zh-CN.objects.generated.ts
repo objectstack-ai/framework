@@ -26,11 +26,11 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
       },
       object_name: {
         label: "对象",
-        help: "触发该 Webhook 的短对象名（留空 = 手动 / API 触发）"
+        help: "触发该 Webhook 的记录事件（create/update/delete）的短对象名"
       },
       triggers: {
         label: "触发器",
-        help: "以逗号分隔的事件列表：create,update,delete,undelete,api"
+        help: "以逗号分隔的事件列表：create,update,delete"
       },
       url: {
         label: "目标 URL",

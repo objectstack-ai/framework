@@ -116,12 +116,12 @@ export const SysWebhook = ObjectSchema.create({
       // Object picker (same widget as sys_sharing_rule) instead of a free-text
       // machine name. Falls back to a text input when the widget is unavailable.
       widget: 'object-ref',
-      description: 'Short object name whose events fire this webhook (blank = manual / API-triggered)',
+      description: 'Short object name whose record events (create/update/delete) fire this webhook',
       group: 'Definition',
     }),
 
     triggers: Field.select(
-      ['create', 'update', 'delete', 'undelete', 'api'],
+      ['create', 'update', 'delete'],
       {
         label: 'Triggers',
         required: false,
@@ -129,7 +129,7 @@ export const SysWebhook = ObjectSchema.create({
         // an array; the auto-enqueuer parser also tolerates the legacy
         // comma-separated / JSON-string forms so existing rows keep working.
         multiple: true,
-        description: 'Record events that fire this webhook (empty = manual / API-triggered)',
+        description: 'Record events that fire this webhook',
         group: 'Definition',
       },
     ),

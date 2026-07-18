@@ -26,11 +26,11 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
       },
       object_name: {
         label: "Objeto",
-        help: "Nombre corto del objeto cuyos eventos activan este Webhook (vacío = activación manual / API)."
+        help: "Nombre corto del objeto cuyos eventos de registro (create/update/delete) activan este Webhook."
       },
       triggers: {
         label: "Desencadenantes",
-        help: "Lista de eventos separada por comas: create,update,delete,undelete,api."
+        help: "Lista de eventos separada por comas: create,update,delete."
       },
       url: {
         label: "URL de destino",

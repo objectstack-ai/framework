@@ -26,11 +26,11 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
       },
       object_name: {
         label: "オブジェクト",
-        help: "このウェブフックを発火するイベントのオブジェクト短縮名（空白 = 手動 / API トリガー）"
+        help: "このウェブフックを発火するレコードイベント（create/update/delete）のオブジェクト短縮名"
       },
       triggers: {
         label: "トリガー",
-        help: "カンマ区切りのイベントリスト: create,update,delete,undelete,api"
+        help: "カンマ区切りのイベントリスト: create,update,delete"
       },
       url: {
         label: "ターゲット URL",

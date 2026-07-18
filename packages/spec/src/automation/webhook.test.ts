@@ -9,11 +9,19 @@ import {
 
 describe('WebhookTriggerType', () => {
   it('should accept valid trigger types', () => {
-    const validTypes = ['create', 'update', 'delete', 'undelete', 'api'];
+    const validTypes = ['create', 'update', 'delete'];
 
     validTypes.forEach(type => {
       expect(() => WebhookTriggerType.parse(type)).not.toThrow();
     });
+  });
+
+  it('should reject undelete / api — removed, no event source (#3196)', () => {
+    // `undelete` had no soft-delete/restore producer; `api` had no manual fire
+    // path. Removed rather than left as silent no-ops — authoring one now fails
+    // loudly instead of registering a webhook that never fires.
+    expect(() => WebhookTriggerType.parse('undelete')).toThrow();
+    expect(() => WebhookTriggerType.parse('api')).toThrow();
   });
 
   it('should reject invalid trigger types', () => {
@@ -121,11 +129,11 @@ describe('WebhookSchema', () => {
     const webhook = WebhookSchema.parse({
       name: 'multi_trigger_webhook',
       object: 'account',
-      triggers: ['create', 'update', 'delete', 'undelete'],
+      triggers: ['create', 'update', 'delete'],
       url: 'https://example.com/webhook',
     });
 
-    expect(webhook.triggers).toHaveLength(4);
+    expect(webhook.triggers).toHaveLength(3);
   });
 
   it('should accept HMAC secret for signing', () => {

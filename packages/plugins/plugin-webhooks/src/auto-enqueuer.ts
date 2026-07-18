@@ -28,8 +28,8 @@ interface OptionalLogger {
 interface CachedSubscription {
     id: string;
     name: string;
-    objectName: string | undefined; // empty = matches all objects (manual-only is filtered out earlier)
-    triggers: Set<'create' | 'update' | 'delete' | 'undelete'>;
+    objectName: string | undefined; // empty = matches all objects
+    triggers: Set<'create' | 'update' | 'delete'>;
     url: string;
     method?: string;
     headers?: Record<string, string>;
@@ -226,13 +226,26 @@ export class AutoEnqueuer {
                 triggerList = s.split(',');
             }
         }
+        const normalized = triggerList.map((t) => t.trim().toLowerCase()).filter(Boolean);
+        // [#3196] Drop (and warn about) any trigger the enqueuer can't map to an
+        // emitted record event — e.g. a legacy `sys_webhook` row authored with
+        // the now-removed `undelete`/`api` values, which would otherwise sit in
+        // the cache matching nothing. A loud drift-guard so a dead trigger can't
+        // silently no-op again.
+        const unknown = normalized.filter((t) => !DISPATCHABLE_WEBHOOK_TRIGGERS.has(t));
+        if (unknown.length > 0) {
+            this.logger.warn?.(
+                `[webhook-auto-enqueuer] webhook '${(row.name as string) ?? row.id}' declares trigger(s) the engine never emits: ` +
+                    `${unknown.join(', ')} — ignored. Dispatchable triggers: create, update, delete.`,
+                { id: row.id, unknown },
+            );
+        }
         const triggers = new Set(
-            triggerList
-                .map((t) => t.trim().toLowerCase())
-                .filter(Boolean) as Array<'create' | 'update' | 'delete' | 'undelete'>,
+            normalized.filter((t) => DISPATCHABLE_WEBHOOK_TRIGGERS.has(t)) as Array<'create' | 'update' | 'delete'>,
         );
         if (triggers.size === 0) {
-            // Manual-only webhook (no triggers) — skip auto-enqueue.
+            // No dispatchable triggers (or a manual-only webhook with none) —
+            // skip auto-enqueue.
             return null;
         }
 
@@ -278,7 +291,7 @@ export class AutoEnqueuer {
         if (event.object === this.subscriptionsObject) return; // self-heal handles its own
 
         const action = event.type.slice('data.record.'.length) as
-            | 'created' | 'updated' | 'deleted' | 'undeleted' | string;
+            | 'created' | 'updated' | 'deleted' | string;
         const trigger = mapActionToTrigger(action);
         if (!trigger) return;
 
@@ -353,7 +366,7 @@ export class AutoEnqueuer {
 
 function mapActionToTrigger(
     action: string,
-): 'create' | 'update' | 'delete' | 'undelete' | null {
+): 'create' | 'update' | 'delete' | null {
     switch (action) {
         case 'created':
             return 'create';
@@ -361,9 +374,10 @@ function mapActionToTrigger(
             return 'update';
         case 'deleted':
             return 'delete';
-        case 'undeleted':
-            return 'undelete';
         default:
             return null;
     }
 }
+
+/** The trigger values the enqueuer can actually map from an emitted record event. */
+const DISPATCHABLE_WEBHOOK_TRIGGERS: ReadonlySet<string> = new Set(['create', 'update', 'delete']);

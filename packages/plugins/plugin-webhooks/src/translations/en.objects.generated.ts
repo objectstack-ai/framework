@@ -26,11 +26,11 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
       },
       object_name: {
         label: "Object",
-        help: "Short object name whose events fire this webhook (blank = manual / API-triggered)"
+        help: "Short object name whose record events (create/update/delete) fire this webhook"
       },
       triggers: {
         label: "Triggers",
-        help: "Comma-separated event list: create,update,delete,undelete,api"
+        help: "Comma-separated event list: create,update,delete"
       },
       url: {
         label: "Target URL",

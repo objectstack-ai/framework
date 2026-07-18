@@ -184,7 +184,7 @@ Circuit breaker configuration
 | **triggers** | `{ key: string; label: string; description?: string; type: Enum<'polling' \| 'webhook'>; … }[]` | optional |  |
 | **syncConfig** | `{ strategy?: Enum<'full' \| 'incremental' \| 'upsert' \| 'append_only'>; direction?: Enum<'import' \| 'export' \| 'bidirectional'>; schedule?: string \| { dialect: Enum<'cel' \| 'js' \| 'cron' \| 'template'>; source?: string; ast?: any; meta?: object }; realtimeSync?: boolean; … }` | optional | Data sync configuration |
 | **fieldMappings** | `{ source: string; target: string; transform?: { type: 'constant'; value: any } \| { type: 'cast'; targetType: Enum<'string' \| 'number' \| 'boolean' \| 'date'> } \| { type: 'lookup'; table: string; keyField: string; valueField: string } \| { type: 'javascript'; expression: string \| { dialect: Enum<'cel' \| 'js' \| 'cron' \| 'template'>; source?: string; ast?: any; meta?: object } } \| { type: 'map'; mappings: Record<string, any> }; defaultValue?: any; … }[]` | optional | Field mapping rules |
-| **webhooks** | `{ name: string; label?: string; object?: string; triggers?: Enum<'create' \| 'update' \| 'delete' \| 'undelete' \| 'api'>[]; … }[]` | optional | Webhook configurations |
+| **webhooks** | `{ name: string; label?: string; object?: string; triggers?: Enum<'create' \| 'update' \| 'delete'>[]; … }[]` | optional | Webhook configurations |
 | **rateLimitConfig** | `{ strategy?: Enum<'fixed_window' \| 'sliding_window' \| 'token_bucket' \| 'leaky_bucket'>; maxRequests: number; windowSeconds: number; burstCapacity?: number; … }` | optional | Rate limiting configuration |
 | **retryConfig** | `{ strategy?: Enum<'exponential_backoff' \| 'linear_backoff' \| 'fixed_delay' \| 'no_retry'>; maxAttempts?: number; initialDelayMs?: number; maxDelayMs?: number; … }` | optional | Retry configuration |
 | **connectionTimeoutMs** | `number` | optional | Connection timeout in ms |
@@ -310,7 +310,7 @@ Connector type
 | **triggers** | `{ key: string; label: string; description?: string; type: Enum<'polling' \| 'webhook'>; … }[]` | optional |  |
 | **syncConfig** | `{ strategy?: Enum<'full' \| 'incremental' \| 'upsert' \| 'append_only'>; direction?: Enum<'import' \| 'export' \| 'bidirectional'>; schedule?: string \| { dialect: Enum<'cel' \| 'js' \| 'cron' \| 'template'>; source?: string; ast?: any; meta?: object }; realtimeSync?: boolean; … }` | optional | Data sync configuration |
 | **fieldMappings** | `{ source: string; target: string; transform?: { type: 'constant'; value: any } \| { type: 'cast'; targetType: Enum<'string' \| 'number' \| 'boolean' \| 'date'> } \| { type: 'lookup'; table: string; keyField: string; valueField: string } \| { type: 'javascript'; expression: string \| { dialect: Enum<'cel' \| 'js' \| 'cron' \| 'template'>; source?: string; ast?: any; meta?: object } } \| { type: 'map'; mappings: Record<string, any> }; defaultValue?: any; … }[]` | optional | Field mapping rules |
-| **webhooks** | `{ name: string; label?: string; object?: string; triggers?: Enum<'create' \| 'update' \| 'delete' \| 'undelete' \| 'api'>[]; … }[]` | optional | Webhook configurations |
+| **webhooks** | `{ name: string; label?: string; object?: string; triggers?: Enum<'create' \| 'update' \| 'delete'>[]; … }[]` | optional | Webhook configurations |
 | **rateLimitConfig** | `{ strategy?: Enum<'fixed_window' \| 'sliding_window' \| 'token_bucket' \| 'leaky_bucket'>; maxRequests: number; windowSeconds: number; burstCapacity?: number; … }` | optional | Rate limiting configuration |
 | **retryConfig** | `{ strategy?: Enum<'exponential_backoff' \| 'linear_backoff' \| 'fixed_delay' \| 'no_retry'>; maxAttempts?: number; initialDelayMs?: number; maxDelayMs?: number; … }` | optional | Retry configuration |
 | **connectionTimeoutMs** | `number` | optional | Connection timeout in ms |
@@ -465,8 +465,8 @@ Synchronization strategy
 | :--- | :--- | :--- | :--- |
 | **name** | `string` | ✅ | Webhook unique name (lowercase snake_case) |
 | **label** | `string` | optional | Human-readable webhook label |
-| **object** | `string` | optional | Object to listen to (optional for manual webhooks) |
-| **triggers** | `Enum<'create' \| 'update' \| 'delete' \| 'undelete' \| 'api'>[]` | optional | Events that trigger execution |
+| **object** | `string` | optional | Object whose record events (create/update/delete) trigger this webhook |
+| **triggers** | `Enum<'create' \| 'update' \| 'delete'>[]` | optional | Events that trigger execution |
 | **url** | `string` | ✅ | External webhook endpoint URL |
 | **method** | `Enum<'GET' \| 'POST' \| 'PUT' \| 'PATCH' \| 'DELETE'>` | ✅ | HTTP method |
 | **headers** | `Record<string, string>` | optional | Custom HTTP headers |

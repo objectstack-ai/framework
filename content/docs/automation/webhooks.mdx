@@ -93,8 +93,8 @@ in `definition_json`, a serialised `Webhook` JSON (canonical schema:
 | `id`              | text      | Primary key.                                                                       |
 | `name`            | text      | Unique snake_case name — referenced in logs and audit.                             |
 | `label`           | text      | Optional display label.                                                            |
-| `object_name`     | text      | Short object name whose events fire this webhook (blank = manual / API-triggered). |
-| `triggers`        | text      | Comma-separated event list: `create,update,delete,undelete,api`.                   |
+| `object_name`     | text      | Short object name whose record events fire this webhook.                           |
+| `triggers`        | text      | Comma-separated event list: `create,update,delete`.                                |
 | `url`             | text      | External endpoint that receives the POST.                                          |
 | `method`          | text      | HTTP method. Default `POST`.                                                        |
 | `description`     | textarea  | Free-text description.                                                              |
@@ -321,7 +321,7 @@ Notes:
 
 - **`object`** — short object name the event came from.
 - **`recordId`** — id of the affected record.
-- **`action`** — `created` / `updated` / `deleted` / `undeleted`.
+- **`action`** — `created` / `updated` / `deleted`.
 - **`timestamp`** — event timestamp, an ISO 8601 string (passed through
   unchanged from the originating realtime event's `timestamp` field — not
   an epoch-ms number).

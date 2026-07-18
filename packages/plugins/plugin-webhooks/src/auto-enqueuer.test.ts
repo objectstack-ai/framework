@@ -292,6 +292,43 @@ describe('AutoEnqueuer', () => {
         await ae.stop();
     });
 
+    it('warns and ignores a legacy trigger the engine never emits (#3196)', async () => {
+        // A row authored before undelete/api were removed keeps its valid
+        // triggers; the dead ones are dropped with a warning (drift-guard).
+        const engine = new FakeEngine({
+            sys_webhook: [webhook({ triggers: 'create,undelete,api' })],
+        });
+        const realtime = new FakeRealtime();
+        const { enqueue, calls } = makeRecorder();
+        const warn = vi.fn();
+        const ae = new AutoEnqueuer(engine, realtime, enqueue, { refreshIntervalMs: 0, logger: { warn } });
+        await ae.start();
+
+        await realtime.publish(event('created', 'contact', { id: 'c-1' }));
+        await flush();
+
+        expect(calls).toHaveLength(1); // the valid `create` trigger still fires
+        expect(warn).toHaveBeenCalledWith(
+            expect.stringContaining('undelete'),
+            expect.objectContaining({ unknown: expect.arrayContaining(['undelete', 'api']) }),
+        );
+        await ae.stop();
+    });
+
+    it('skips a webhook whose only triggers are removed values (#3196)', async () => {
+        const engine = new FakeEngine({ sys_webhook: [webhook({ triggers: 'undelete,api' })] });
+        const realtime = new FakeRealtime();
+        const { enqueue, calls } = makeRecorder();
+        const ae = new AutoEnqueuer(engine, realtime, enqueue, { refreshIntervalMs: 0 });
+        await ae.start();
+
+        await realtime.publish(event('created', 'contact', { id: 'c-1' }));
+        await flush();
+
+        expect(calls).toHaveLength(0);
+        await ae.stop();
+    });
+
     it('self-heals the cache when sys_webhook changes', async () => {
         const engine = new FakeEngine({ sys_webhook: [] });
         const realtime = new FakeRealtime();
