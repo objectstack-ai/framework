@@ -14,6 +14,15 @@ import { parseAutonumberFormat, renderAutonumber, missingFieldValues } from '@ob
 import { ExecutionContext, ExecutionContextSchema } from '@objectstack/spec/kernel';
 import { IDataDriver, IDataEngine, Logger, createLogger, withTransientRetry, type RetryOptions } from '@objectstack/core';
 import { SummaryRecomputeError, type SummaryRecomputeFailure } from './summary-errors.js';
+
+/**
+ * Per-row outcome of {@link ObjectQL.insertMany} (framework#3172). One entry
+ * per input row, in input order: written rows carry the after-hook record,
+ * failed rows carry the per-row error (validation / autonumber / encryption).
+ */
+export type InsertManyRowOutcome =
+  | { ok: true; record: any }
+  | { ok: false; error: unknown };
 import { CoreServiceName, StorageNameMapping } from '@objectstack/spec/system';
 import { IRealtimeService, RealtimeEventPayload } from '@objectstack/spec/contracts';
 import type { ICryptoProvider, CryptoHandle } from '@objectstack/spec/contracts';
@@ -2277,7 +2286,7 @@ export class ObjectQL implements IDataEngine {
       }
 
       try {
-        let result;
+        let result: any;
         const schemaForValidation = this._registry.getObject(object);
         // When the driver generates autonumbers natively (persistent SQL
         // sequence), the engine defers to it — see #1603.
@@ -2285,13 +2294,32 @@ export class ObjectQL implements IDataEngine {
         // Defaults are already resolved above (pre-hook, #2703); a hook may
         // have overridden fields or replaced `input.data` — take its data as-is.
         const rows = rowHookContexts.map((rowCtx) => rowCtx.input.data as Record<string, unknown>);
-        for (const r of rows) {
-          await this.encryptSecretFields(object, r, opCtx.context, driverOptions);
+        // Partial-success mode (framework#3172, entered via insertMany): a row
+        // that fails validation is culled and reported per-row instead of
+        // aborting the whole batch — so a bulkWrite caller never needs the
+        // whole-batch degradation that re-runs beforeInsert hooks on the good
+        // rows. rowErrors[i] set = row i is dead; only live rows reach the
+        // driver / afterInsert / summaries.
+        const partialMode = isBatch && (options as any)?.__partialRowErrors === true;
+        const rowErrors: (unknown | undefined)[] = new Array(rows.length);
+        for (let i = 0; i < rows.length; i++) {
+          try {
+            await this.encryptSecretFields(object, rows[i], opCtx.context, driverOptions);
+          } catch (e) {
+            if (!partialMode) throw e;
+            rowErrors[i] = e;
+          }
         }
-        for (const r of rows) {
-          normalizeMultiValueFields(schemaForValidation, r);
-          validateRecord(schemaForValidation, r, 'insert');
-          evaluateValidationRules(schemaForValidation as any, r, 'insert', { logger: this.logger, currentUser: this.buildEvalUser(opCtx.context) });
+        for (let i = 0; i < rows.length; i++) {
+          if (rowErrors[i] !== undefined) continue;
+          try {
+            normalizeMultiValueFields(schemaForValidation, rows[i]);
+            validateRecord(schemaForValidation, rows[i], 'insert');
+            evaluateValidationRules(schemaForValidation as any, rows[i], 'insert', { logger: this.logger, currentUser: this.buildEvalUser(opCtx.context) });
+          } catch (e) {
+            if (!partialMode) throw e;
+            rowErrors[i] = e;
+          }
         }
         // Autonumbers are assigned AFTER validation (framework#3152): in the
         // batch path a bulkWrite retry / per-row degradation re-runs the whole
@@ -2300,19 +2328,33 @@ export class ObjectQL implements IDataEngine {
         // failed attempt, leaving gaps. Required-validation exempts autonumber
         // fields either way (they are engine-assigned), and a driver that owns
         // autonumber assigns nothing here — so no validation rule can depend on
-        // the value, making this reorder safe.
-        for (const r of rows) {
-          await this.applyAutonumbers(object, r, opCtx.context, driverOwnsAutonumber);
+        // the value, making this reorder safe. In partial mode dead rows are
+        // skipped, so they never consume a sequence value either.
+        for (let i = 0; i < rows.length; i++) {
+          if (rowErrors[i] !== undefined) continue;
+          try {
+            await this.applyAutonumbers(object, rows[i], opCtx.context, driverOwnsAutonumber);
+          } catch (e) {
+            if (!partialMode) throw e;
+            rowErrors[i] = e;
+          }
         }
+        // Live rows = the ones that survived per-row preparation. In
+        // non-partial mode rowErrors is all-empty, so this is exactly `rows`.
+        const liveIndexes: number[] = [];
+        for (let i = 0; i < rows.length; i++) if (rowErrors[i] === undefined) liveIndexes.push(i);
+        const liveRows = liveIndexes.map((i) => rows[i]);
         if (isBatch) {
-          if (driver.bulkCreate) {
-               result = await driver.bulkCreate(object, rows, driverOptions);
+          if (liveRows.length === 0) {
+               result = [];
+          } else if (driver.bulkCreate) {
+               result = await driver.bulkCreate(object, liveRows, driverOptions);
           } else {
                // Fallback loop
-               result = await Promise.all(rows.map((item) => driver.create(object, item, driverOptions)));
+               result = await Promise.all(liveRows.map((item) => driver.create(object, item, driverOptions)));
           }
         } else {
-          result = await driver.create(object, rows[0], driverOptions);
+          result = await driver.create(object, liveRows[0], driverOptions);
         }
 
         // Driver-result contract guard (framework#3151): a batch write must
@@ -2323,12 +2365,12 @@ export class ObjectQL implements IDataEngine {
         // Refuse it: throw so the caller sees a real failure rather than
         // silent data loss. (Every driver in this repo already returns
         // one-per-row in order; this defends against third-party drivers.)
-        if (isBatch && (!Array.isArray(result) || result.length !== rows.length)) {
+        if (isBatch && (!Array.isArray(result) || result.length !== liveRows.length)) {
           throw Object.assign(
             new Error(
               `bulkCreate for '${object}' returned ${
                 Array.isArray(result) ? `${result.length} record(s)` : String(typeof result)
-              } for ${rows.length} input row(s) — refusing to fabricate afterInsert contexts`,
+              } for ${liveRows.length} input row(s) — refusing to fabricate afterInsert contexts`,
             ),
             { code: 'ERR_BULK_RESULT_MISMATCH' },
           );
@@ -2338,11 +2380,13 @@ export class ObjectQL implements IDataEngine {
         // the after-hook view so flow trigger conditions (`record.is_escalated
         // != true`) and `{record.<bool>}` interpolation see JS booleans, not
         // ints. A shallow copy — the value returned to the caller is untouched.
+        // Only live rows have results — dead (partial-mode) rows never reach
+        // afterInsert.
         const resultRows: any[] = isBatch ? (Array.isArray(result) ? result : [result]) : [result];
-        for (let i = 0; i < rowHookContexts.length; i++) {
-          const rowCtx = rowHookContexts[i];
+        for (let k = 0; k < liveIndexes.length; k++) {
+          const rowCtx = rowHookContexts[liveIndexes[k]];
           rowCtx.event = 'afterInsert';
-          rowCtx.result = coerceBooleanFields(schemaForValidation as any, resultRows[i] as any);
+          rowCtx.result = coerceBooleanFields(schemaForValidation as any, resultRows[k] as any);
           await this.triggerHooks('afterInsert', rowCtx);
         }
 
@@ -2386,8 +2430,16 @@ export class ObjectQL implements IDataEngine {
         }
 
         // Return the (possibly hook-mutated) after-view: the array of per-row
-        // results for batch, the single record otherwise.
-        const written = isBatch ? rowHookContexts.map((rowCtx) => rowCtx.result) : rowHookContexts[0].result;
+        // results for batch, the single record otherwise. In partial mode the
+        // batch return is instead one outcome PER INPUT ROW ({ok,record} /
+        // {ok:false,error}), in input order (framework#3172).
+        const written = isBatch
+          ? (partialMode
+              ? rows.map((_r, i) => (rowErrors[i] === undefined
+                  ? { ok: true as const, record: rowHookContexts[i].result }
+                  : { ok: false as const, error: rowErrors[i] }))
+              : rowHookContexts.map((rowCtx) => rowCtx.result))
+          : rowHookContexts[0].result;
         // Records ARE written; a summary that could not be recomputed after
         // retries must not be silent (framework#3147). Thrown after realtime
         // publish, carrying the written records so a bulk caller (seed/import)
@@ -2401,6 +2453,25 @@ export class ObjectQL implements IDataEngine {
     });
 
     return opCtx.result;
+  }
+
+  /**
+   * Batch insert with PARTIAL SUCCESS (framework#3172): unlike
+   * `insert(object, rows[])` — which aborts the whole batch when any row
+   * fails validation — this culls the bad rows after beforeInsert, writes the
+   * survivors in one driver batch, and returns one outcome per input row in
+   * input order. beforeInsert hooks therefore run exactly ONCE per row even
+   * when the batch contains bad rows (no whole-batch degradation re-run), and
+   * dead rows never consume an autonumber sequence value. afterInsert hooks,
+   * summary recompute, and realtime events fire only for the written rows.
+   *
+   * A summary-recompute failure after retries still throws
+   * {@link SummaryRecomputeError} (framework#3147) with `written` set to the
+   * outcome array — the records ARE written.
+   */
+  async insertMany(object: string, rows: any[], options?: DataEngineInsertOptions): Promise<InsertManyRowOutcome[]> {
+    if (!Array.isArray(rows)) throw new Error('insertMany expects an array of rows');
+    return this.insert(object, rows, { ...(options ?? {}), __partialRowErrors: true } as any);
   }
 
   async update(object: string, data: any, options?: EngineUpdateOptions): Promise<any> {

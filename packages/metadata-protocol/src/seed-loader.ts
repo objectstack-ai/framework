@@ -271,17 +271,15 @@ export class SeedLoaderService implements ISeedLoaderService {
     let lastBatchUncertain = false;
     const isUncertainOutcome = (e: unknown) =>
       defaultIsTransientError(e) || (e as { code?: unknown } | null)?.code === 'ERR_BULK_RESULT_MISMATCH';
-    // Reassemble one record per input row in order: rows already present are
-    // represented by the existing record; the rest are consumed in order from
-    // the freshly-inserted list.
-    const assembleInOrder = (rows: Record<string, unknown>[], existing: Map<string, any>, freshlyInserted: any[]): any[] => {
-      let k = 0;
-      return rows.map((r) => {
-        const key = extIdOf(r);
-        if (key && existing.has(key)) return existing.get(key);
-        return freshlyInserted[k++];
-      });
-    };
+    // Partial-success entry (framework#3172): when the engine offers
+    // insertMany, a row that fails validation is a final per-row verdict from
+    // ONE batch call — bulkWrite never degrades, so beforeInsert hooks run
+    // exactly once per row. Feature-detected so a legacy engine (tests, other
+    // IDataEngine impls) falls back to the whole-array insert + degradation.
+    const engineInsertMany: ((o: string, rows: any[], op: any) => Promise<Array<{ ok: boolean; record?: any; error?: unknown }>>) | undefined =
+      typeof (this.engine as any).insertMany === 'function'
+        ? (o, rows, op) => (this.engine as any).insertMany(o, rows, op)
+        : undefined;
     const flushPendingInserts = async (): Promise<void> => {
       if (pendingInserts.length === 0) return;
       const batch = pendingInserts.splice(0, pendingInserts.length);
@@ -289,7 +287,7 @@ export class SeedLoaderService implements ISeedLoaderService {
         batch.map(b => b.record),
         {
           batchSize: SeedLoaderService.BULK_BATCH_SIZE,
-          writeBatch: async (rows, { attempt }) => {
+          writeBatchPartial: async (rows, { attempt }) => {
             let toInsert = rows;
             let existing = new Map<string, any>();
             if (attempt > 1) {
@@ -299,20 +297,41 @@ export class SeedLoaderService implements ISeedLoaderService {
               toInsert = rows.filter((r) => { const k = extIdOf(r); return !(k && existing.has(k)); });
             }
             try {
-              // A lone row keeps the historical bare-record insert() call shape
-              // (no array wrapping) so single-record datasets are byte-for-byte
-              // unchanged; only a real batch (>1) uses the array/bulk form.
-              const freshlyInserted = toInsert.length === 0
-                ? []
-                : toInsert.length === 1
+              let freshOutcomes: Array<{ ok: boolean; record?: any; error?: unknown }>;
+              if (toInsert.length === 0) {
+                freshOutcomes = [];
+              } else if (engineInsertMany) {
+                // Partial-success batch: per-row verdicts, hooks fire once.
+                // On ERR_SUMMARY_RECOMPUTE, writeRecoveringSummary hands back
+                // e.written — which for insertMany IS the outcome array.
+                freshOutcomes = await this.writeRecoveringSummary(() => engineInsertMany(objectName, toInsert, opts));
+              } else {
+                // Legacy whole-array insert: any bad row throws the batch, and
+                // bulkWrite's per-row degradation (writeOne) sorts it out. A
+                // lone row keeps the historical bare-record insert() shape.
+                const recs = toInsert.length === 1
                   ? [await this.writeRecoveringSummary(() => this.engine.insert(objectName, toInsert[0], opts))]
                   : await this.writeRecoveringSummary(() => this.engine.insert(objectName, toInsert, opts));
+                freshOutcomes = (recs as any[]).map((r) => ({ ok: true, record: r }));
+              }
               lastBatchUncertain = false;
-              return assembleInOrder(rows, existing, freshlyInserted as any[]);
+              // Reassemble one outcome per input row in order: recheck hits use
+              // the existing record; the rest consume freshOutcomes in order.
+              let k = 0;
+              return rows.map((r) => {
+                const key = extIdOf(r);
+                if (key && existing.has(key)) return { ok: true, record: existing.get(key) };
+                return freshOutcomes[k++];
+              });
             } catch (e) {
               lastBatchUncertain = isUncertainOutcome(e);
               throw e;
             }
+          },
+          writeBatch: async () => {
+            // Unreachable — writeBatchPartial above takes precedence — but the
+            // BulkWriteOptions contract requires it.
+            throw new Error('seed-loader uses writeBatchPartial');
           },
           writeOne: async (row, { attempt }) => {
             if (attempt > 1 || lastBatchUncertain) {

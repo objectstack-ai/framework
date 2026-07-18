@@ -79,6 +79,21 @@ export interface BulkWriteOptions<TRow, TRecord = any> extends RetryOptions {
    * carries the same recheck signal as {@link writeBatch}.
    */
   writeOne: (row: TRow, ctx: { attempt: number }) => Promise<TRecord>;
+  /**
+   * Partial-success batch write (framework#3172). When provided it is used
+   * INSTEAD of {@link writeBatch}: it must resolve one outcome per input row,
+   * in input order — `{ ok: true, record }` for written rows, `{ ok: false,
+   * error }` for rows that failed individually (e.g. validation). Per-row
+   * failures are final verdicts: bulkWrite records them as-is and does NOT
+   * degrade to `writeOne` for them — that is the whole point (a degradation
+   * re-run would re-fire beforeInsert hooks on the good rows). Only a THROWN
+   * error (a transient infra failure, a result-count mismatch) falls back to
+   * the per-row `writeOne` degradation, exactly like `writeBatch`.
+   */
+  writeBatchPartial?: (
+    batch: TRow[],
+    ctx: { attempt: number },
+  ) => Promise<Array<{ ok: boolean; record?: TRecord; error?: unknown }>>;
 }
 
 const DEFAULT_BATCH_SIZE = 200;
@@ -202,6 +217,29 @@ export async function bulkWrite<TRow, TRecord = any>(
   for (let start = 0; start < rows.length; start += batchSize) {
     const batch = rows.slice(start, start + batchSize);
     try {
+      // Partial-success path (framework#3172): one call yields a final per-row
+      // verdict, so a row that fails validation never triggers the whole-batch
+      // degradation that re-runs beforeInsert hooks on its siblings.
+      if (opts.writeBatchPartial) {
+        const outcomes = await withRetry((attempt) => opts.writeBatchPartial!(batch, { attempt }), retryOpts);
+        if (!Array.isArray(outcomes) || outcomes.length !== batch.length) {
+          throw Object.assign(
+            new Error(
+              `bulkWrite: writeBatchPartial returned ${
+                Array.isArray(outcomes) ? `${outcomes.length} outcome(s)` : String(typeof outcomes)
+              } for a ${batch.length}-row batch — treating batch as failed`,
+            ),
+            { code: 'ERR_BULK_RESULT_MISMATCH' },
+          );
+        }
+        for (let i = 0; i < batch.length; i++) {
+          const o = outcomes[i];
+          results[start + i] = o.ok
+            ? { index: start + i, ok: true, record: o.record }
+            : { index: start + i, ok: false, error: o.error };
+        }
+        continue;
+      }
       const records = await withRetry((attempt) => opts.writeBatch(batch, { attempt }), retryOpts);
       // Contract guard (framework#3151): `writeBatch` must resolve one record
       // per input row. A short / long / non-array return breaks the positional

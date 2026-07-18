@@ -3265,6 +3265,34 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             count: records.length
         };
     }
+
+    /**
+     * Partial-success bulk create (framework#3172): like createManyData, but a
+     * row that fails validation is a per-row verdict instead of aborting the
+     * whole batch — the import runner uses this so a bad row never forces a
+     * degradation re-run of the good rows' beforeInsert hooks. Requires an
+     * engine with `insertMany` (ObjectQL has it); absent that, callers should
+     * fall back to createManyData.
+     */
+    async insertManyData(request: { object: string, records: any[], context?: any }): Promise<{ object: string; outcomes: Array<{ ok: boolean; record?: any; error?: unknown }> }> {
+        const engineInsertMany = (this.engine as any)?.insertMany;
+        if (typeof engineInsertMany !== 'function') {
+            throw new Error('insertManyData requires an engine with insertMany (framework#3172)');
+        }
+        // Same ingress strip as createManyData (#3043).
+        const rows = stripReadonlyForInsert(
+            this.engine.registry?.getObject(request.object),
+            request.records,
+            request.context,
+        );
+        const outcomes = await engineInsertMany.call(
+            this.engine,
+            request.object,
+            rows,
+            request.context !== undefined ? { context: request.context } as any : undefined,
+        );
+        return { object: request.object, outcomes };
+    }
     
     async updateManyData(request: UpdateManyDataRequest): Promise<BatchUpdateResponse> {
         const { object, records, options } = request;
