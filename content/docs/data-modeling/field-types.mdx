@@ -76,14 +76,14 @@ Phone number field.
 ```
 
 ### `password`
-Masked password input (stored as a one-way hash, owned by the auth subsystem). For reversible encrypted-at-rest secrets (API keys, tokens), use the `secret` type instead.
+Masked password input. On a generic object the value is **plaintext at rest** but **masked to `••••••••` on read** (ADR-0100) — it is *not* one-way hashed. One-way hashing is owned by the auth subsystem and applies only to its identity tables, never to an authored `password` field. For reversible encrypted-at-rest secrets (API keys, tokens, DB passwords), use the `secret` type instead; for login credentials, model them on the auth user object.
 
 ```typescript
 { name: 'password', label: 'Password', type: 'password', required: true }
 ```
 
 ### `secret`
-Reversible, encrypted-at-rest value (DB password, API key, token). Unlike `password` (a one-way hash), a `secret` is encrypted on write via the registered crypto provider, stored as an opaque ref on the row, and masked on read. Fail-closed: with no provider configured, writes throw rather than persist cleartext.
+Reversible, encrypted-at-rest value (DB password, API key, token). Unlike `password` (masked on read but plaintext at rest, or one-way hashed inside the auth subsystem), a `secret` is encrypted on write via the registered crypto provider, stored as an opaque ref on the row, and masked on read. Fail-closed: with no provider configured, writes throw rather than persist cleartext.
 
 ```typescript
 { name: 'api_key', label: 'API Key', type: 'secret' }
