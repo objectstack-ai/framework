@@ -39,26 +39,29 @@ They intercept operations at specific points (before/after) and can:
 
 ### Hook Lifecycle Events
 
-ObjectStack provides **14 lifecycle events** organized by operation type:
+ObjectStack provides **8 lifecycle events** organized by operation type:
 
 | Event | When It Fires | Use Cases |
 |:------|:--------------|:----------|
 | **Read Operations** | | |
-| `beforeFind` | Before querying multiple records | Filter queries by user context, log access |
-| `afterFind` | After querying multiple records | Transform results, mask sensitive data |
-| `beforeFindOne` | Before fetching a single record | Validate permissions, log access |
-| `afterFindOne` | After fetching a single record | Enrich data, mask fields |
-| `beforeCount` | Before counting records | Filter by context |
-| `afterCount` | After counting records | Log metrics |
-| `beforeAggregate` | Before aggregate operations | Validate aggregation rules |
-| `afterAggregate` | After aggregate operations | Transform results |
+| `beforeFind` | Before any read — `find` **and** `findOne` | Filter queries by user context, log access |
+| `afterFind` | After any read — `find` **and** `findOne` | Transform results, enrich data |
 | **Write Operations** | | |
 | `beforeInsert` | Before creating a record | Set defaults, validate, normalize |
 | `afterInsert` | After creating a record | Send notifications, create related records |
-| `beforeUpdate` | Before updating a record | Validate changes, check permissions |
-| `afterUpdate` | After updating a record | Trigger workflows, sync external systems |
-| `beforeDelete` | Before deleting a record | Check dependencies, prevent deletion |
-| `afterDelete` | After deleting a record | Clean up related data, notify users |
+| `beforeUpdate` | Before updating a record (single **or** bulk `multi:true`) | Validate changes, check permissions |
+| `afterUpdate` | After updating a record (single **or** bulk) | Trigger workflows, sync external systems |
+| `beforeDelete` | Before deleting a record (single **or** bulk `multi:true`) | Check dependencies, prevent deletion |
+| `afterDelete` | After deleting a record (single **or** bulk) | Clean up related data, notify users |
+
+> **Why only 8?** The read events fire for `findOne` as well as `find` (the event
+> attaches to record materialization, not the engine method), so one subscription
+> covers every read shape — there is no `beforeFindOne`/`afterFindOne`. Likewise the
+> write events fire on bulk `multi:true` operations (the row-scoping predicate is in
+> `ctx.input.ast`), so there is no `*Many` event. And there is no `beforeCount`/
+> `beforeAggregate`: read authorization and row filtering belong to **RLS / permission
+> rules**, and field masking to **field-level metadata** — declarative mechanisms that
+> apply everywhere, rather than a hook every author must remember to re-attach.
 
 ### Before vs After Hooks
 
@@ -625,11 +628,17 @@ const highValueAccountAlert: Hook = {
 
 ### 10. Data Masking (Read Operations)
 
+> For **static** field masking (a field is always hidden/masked for a role),
+> prefer declarative **field-level metadata** (secret/masked fields) — it applies
+> on every read path automatically. Use an `afterFind` hook only for masking that
+> depends on runtime logic the field metadata can't express. A single `afterFind`
+> subscription covers both `find` and `findOne`.
+
 ```typescript
 const maskSensitiveData: Hook = {
   name: 'mask_pii',
   object: ['contact', 'lead'],
-  events: ['afterFind', 'afterFindOne'],
+  events: ['afterFind'],   // fires for findOne too — no separate afterFindOne
   handler: async (ctx) => {
     // Check user role
     const isAdmin = ctx.session?.roles?.includes('admin');

@@ -189,14 +189,14 @@ EOF
 
 | Type | live | exp | dead | planned | Notes |
 |---|---|---|---|---|---|
-| object | 37 | – | 7 | 1 | aspirational tier (versioning/softDelete/search/recordName/keyPrefix) REMOVED in 16.0 (#2377) — tombstoned in UNKNOWN_KEY_GUIDANCE; remaining dead = tags/active/isSystem/abstract + enable.searchable/trash/mru (authoring-form-surfaced, deferred); ObjectCapabilities otherwise live post-#2707/#2727; `tenancy.strategy`/`crossTenantAccess` REMOVED post-15.0 (#2763) |
-| field | 55 | – | 3 | – | near-healthy; vectorConfig/fileAttachmentConfig/dependencies REMOVED in 16.0 (#2377); remaining dead = referenceFilters/columnName/index (authoring-form-surfaced, deferred), all authorWarn'd |
+| object | 40 | – | 2 | 1 | aspirational tier (versioning/softDelete/search/recordName/keyPrefix) + tags/active/abstract REMOVED (#2377) — tombstoned in UNKNOWN_KEY_GUIDANCE; `isSystem` + `enable.searchable` CORRECTED to live (#2377 — sharing default-model + global-search opt-out; 2026-06 audit missed both readers); remaining dead = `enable.trash`/`mru` (inert default-true, ~35 sys-object setters → deferred); `tenancy.strategy`/`crossTenantAccess` REMOVED post-15.0 (#2763) |
+| field | 55 | – | 0 | – | healthy — full dead set (vectorConfig/fileAttachmentConfig/dependencies, then referenceFilters/columnName/index) REMOVED (#2377); columnName also dropped the ADR-0062 D7 lint + StorageNameMapping column helpers |
 | flow | 27 | – | 4 | – | dead = description/template/nodes.outputSchema/errorHandling.fallbackNodeId (engine uses fault edges) |
-| action | 35 | 1 | 0 | – | `disabled` went LIVE via metadata-admin authoring UI (2026-06 audit missed objectui); dead `timeout` REMOVED in 16.0 (#2377) |
+| action | 35 | 1 | 0 | – | `disabled` went LIVE via metadata-admin authoring UI (2026-06 audit missed objectui); `type:'form'` CORRECTED to live (objectui ActionRunner.executeForm, #2377); dead `timeout` REMOVED (#2377) |
 | hook | 11 | – | 2 | – | model-healthy; only label/description dead (benign) |
 | permission | 32 | – | 1 | – | CRUD/FLS/RLS live; `contextVariables` dead (RLS uses current_user.* built-ins only) |
 | position | 4 | – | – | – | (role's ADR-0090 successor) fully live |
-| agent | 14 | 5 | 1 | – | `tenantId` dead (authoring-form-surfaced, deferred); dead `planning.strategy`/`allowReplan` REMOVED in 16.0 (#2377), only `planning.maxIterations` live; autonomy tier experimental |
+| agent | 14 | 5 | 0 | – | dead `tenantId` + `planning.strategy`/`allowReplan` REMOVED (#2377) — only `planning.maxIterations` live; autonomy tier experimental |
 | tool | 9 | 1 | 1 | – | `permissions` dead — tool invocation not permission-gated by it |
 | skill | 10 | – | – | – | fully live |
 | dataset | 19 | – | 0 | – | `measures.certified` (declared-but-unenforced governance flag) REMOVED in 16.0 (#2377) |

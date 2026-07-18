@@ -98,6 +98,13 @@ export const TaskViews = defineView({
         { field: 'estimate_hours' },
       ],
 
+      // @objectstack/spec ListViewSchema.sort accepts a bare STRING
+      // ("field [asc|desc]"), not only the {field,order}[] array form. This
+      // is the exact shape that used to crash the renderer with
+      // "schema.sort.map is not a function" (objectui#2601) — kept here as a
+      // live coverage fixture so a real list view exercises the string form.
+      sort: 'estimate_hours desc',
+
       // ADR-0053 — NO `userFilters` here: on an object list view ("views"
       // mode) the console suppresses them by design (the view switcher is
       // the only nav control; objectui warns since #2220). End-user filter

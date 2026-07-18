@@ -50,21 +50,9 @@ export const jaJPMetadataForms: NonNullable<TranslationData['metadataForms']> = 
         label: "説明",
         helpText: "開発者向けドキュメント"
       },
-      tags: {
-        label: "タグ",
-        helpText: "分類タグ（例: \"sales\", \"system\"）"
-      },
-      active: {
-        label: "有効",
-        helpText: "オブジェクトが有効で使用可能か"
-      },
       isSystem: {
         label: "システム組み込み",
         helpText: "システムオブジェクト（削除から保護）"
-      },
-      abstract: {
-        label: "抽象",
-        helpText: "抽象ベース（インスタンス化不可）"
       },
       fields: {
         label: "フィールド",
@@ -428,10 +416,6 @@ export const jaJPMetadataForms: NonNullable<TranslationData['metadataForms']> = 
         label: "参照",
         helpText: "参照先オブジェクト名"
       },
-      referenceFilters: {
-        label: "参照フィルター",
-        helpText: "フィルター式（例: \"active = true\"）"
-      },
       deleteBehavior: {
         label: "削除動作",
         helpText: "参照先レコード削除時の動作"
@@ -443,14 +427,6 @@ export const jaJPMetadataForms: NonNullable<TranslationData['metadataForms']> = 
       summaryOperations: {
         label: "集計操作",
         helpText: "ロールアップ集計設定（親子関係用）"
-      },
-      columnName: {
-        label: "列名",
-        helpText: "データベース上の物理列名（既定はフィールド名）"
-      },
-      index: {
-        label: "インデックス",
-        helpText: "高速クエリ用のデータベースインデックスを作成"
       },
       externalId: {
         label: "外部 ID",
@@ -1651,10 +1627,6 @@ export const jaJPMetadataForms: NonNullable<TranslationData['metadataForms']> = 
       permissions: {
         label: "権限",
         helpText: "このエージェントの使用に必要な権限"
-      },
-      tenantId: {
-        label: "テナント ID",
-        helpText: "特定 organization ID に制限"
       },
       guardrails: {
         label: "ガードレール",

@@ -552,10 +552,12 @@ const ObjectSchemaBase = z.object({
   /**
    * Taxonomy & Organization
    */
-  tags: z.array(z.string()).optional().describe('Categorization tags (e.g. "sales", "system", "reference")'),
-  active: z.boolean().optional().default(true).describe('Is the object active and usable'),
-  isSystem: z.boolean().optional().default(false).describe('Is system object (protected from deletion)'),
-  abstract: z.boolean().optional().default(false).describe('Is abstract base object (cannot be instantiated)'),
+  // `tags`, `active`, `abstract` removed in the 16.x line (#2377, ADR-0049):
+  // no runtime reader (an "inactive"/"abstract" object still got a table and was
+  // fully usable; tags were never consumed). `isSystem` STAYS — it is live:
+  // plugin-sharing effectiveSharingModel defaults a no-sharingModel isSystem
+  // object to public, and the security-posture lint exempts system objects.
+  isSystem: z.boolean().optional().default(false).describe('Is system object (protected from deletion; defaults its org-wide sharing to public when no sharingModel is set — plugin-sharing)'),
 
   /**
    * Managed-by hint — declares which lifecycle bucket the object belongs
@@ -1094,6 +1096,18 @@ const UNKNOWN_KEY_GUIDANCE: Record<string, string> = {
     '`keyPrefix` was removed from the spec in 16.0 (#2377, ADR-0049) — record ' +
     'ids are not prefixed from it (no Salesforce-style key-prefix runtime). ' +
     'Remove the key; it had no effect.',
+  tags:
+    '`tags` (object-level categorization) was removed from the spec (#2377, ' +
+    'ADR-0049) — it had no runtime reader. Remove the key; use `managedBy` for ' +
+    'lifecycle bucketing or a real field for per-record tagging.',
+  active:
+    '`active` was removed from the spec (#2377, ADR-0049) — no runtime reader ' +
+    'gated on it, so an "inactive" object was still fully queryable and usable. ' +
+    'Remove the key; gate availability with permissions/sharing instead.',
+  abstract:
+    '`abstract` was removed from the spec (#2377, ADR-0049) — object ' +
+    'inheritance/abstraction is not implemented, so an abstract object still ' +
+    'got a table and was instantiable. Remove the key.',
 };
 
 /** Levenshtein edit distance — backs the "did you mean" hint for typo'd keys. */

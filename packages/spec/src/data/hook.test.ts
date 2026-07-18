@@ -9,13 +9,8 @@ import {
 
 describe('HookEvent', () => {
   describe('Read Operations', () => {
-    it('should accept read operation events', () => {
-      const readEvents = [
-        'beforeFind', 'afterFind',
-        'beforeFindOne', 'afterFindOne',
-        'beforeCount', 'afterCount',
-        'beforeAggregate', 'afterAggregate',
-      ];
+    it('should accept read events (fire for both find and findOne)', () => {
+      const readEvents = ['beforeFind', 'afterFind'];
 
       readEvents.forEach(event => {
         expect(() => HookEvent.parse(event)).not.toThrow();
@@ -24,7 +19,7 @@ describe('HookEvent', () => {
   });
 
   describe('Write Operations', () => {
-    it('should accept write operation events', () => {
+    it('should accept write events (fire for both single and bulk writes)', () => {
       const writeEvents = [
         'beforeInsert', 'afterInsert',
         'beforeUpdate', 'afterUpdate',
@@ -37,15 +32,22 @@ describe('HookEvent', () => {
     });
   });
 
-  describe('Bulk Operations', () => {
-    it('should accept bulk operation events', () => {
-      const bulkEvents = [
+  describe('Removed non-dispatched events (#3195)', () => {
+    it('should reject per-method read and *Many events that the engine never dispatched', () => {
+      // These were declared but never fired; the engine only ever triggers the
+      // 8 events above. Removed rather than left as silent no-ops — read
+      // filtering is RLS/middleware, masking is field metadata, and bulk writes
+      // fire the singular before/after events.
+      const removed = [
+        'beforeFindOne', 'afterFindOne',
+        'beforeCount', 'afterCount',
+        'beforeAggregate', 'afterAggregate',
         'beforeUpdateMany', 'afterUpdateMany',
         'beforeDeleteMany', 'afterDeleteMany',
       ];
 
-      bulkEvents.forEach(event => {
-        expect(() => HookEvent.parse(event)).not.toThrow();
+      removed.forEach(event => {
+        expect(() => HookEvent.parse(event)).toThrow();
       });
     });
   });

@@ -27,6 +27,12 @@ import {
   MCP_OAUTH_SCOPE_DATA_WRITE,
   MCP_OAUTH_SCOPE_ACTIONS,
 } from '@objectstack/spec/ai';
+import {
+  validateExpression,
+  introspectScope,
+  inferExpressionType,
+  type FieldRole,
+} from '@objectstack/formula';
 
 export interface McpObjectSummary {
   name: string;
@@ -190,6 +196,21 @@ function jsonText(value: unknown): string {
 }
 
 /**
+ * Authoring site → the `(role, scope)` the shared validator uses. A `formula`
+ * field is a `value` expression bound to the `record` namespace; a `validation`
+ * rule is a `record`-scoped `predicate`; a `flow_condition` is a `predicate`
+ * whose fields are flattened to top level; a `template` is a text template.
+ * Exposing a single friendly `site` keeps the tool aligned with how an author
+ * thinks about *where* the expression goes.
+ */
+const VALIDATE_SITE_MAP: Record<string, { role: FieldRole; scope: 'record' | 'flattened' }> = {
+  formula: { role: 'value', scope: 'record' },
+  validation: { role: 'predicate', scope: 'record' },
+  flow_condition: { role: 'predicate', scope: 'flattened' },
+  template: { role: 'template', scope: 'record' },
+};
+
+/**
  * Register the object-CRUD tool set on a fresh per-request {@link McpServer}.
  * All execution is delegated to `bridge`, which is bound to the caller's
  * principal by the runtime.
@@ -252,6 +273,69 @@ export function registerObjectTools(
           const def = await bridge.describeObject(objectName);
           if (!def) return errorResult(`Object "${objectName}" not found`);
           return textResult(def);
+        } catch (err) {
+          return errorResult(messageOf(err));
+        }
+      },
+    );
+
+    // Validate a CEL expression against a real object schema BEFORE it is
+    // authored into metadata — the same checks `objectstack build` runs, so an
+    // agent gets a build-accurate verdict plus the fields/functions in scope to
+    // self-correct, instead of shipping a formula that silently evaluates to
+    // `null` (#1928). Read-only (schema introspection); no data is touched.
+    server.registerTool(
+      'validate_expression',
+      {
+        description:
+          'Validate a CEL expression against an object\'s schema before authoring it into metadata. Returns ' +
+          'build-time errors (bare field refs, unknown fields, unknown functions) and advisory warnings ' +
+          '(text/boolean fields misused in arithmetic, date-equality pitfalls), plus the fields and stdlib ' +
+          'functions in scope so you can self-correct. `site` says where the expression will live: a `formula` ' +
+          'field, a `validation`/predicate, or a `flow_condition` (fields are bound bare in flow conditions).',
+        inputSchema: {
+          objectName: z.string().describe('The object/table the expression is authored against, e.g. "task"'),
+          expression: z.string().describe('The CEL expression to validate, e.g. "record.amount / 100"'),
+          site: z
+            .enum(['formula', 'validation', 'flow_condition', 'template'])
+            .optional()
+            .describe(
+              'Where the expression will live. formula/validation bind `record.<field>`; flow_condition binds fields bare. Default: formula.',
+            ),
+        },
+        annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+      },
+      async ({ objectName, expression, site }) => {
+        const bad = guard(objectName);
+        if (bad) return errorResult(bad);
+        try {
+          const def = (await bridge.describeObject(objectName)) as { fields?: unknown } | null;
+          if (!def) return errorResult(`Object "${objectName}" not found`);
+          const fieldDefs = Array.isArray(def.fields) ? (def.fields as Array<Record<string, unknown>>) : [];
+          const fields: string[] = [];
+          const fieldTypes: Record<string, string> = {};
+          for (const f of fieldDefs) {
+            if (typeof f?.name !== 'string') continue;
+            fields.push(f.name);
+            if (typeof f?.type === 'string') fieldTypes[f.name] = f.type;
+          }
+          const { role, scope } = VALIDATE_SITE_MAP[site ?? 'formula'];
+          const hint = { objectName, fields, fieldTypes, scope } as const;
+          const result = validateExpression(role, expression, hint);
+          const inScope = introspectScope(role, hint);
+          const inferredType = role === 'value' ? inferExpressionType(expression, hint) : undefined;
+          return textResult({
+            ok: result.ok,
+            errors: result.errors,
+            warnings: result.warnings,
+            ...(inferredType ? { inferredType } : {}),
+            inScope: {
+              dialect: inScope.dialect,
+              roots: inScope.roots,
+              fields: inScope.fields,
+              functions: inScope.functions,
+            },
+          });
         } catch (err) {
           return errorResult(messageOf(err));
         }

@@ -114,6 +114,32 @@ const PROBES: ReadonlyArray<{ file: string; re: RegExp; key: (m: RegExpExecArray
     re: /['"`][^'"`]*\/realtime[^'"`]*['"`]/g,
     key: () => 'realtime:rest-server.ts:route(TRANSPORT-WIRED)',
   },
+
+  // ── ADR-0096 / #3167 — MCP execution-surface identity pins ─────────────
+  // (1) The HTTP `/mcp` handler must stay classified (a new sibling MCP data
+  // handler → UNCLASSIFIED). (2) Its caller-identity threading: handleMcp must
+  // build the tool bridge FROM the request context (carrying the caller EC).
+  // Drop the threading (or build a system/unscoped bridge for HTTP) → the
+  // context-threaded key vanishes → the mcp-http-identity row goes STALE → red CI.
+  {
+    file: 'packages/runtime/src/http-dispatcher.ts',
+    re: /async\s+handleMcp\s*\(/g,
+    key: () => 'mcp:http-dispatcher.ts:handleMcp',
+  },
+  {
+    file: 'packages/runtime/src/http-dispatcher.ts',
+    re: /this\.buildMcpBridge\(context\)/g,
+    key: () => 'mcp:http-dispatcher.ts:buildMcpBridge(context-threaded)',
+  },
+  // (3) The stdio transport's UNSCOPED data bridge: the long-lived server is fed
+  // the raw metadata service + data engine with no principal. Wrapping these in
+  // a principal-bound bridge (the admission fix) changes this line → the
+  // unscoped-stdio key goes STALE → forces re-classifying mcp-stdio-authority.
+  {
+    file: 'packages/mcp/src/plugin.ts',
+    re: /bridgeResources\(metadataService, dataEngine\)/g,
+    key: () => 'mcp:plugin.ts:bridgeResources(unscoped-stdio)',
+  },
 ];
 
 /** Statically enumerate the anonymous-deny HTTP entry points from source. */
@@ -210,5 +236,28 @@ describe('#2567 — anonymous-deny surface ratchet bites', () => {
       opts(() => new Set([...discoverAnonymousDenySurfaces()].filter((k) => k !== threaded))),
     );
     expect(problems.some((p) => /STALE covers/.test(p) && p.includes(threaded))).toBe(true);
+  });
+
+  // ── ADR-0096 / #3167 — the MCP identity pins bite too ──────────────────
+  it('(f) dropping the MCP HTTP context-thread → STALE covers failure (#3167)', () => {
+    const threaded = 'mcp:http-dispatcher.ts:buildMcpBridge(context-threaded)';
+    // Baseline sanity: the HTTP `/mcp` handler threads the caller EC today.
+    expect(discoverAnonymousDenySurfaces().has(threaded)).toBe(true);
+    const problems = checkLedger(
+      AUTHZ_CONFORMANCE,
+      opts(() => new Set([...discoverAnonymousDenySurfaces()].filter((k) => k !== threaded))),
+    );
+    expect(problems.some((p) => /STALE covers/.test(p) && p.includes(threaded))).toBe(true);
+  });
+
+  it('(g) the stdio unscoped-bridge posture is pinned; changing it goes STALE (#3167)', () => {
+    const stdio = 'mcp:plugin.ts:bridgeResources(unscoped-stdio)';
+    // Baseline sanity: the long-lived server bridges the raw services today.
+    expect(discoverAnonymousDenySurfaces().has(stdio)).toBe(true);
+    const problems = checkLedger(
+      AUTHZ_CONFORMANCE,
+      opts(() => new Set([...discoverAnonymousDenySurfaces()].filter((k) => k !== stdio))),
+    );
+    expect(problems.some((p) => /STALE covers/.test(p) && p.includes(stdio))).toBe(true);
   });
 });

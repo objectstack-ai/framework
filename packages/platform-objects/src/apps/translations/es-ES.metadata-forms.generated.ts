@@ -50,21 +50,9 @@ export const esESMetadataForms: NonNullable<TranslationData['metadataForms']> = 
         label: "Descripción",
         helpText: "Documentación para desarrolladores"
       },
-      tags: {
-        label: "Etiquetas",
-        helpText: "Etiquetas de categorización (p. ej. \"sales\", \"system\")"
-      },
-      active: {
-        label: "Activo",
-        helpText: "Indica si el objeto está activo y usable"
-      },
       isSystem: {
         label: "Integrado del sistema",
         helpText: "Objeto de sistema (protegido contra eliminación)"
-      },
-      abstract: {
-        label: "Abstracto",
-        helpText: "Base abstracta (no se puede instanciar)"
       },
       fields: {
         label: "Campos",
@@ -428,10 +416,6 @@ export const esESMetadataForms: NonNullable<TranslationData['metadataForms']> = 
         label: "Referencia",
         helpText: "Nombre del objeto referenciado"
       },
-      referenceFilters: {
-        label: "Filtros de referencia",
-        helpText: "Expresiones de filtro (p. ej., \"active = true\")"
-      },
       deleteBehavior: {
         label: "Comportamiento al eliminar",
         helpText: "Qué ocurre cuando se elimina el registro referenciado"
@@ -443,14 +427,6 @@ export const esESMetadataForms: NonNullable<TranslationData['metadataForms']> = 
       summaryOperations: {
         label: "Operaciones de resumen",
         helpText: "Configuración de resumen roll-up (para relaciones padre-hijo)"
-      },
-      columnName: {
-        label: "Nombre de columna",
-        helpText: "Nombre de columna física en la base de datos (por defecto, el nombre del campo)"
-      },
-      index: {
-        label: "Índice",
-        helpText: "Crea un índice de base de datos para consultas más rápidas"
       },
       externalId: {
         label: "ID externo",
@@ -1651,10 +1627,6 @@ export const esESMetadataForms: NonNullable<TranslationData['metadataForms']> = 
       permissions: {
         label: "Permisos",
         helpText: "Permisos necesarios para usar este agente"
-      },
-      tenantId: {
-        label: "ID de tenant",
-        helpText: "Restringe a un ID de organization específico"
       },
       guardrails: {
         label: "Reglas de protección",

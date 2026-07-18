@@ -50,21 +50,9 @@ export const zhCNMetadataForms: NonNullable<TranslationData['metadataForms']> = 
         label: "描述",
         helpText: "开发文档说明"
       },
-      tags: {
-        label: "标签",
-        helpText: "分类标签（如：\"sales\"、\"system\"）"
-      },
-      active: {
-        label: "启用",
-        helpText: "对象是否启用并可用"
-      },
       isSystem: {
         label: "系统内置",
         helpText: "系统对象（受保护，不可删除）"
-      },
-      abstract: {
-        label: "抽象",
-        helpText: "抽象基类（不能直接实例化）"
       },
       fields: {
         label: "字段",
@@ -428,10 +416,6 @@ export const zhCNMetadataForms: NonNullable<TranslationData['metadataForms']> = 
         label: "引用对象",
         helpText: "被引用的对象名称"
       },
-      referenceFilters: {
-        label: "引用过滤",
-        helpText: "筛选表达式（如：active = true）"
-      },
       deleteBehavior: {
         label: "删除行为",
         helpText: "被引用记录删除时的处理方式"
@@ -443,14 +427,6 @@ export const zhCNMetadataForms: NonNullable<TranslationData['metadataForms']> = 
       summaryOperations: {
         label: "汇总操作",
         helpText: "父子关系下的汇总聚合配置"
-      },
-      columnName: {
-        label: "列名",
-        helpText: "数据库中的物理列名（默认与字段名相同）"
-      },
-      index: {
-        label: "索引",
-        helpText: "建立数据库索引以加速查询"
       },
       externalId: {
         label: "外部 ID",
@@ -1651,10 +1627,6 @@ export const zhCNMetadataForms: NonNullable<TranslationData['metadataForms']> = 
       permissions: {
         label: "权限",
         helpText: "使用此代理所需的权限"
-      },
-      tenantId: {
-        label: "租户 ID",
-        helpText: "限定到特定组织"
       },
       guardrails: {
         label: "护栏",

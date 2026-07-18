@@ -129,6 +129,12 @@ create/update payload.
 
 - **list_objects()** — list available objects (system \`sys_*\` objects are hidden).
 - **describe_object({ objectName })** — an object's fields and features.
+- **validate_expression({ objectName, expression, site? })** — check a CEL
+  expression against an object's schema *before* you author it into a formula,
+  validation, or flow condition. Returns build-time errors (bare field refs,
+  unknown fields/functions) and advisory warnings (text/boolean fields misused
+  in arithmetic), plus the fields and stdlib functions in scope. \`site\` is
+  \`formula\` | \`validation\` | \`flow_condition\` | \`template\` (default \`formula\`).
 - **query_records({ objectName, where?, fields?, limit?, offset?, orderBy? })** —
   read records. \`where\` is a field→value match, e.g. \`{ "status": "open" }\`.
   Results are page-capped; use \`limit\`/\`offset\` to page.

@@ -20,10 +20,7 @@ export const objectForm = defineForm({
         { field: 'pluralLabel', type: 'text', colSpan: 1, helpText: 'Plural display name (e.g. "Accounts")' },
         { field: 'icon', type: 'text', colSpan: 1, helpText: 'Lucide icon name (e.g. "building", "users")' },
         { field: 'description', type: 'textarea', colSpan: 2, helpText: 'Developer documentation' },
-        { field: 'tags', type: 'tags', colSpan: 2, helpText: 'Categorization tags (e.g. "sales", "system")' },
-        { field: 'active', type: 'boolean', colSpan: 1, helpText: 'Is the object active and usable' },
-        { field: 'isSystem', type: 'boolean', colSpan: 1, helpText: 'System object (protected from deletion)' },
-        { field: 'abstract', type: 'boolean', colSpan: 1, helpText: 'Abstract base (cannot be instantiated)' },
+        { field: 'isSystem', type: 'boolean', colSpan: 1, helpText: 'System object (protected from deletion; defaults sharing to public)' },
       ],
     },
     {

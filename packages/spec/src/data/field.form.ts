@@ -45,7 +45,6 @@ export const fieldForm = defineForm({
         { field: 'options', type: 'repeater', visibleWhen: "data.type == 'select' || data.type == 'multiselect'", helpText: 'Available options (label/value pairs)' },
         // Reference field options
         { field: 'reference', widget: 'ref:object', visibleWhen: "data.type == 'lookup' || data.type == 'master_detail'", helpText: 'Referenced object name' },
-        { field: 'referenceFilters', widget: 'string-tags', visibleWhen: "data.type == 'lookup' || data.type == 'master_detail'", helpText: 'Filter expressions (e.g., "active = true")' },
         { field: 'deleteBehavior', visibleWhen: "data.type == 'lookup' || data.type == 'master_detail'", helpText: 'What happens when referenced record is deleted' },
       ],
     },
@@ -69,8 +68,6 @@ export const fieldForm = defineForm({
       columns: 2,
       fields: [
         // Database & Performance
-        { field: 'columnName', colSpan: 2, helpText: 'Physical column name in database (defaults to field name)' },
-        { field: 'index', colSpan: 1, helpText: 'Create database index for faster queries' },
         { field: 'externalId', colSpan: 1, helpText: 'Mark as external ID for upsert operations' },
         // UI & Visibility
         { field: 'readonly', colSpan: 1, helpText: 'Field is read-only in forms' },

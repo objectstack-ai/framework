@@ -561,8 +561,13 @@ export class SqlDriver implements IDataDriver {
    * nothing is tracked and the map stays empty, so the cost is a single ALS
    * lookup per query.
    *
-   * Only durations and a count are recorded — never SQL text — so the header
-   * can be surfaced without leaking query shapes to non-admins.
+   * The aggregate records only durations and a count — never SQL text — so the
+   * `Server-Timing` header can be surfaced without leaking query shapes to
+   * non-admins. When an admin opts into DETAIL mode (`X-OS-Debug-Timing: json`,
+   * admin-gated), each query's PARAMETRIZED statement (knex's `q.sql`, which
+   * carries `?` placeholders — the bindings live separately and are NEVER
+   * recorded) is additionally captured so the admin-only detail payload can list
+   * the slowest queries by shape. Literal row values never enter the collector.
    */
   private installQueryTiming(): void {
     // uid → { start, collector }, populated only while a collector is active,
@@ -580,7 +585,14 @@ export class SqlDriver implements IDataDriver {
       const rec = inflight.get(uid);
       if (!rec) return;
       inflight.delete(uid);
-      rec.timing.count('db', perfNow() - rec.t0, 'queries');
+      const dur = perfNow() - rec.t0;
+      rec.timing.count('db', dur, 'queries');
+      // Admin-gated detail mode: keep the query SHAPE (parametrized SQL, no
+      // bindings) so the slowest queries can be surfaced. `recordDetail` is a
+      // no-op unless detail capture is on, so this is free on the normal path.
+      if (rec.timing.detailEnabled && typeof q?.sql === 'string') {
+        rec.timing.recordDetail('db', q.sql, dur);
+      }
     };
     this.knex.on('query-response', (_response: any, q: any) => settle(q));
     this.knex.on('query-error', (_error: any, q: any) => settle(q));

@@ -50,21 +50,9 @@ export const enMetadataForms: NonNullable<TranslationData['metadataForms']> = {
         label: "Description",
         helpText: "Developer documentation"
       },
-      tags: {
-        label: "Tags",
-        helpText: "Categorization tags (e.g. \"sales\", \"system\")"
-      },
-      active: {
-        label: "Active",
-        helpText: "Is the object active and usable"
-      },
       isSystem: {
         label: "Is System",
         helpText: "System object (protected from deletion)"
-      },
-      abstract: {
-        label: "Abstract",
-        helpText: "Abstract base (cannot be instantiated)"
       },
       fields: {
         label: "Fields",
@@ -428,10 +416,6 @@ export const enMetadataForms: NonNullable<TranslationData['metadataForms']> = {
         label: "Reference",
         helpText: "Referenced object name"
       },
-      referenceFilters: {
-        label: "Reference Filters",
-        helpText: "Filter expressions (e.g., \"active = true\")"
-      },
       deleteBehavior: {
         label: "Delete Behavior",
         helpText: "What happens when referenced record is deleted"
@@ -443,14 +427,6 @@ export const enMetadataForms: NonNullable<TranslationData['metadataForms']> = {
       summaryOperations: {
         label: "Summary Operations",
         helpText: "Roll-up summary configuration (for parent-child relationships)"
-      },
-      columnName: {
-        label: "Column Name",
-        helpText: "Physical column name in database (defaults to field name)"
-      },
-      index: {
-        label: "Index",
-        helpText: "Create database index for faster queries"
       },
       externalId: {
         label: "External Id",
@@ -1651,10 +1627,6 @@ export const enMetadataForms: NonNullable<TranslationData['metadataForms']> = {
       permissions: {
         label: "Permissions",
         helpText: "Required permissions to use this agent"
-      },
-      tenantId: {
-        label: "Tenant Id",
-        helpText: "Restrict to specific organization ID"
       },
       guardrails: {
         label: "Guardrails",

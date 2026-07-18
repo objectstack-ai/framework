@@ -46,6 +46,21 @@ export interface ServerTimingMark {
 }
 
 /**
+ * One recorded sub-event when DETAIL capture is on (see
+ * {@link PerfTiming.enableDetail}). Unlike the aggregate `db` mark — which folds
+ * every query into a single count+duration — a detail sample keeps the
+ * individual event so an admin can see *which* queries ran and which was
+ * slowest. `label` is a description of the event (for SQL: the PARAMETRIZED
+ * statement, bindings stripped — the query shape, never literal row values).
+ */
+export interface ServerTimingDetail {
+    /** Event label — e.g. a parametrized SQL statement (no bindings). */
+    label: string;
+    /** Duration in milliseconds. */
+    dur: number;
+}
+
+/**
  * Monotonic millisecond clock. Prefers `performance.now()` (monotonic, not
  * affected by wall-clock adjustments); falls back to `Date.now()` on the rare
  * runtime where `performance` is unavailable.
@@ -138,10 +153,62 @@ export class PerfTiming {
      * already inserted into {@link _marks}, mutated in place as events arrive.
      */
     private _aggregates?: Map<string, { mark: ServerTimingMark; count: number; unit?: string }>;
+    /**
+     * Per-event detail samples by category, populated only while detail capture
+     * is on (see {@link enableDetail}). Lazily created so a request that never
+     * enables detail pays nothing.
+     */
+    private _detail?: Map<string, ServerTimingDetail[]>;
+    private _detailOn = false;
+    /**
+     * Hard cap on stored detail samples per category — detail is only ever on
+     * for a deliberate debug request, but a pathological request must not pin
+     * unbounded memory. The aggregate {@link count} still reflects the true
+     * total; only the retained per-event list is bounded.
+     */
+    private static readonly DETAIL_CAP = 1000;
 
     /** Record an already-measured phase. */
     record(name: string, dur: number, desc?: string): void {
         this._marks.push({ name, dur, desc });
+    }
+
+    /**
+     * Turn on per-event DETAIL capture for this request. Off by default so the
+     * hot path never allocates a per-event list; the HTTP middleware enables it
+     * only for an admin-gated `X-OS-Debug-Timing: json` request. Idempotent.
+     */
+    enableDetail(): void {
+        this._detailOn = true;
+    }
+
+    /** Whether per-event detail capture is on. */
+    get detailEnabled(): boolean {
+        return this._detailOn;
+    }
+
+    /**
+     * Record one per-event detail sample under `category` (e.g. `'db'`). A no-op
+     * unless {@link enableDetail} was called, so the hot-path call site (the SQL
+     * driver's query listener) pays only a boolean check when detail is off.
+     * Bounded by {@link DETAIL_CAP}; excess events still count toward the
+     * aggregate via {@link count} but are not retained individually.
+     */
+    recordDetail(category: string, label: string, dur: number): void {
+        if (!this._detailOn) return;
+        const detail = (this._detail ??= new Map());
+        let list = detail.get(category);
+        if (!list) {
+            list = [];
+            detail.set(category, list);
+        }
+        if (list.length >= PerfTiming.DETAIL_CAP) return;
+        list.push({ label: String(label), dur: Number.isFinite(dur) && dur > 0 ? dur : 0 });
+    }
+
+    /** Retained detail samples for `category`, in record order (empty when none). */
+    details(category: string): readonly ServerTimingDetail[] {
+        return this._detail?.get(category) ?? [];
     }
 
     /**
@@ -284,6 +351,16 @@ export function countServerTiming(name: string, dur: number, unit?: string): voi
     store.getStore()?.count(name, dur, unit);
 }
 
+/**
+ * Record a per-event DETAIL sample (e.g. one parametrized SQL statement) onto
+ * the ambient collector — see {@link PerfTiming.recordDetail}. A no-op when no
+ * collector is active OR detail capture is off, so the hot-path call site pays
+ * only an `AsyncLocalStorage` lookup + a boolean check when not debugging.
+ */
+export function recordServerTimingDetail(category: string, label: string, dur: number): void {
+    store.getStore()?.recordDetail(category, label, dur);
+}
+
 // --- Disclosure gate (WHO may see the timing) -------------------------
 
 /**
@@ -302,10 +379,23 @@ export function countServerTiming(name: string, dur: number, unit?: string): voi
  *
  * Keeping this out of {@link PerfTiming} preserves the collector's invariant
  * ("it only measures, it never decides whether to emit").
+ *
+ * Two levels, because global mode discloses the basic header to everyone but the
+ * richer per-query detail must stay admin-only:
+ *  - `allowed`    — the basic `Server-Timing` header may be disclosed (opened by
+ *                   global mode for everyone, or by a proven admin per-request).
+ *  - `privileged` — the principal is a proven admin/service. Gates the richer,
+ *                   SQL-shape-bearing detail payload, which must NEVER reach an
+ *                   ordinary caller even when global mode is on.
  */
 export interface PerfDisclosureGate {
-    /** Whether the collected timing may be disclosed to the client. */
+    /** Whether the basic collected timing may be disclosed to the client. */
     allowed: boolean;
+    /**
+     * Whether the principal is a proven admin/service — gates the richer detail
+     * payload independently of `allowed`. Absent = not privileged.
+     */
+    privileged?: boolean;
 }
 
 /**
@@ -330,17 +420,30 @@ export function runWithPerfDisclosure<T>(gate: PerfDisclosureGate, fn: () => T):
 }
 
 /**
- * Open the ambient disclosure gate — the request has proven it may see its own
- * `Server-Timing` header (admin/service identity). A no-op when no gate is
- * active (perf-tuning off, or already-global mode with no gate to flip), so the
- * call site stays branch-free.
+ * Open the ambient disclosure gate — the request has proven an admin/service
+ * identity, so it may see its own `Server-Timing` header AND the richer detail
+ * payload. Sets both {@link PerfDisclosureGate.allowed} and `privileged`. A
+ * no-op when no gate is active (perf-tuning off), so the call site stays
+ * branch-free.
  */
 export function allowPerfDisclosure(): void {
     const g = gateStore.getStore();
-    if (g) g.allowed = true;
+    if (g) {
+        g.allowed = true;
+        g.privileged = true;
+    }
 }
 
 /** Whether the ambient disclosure gate is open. `false` when none is active. */
 export function isPerfDisclosureAllowed(): boolean {
     return gateStore.getStore()?.allowed ?? false;
+}
+
+/**
+ * Whether the ambient principal is a proven admin/service — gates the richer
+ * detail payload. `false` when no gate is active or only global-mode disclosure
+ * (not a proven admin) opened it.
+ */
+export function isPerfDisclosurePrivileged(): boolean {
+    return gateStore.getStore()?.privileged ?? false;
 }

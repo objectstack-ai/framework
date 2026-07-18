@@ -181,7 +181,6 @@ Use `camelCase`:
 ```typescript
 {
   maxLength: 100,
-  referenceFilters: ['active'],
   defaultValue: 'none',
 }
 ```

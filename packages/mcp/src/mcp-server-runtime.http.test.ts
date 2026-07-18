@@ -97,6 +97,7 @@ describe('MCPServerRuntime.handleHttpRequest (Streamable HTTP)', () => {
         'list_objects',
         'query_records',
         'update_record',
+        'validate_expression',
       ].sort(),
     );
   });

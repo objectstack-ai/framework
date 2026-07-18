@@ -184,33 +184,9 @@ export function validateStackExpressions(stack: AnyRec): ExprIssue[] {
       ? (fields as AnyRec[])
       : (fields && typeof fields === 'object' ? Object.values(fields as AnyRec) as AnyRec[] : []);
 
-    // ── ADR-0062 D7 — reject `field.columnName` on external objects ──────
-    // `field.columnName` (localField → physicalColumn) is the managed-object
-    // mechanism; it is NOT applied by the driver's query pipeline for federated
-    // objects, where `external.columnMap` (remoteColumn → localField) is the
-    // authoritative — and inverse — mapping. Allowing both would be a silent
-    // dual-source ambiguity, so reject `columnName` on any object that declares
-    // an `external` binding (a federated object). Managed objects are untouched.
-    if (obj.external != null) {
-      const fieldEntries: Array<[string, AnyRec]> = Array.isArray(fields)
-        ? (fields as AnyRec[]).map((f) => [((f as AnyRec)?.name as string) ?? '?', f as AnyRec])
-        : (fields && typeof fields === 'object'
-            ? (Object.entries(fields as AnyRec) as Array<[string, AnyRec]>)
-            : []);
-      for (const [fname, fdef] of fieldEntries) {
-        if (fdef && typeof fdef === 'object' && (fdef as AnyRec).columnName != null) {
-          issues.push({
-            where: `object '${objectName}' · field '${fname}'`,
-            message:
-              `external object '${objectName}': field '${fname}' sets columnName='${String((fdef as AnyRec).columnName)}', ` +
-              `which is not supported on federated objects (ADR-0062 D7). The driver's query pipeline ignores ` +
-              `field.columnName for external objects; map remote columns via the datasource's external.columnMap instead.`,
-            source: `columnName='${String((fdef as AnyRec).columnName)}'`,
-            severity: 'error',
-          });
-        }
-      }
-    }
+    // (ADR-0062 D7's `field.columnName`-on-external-objects rejection was removed
+    // with `field.columnName` itself in #2377: the field no longer exists, so there
+    // is no dual-source ambiguity to guard — external column mapping is `external.columnMap`.)
 
     for (const f of fieldList) {
       // Field-level conditional rules are server-enforced (rule-validator) and

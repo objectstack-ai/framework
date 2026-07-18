@@ -11,7 +11,7 @@ For comprehensive data lifecycle hooks documentation, see:
 **→ [objectstack-data/references/data-hooks.md](../../objectstack-data/references/data-hooks.md)**
 
 The canonical reference includes:
-- All 14 lifecycle events (beforeFind, afterFind, beforeInsert, afterInsert, beforeUpdate, afterUpdate, beforeDelete, afterDelete, beforeCount, afterCount, beforeAggregate, afterAggregate, beforeFindOne, afterFindOne)
+- All 8 lifecycle events (beforeFind, afterFind, beforeInsert, afterInsert, beforeUpdate, afterUpdate, beforeDelete, afterDelete)
 - Complete Hook definition schema
 - HookContext API reference
 - Registration methods (declarative, programmatic, file-based)
@@ -42,24 +42,29 @@ const hook: Hook = {
 };
 ```
 
-### 14 Lifecycle Events
+### 8 Lifecycle Events
 
 | Event | When Fires | Use Case |
 |:------|:-----------|:---------|
-| `beforeFind` | Before querying multiple records | Filter queries, log access |
-| `afterFind` | After querying multiple records | Transform results, mask data |
-| `beforeFindOne` | Before fetching single record | Validate permissions |
-| `afterFindOne` | After fetching single record | Enrich data |
-| `beforeCount` | Before counting records | Filter by context |
-| `afterCount` | After counting records | Log metrics |
-| `beforeAggregate` | Before aggregate operations | Validate rules |
-| `afterAggregate` | After aggregate operations | Transform results |
+| `beforeFind` | Before any read (`find` **and** `findOne`) | Filter queries, log access |
+| `afterFind` | After any read (`find` **and** `findOne`) | Transform results, enrich data |
 | `beforeInsert` | Before creating a record | Set defaults, validate |
 | `afterInsert` | After creating a record | Send notifications |
-| `beforeUpdate` | Before updating a record | Validate changes |
-| `afterUpdate` | After updating a record | Trigger workflows |
-| `beforeDelete` | Before deleting a record | Check dependencies |
-| `afterDelete` | After deleting a record | Clean up related data |
+| `beforeUpdate` | Before updating a record (single **or** bulk `multi:true`) | Validate changes |
+| `afterUpdate` | After updating a record (single **or** bulk) | Trigger workflows |
+| `beforeDelete` | Before deleting a record (single **or** bulk `multi:true`) | Check dependencies |
+| `afterDelete` | After deleting a record (single **or** bulk) | Clean up related data |
+
+> **One read event, one write event per kind.** `beforeFind`/`afterFind` fire for
+> `findOne` too (the event attaches to record materialization, not the method), and
+> the write events fire on bulk `multi:true` operations as well — the row-scoping
+> predicate is in `ctx.input.ast`. There is no `beforeFindOne`, `beforeCount`,
+> `beforeAggregate`, or `*Many` event.
+>
+> **Don't reach for a hook when a declarative mechanism already fits:**
+> - Read authorization / row filtering → **RLS / permission rules**, not a `beforeFind` hook.
+> - Field masking → **field-level metadata** (secret/masked fields), not an `afterFind` hook.
+> - Delete guards → a **`beforeDelete`** hook (this is the right tool).
 
 ### Common Patterns
 

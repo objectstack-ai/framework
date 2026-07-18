@@ -96,7 +96,7 @@ sequenceDiagram
 
     QE-->>K: DataRecord
 
-    K->>H: afterFindOne hooks
+    K->>H: afterFind hooks (fire for findOne too)
     H-->>K: Transformed record
 
     K->>Sec: applyFieldSecurity(record, user)
@@ -310,7 +310,7 @@ flowchart TD
     end
 ```
 
-The lifecycle events are defined by the `HookEvent` enum. Reads also have hooks: `beforeFind/afterFind`, `beforeFindOne/afterFindOne`, `beforeCount/afterCount`, and `beforeAggregate/afterAggregate`. Bulk writes add `beforeUpdateMany/afterUpdateMany` and `beforeDeleteMany/afterDeleteMany`.
+The lifecycle events are defined by the `HookEvent` enum (8 events). Reads fire `beforeFind`/`afterFind` — for **both** `find` and `findOne`, so one subscription covers every read shape. Bulk writes (`multi: true`) fire the **same** `beforeUpdate`/`beforeDelete`/`afterUpdate`/`afterDelete` events as single-id writes, with the row-scoping predicate in `ctx.input.ast`. There are deliberately no per-method (`findOne`/`count`/`aggregate`) or `*Many` events: read authorization and row filtering are RLS/permission-rule concerns, and field masking is field-level metadata.
 
 | Hook | Phase | Can Modify? | Can Abort? |
 |:---|:---|:---|:---|
