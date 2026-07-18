@@ -199,20 +199,38 @@ export function runImport(opts: RunImportOptions): Promise<ImportRunSummary> {
       ...(meta.displayField ? [meta.displayField] : []),
       'name', 'title', 'label', 'full_name', 'email', 'username',
     ])];
-    let match: RefMatch = {};
-    for (const f of candidates) {
-      try {
-        const r = await p.findData({
-          ...findArgsBase({ $filter: { [f]: display }, $top: 2 }),
-          object: referenceObject,
-        });
-        const recs = findRows(r);
-        if (recs.length === 0) continue;
-        if (recs.length > 1) { match = { ambiguous: true, matchedField: f }; break; }
-        if (recs[0]?.id != null) { match = { id: String(recs[0].id), matchedField: f }; break; }
-      } catch { /* field absent on target object — try the next candidate */ }
+    const lookup = async (): Promise<RefMatch> => {
+      let match: RefMatch = {};
+      for (const f of candidates) {
+        try {
+          const r = await p.findData({
+            ...findArgsBase({ $filter: { [f]: display }, $top: 2 }),
+            object: referenceObject,
+          });
+          const recs = findRows(r);
+          if (recs.length === 0) continue;
+          if (recs.length > 1) { match = { ambiguous: true, matchedField: f }; break; }
+          if (recs[0]?.id != null) { match = { id: String(recs[0].id), matchedField: f }; break; }
+        } catch { /* field absent on target object — try the next candidate */ }
+      }
+      return match;
+    };
+    let match = await lookup();
+    // A miss may just mean the referenced row is still buffered as a pending
+    // create — the same-file "later row references an earlier CREATE" case that
+    // the batched-create rework regressed. Flush the buffer and retry the
+    // lookup once: the buffered rows are all EARLIER than this one (resolveRef
+    // runs mid row-loop), so the flush is safe and, once drained, a no-op.
+    // Only a reference to THIS object can be satisfied from the buffer, so we
+    // don't flush for a miss on some other object (framework#3148).
+    if (!match.id && !match.ambiguous && referenceObject === objectName && pendingCreates.length > 0) {
+      await flushPendingCreates();
+      match = await lookup();
     }
-    refCache.set(cacheKey, match);
+    // Cache only a definitive verdict. A bare miss ({}) is deliberately NOT
+    // cached: the referenced row may be created by a later flush, and a
+    // negative-cache entry would pin the miss forever (the pre-fix regression).
+    if (match.id != null || match.ambiguous) refCache.set(cacheKey, match);
     return match;
   };
 
