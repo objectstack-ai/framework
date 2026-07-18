@@ -34,8 +34,12 @@
  *
  * Every variant declared by `ValidationRuleSchema` is enforced here — the
  * schema deliberately excludes anything that would need I/O or a handler model
- * (uniqueness → DB index, async → form layer, custom → lifecycle hook), so
- * there are no silent no-ops.
+ * (uniqueness → DB index, async → form layer, custom → lifecycle hook). The
+ * engine invokes this evaluator on insert, single-id update, and — per matched
+ * row — multi-row (`multi: true`) update (#3106), so no declared rule is a
+ * silent no-op on the write path. Known gap: rules declaring
+ * `events: ['delete']` are never evaluated (`engine.delete` does not call this
+ * evaluator; tracked separately — see below).
  *
  * ## Execution-control semantics (from `BaseValidationSchema`)
  *
@@ -61,7 +65,10 @@
  * the record's prior state. The engine fetches it once (see
  * `engine.update`) and threads it in via `opts.previous`. On `insert` there
  * is no prior state, so `state_machine` is a no-op (the field-level select
- * check already constrains the initial value to a declared option).
+ * check already constrains the initial value to a declared option). On a
+ * multi-row update the engine reads the row-scoped match set (the same AST the
+ * write binds, shared with the `readonlyWhen` bulk strip) and calls the
+ * evaluator once per matched row — one payload, N priors (#3106).
  */
 
 import { ExpressionEngine } from '@objectstack/formula';

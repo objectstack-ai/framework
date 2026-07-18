@@ -30,7 +30,7 @@ import { ExpressionEngine } from '@objectstack/formula';
 import type { Expression } from '@objectstack/spec';
 import { isAggregatedViewContainer, expandViewContainer } from '@objectstack/spec';
 import { bindHooksToEngine } from './hook-binder.js';
-import { validateRecord, normalizeMultiValueFields, coerceBooleanFields } from './validation/record-validator.js';
+import { validateRecord, normalizeMultiValueFields, coerceBooleanFields, ValidationError } from './validation/record-validator.js';
 import { evaluateValidationRules, needsPriorRecord, stripReadonlyWhenFields, stripReadonlyWhenFieldsMulti, hasReadonlyWhenInPayload, stripReadonlyFields } from './validation/rule-validator.js';
 import { applyInMemoryAggregation } from './in-memory-aggregation.js';
 
@@ -2442,13 +2442,6 @@ export class ObjectQL implements IDataEngine {
                await this.encryptSecretFields(object, hookContext.input.data as Record<string, unknown>, opCtx.context, hookContext.input.options);
                normalizeMultiValueFields(updateSchema, hookContext.input.data as Record<string, unknown>);
                validateRecord(updateSchema, hookContext.input.data as Record<string, unknown>, 'update');
-               // Multi-row update: per-row prior state is not fetched for the
-               // object-level state_machine / cross_field / script rules (they
-               // need one prior per row, and a single bulk payload cannot diverge
-               // per row). Warn so the gap stays visible.
-               if (needsPriorRecord(updateSchema as any)) {
-                   this.logger.warn('Object-level validation rules (state_machine/cross_field/script) are not enforced on multi-row updates', { object });
-               }
                // [#2982] Consume the middleware-composed AST seeded above, so
                // the injected row-scoping (RLS write filter, sharing's
                // editable-rows filter) actually binds the driver operation. Fail
@@ -2463,17 +2456,28 @@ export class ObjectQL implements IDataEngine {
                        `(a hook cleared the target id after the security filter was composed).`,
                    );
                }
+               // [#3106] Validation rules, `requiredWhen` and per-option
+               // `visibleWhen` are PER ROW on a bulk update, exactly like the
+               // `readonlyWhen` strip below: one payload, N prior states. Read
+               // the row-scoped match set ONCE with the SAME AST the write binds
+               // (shared with the [#3042] strip), and only when the schema
+               // actually needs prior state — `needsPriorRecord` subsumes
+               // `hasReadonlyWhenInPayload` (readonlyWhen fields count toward
+               // it), so a rule-free schema still pays nothing here.
+               const rulesNeedRows = needsPriorRecord(updateSchema as any);
+               const payloadHasReadonlyWhen = hasReadonlyWhenInPayload(updateSchema as any, hookContext.input.data as Record<string, unknown>);
+               let priorRows: Record<string, unknown>[] | null = null;
+               if (rulesNeedRows || payloadHasReadonlyWhen) {
+                   priorRows = await driver.find(object, ast, hookContext.input.options as any) as Record<string, unknown>[];
+               }
                // [#3042] Enforce conditional `readonlyWhen` on the bulk path too.
                // Unlike static `readonly` (below), a `readonlyWhen` lock is PER
-               // ROW, so read the row-scoped match set with the SAME AST the write
-               // binds (one query, and only when the payload actually writes a
-               // `readonlyWhen` field) and drop any field locked in ≥1 matched row
-               // — a bulk write can't keep it for some rows and drop it for others,
-               // so a field locked in any target row is fail-safe-dropped for all
-               // (narrow `where` to reach the unlocked rows). Symmetric with the
+               // ROW — drop any field locked in ≥1 matched row: a bulk write
+               // can't keep it for some rows and drop it for others, so a field
+               // locked in any target row is fail-safe-dropped for all (narrow
+               // `where` to reach the unlocked rows). Symmetric with the
                // single-id `stripReadonlyWhenFields`; INSERT stays exempt.
-               if (hasReadonlyWhenInPayload(updateSchema as any, hookContext.input.data as Record<string, unknown>)) {
-                   const priorRows = await driver.find(object, ast, hookContext.input.options as any);
+               if (payloadHasReadonlyWhen) {
                    hookContext.input.data = stripReadonlyWhenFieldsMulti(updateSchema as any, hookContext.input.data as Record<string, unknown>, priorRows, this.logger) as any;
                }
                // [#2948] Same static-`readonly` write guard on the bulk path —
@@ -2482,6 +2486,30 @@ export class ObjectQL implements IDataEngine {
                // rejected upstream by the tenant write wall, #2946).
                if (!opCtx.context?.isSystem) {
                    hookContext.input.data = stripReadonlyFields(updateSchema as any, hookContext.input.data as Record<string, unknown>, suppliedKeys, this.logger) as any;
+               }
+               // [#3106] Same enforcement the single-id branch runs at its
+               // `evaluateValidationRules` call, applied per matched row: any
+               // error-severity violation rejects the WHOLE batch before
+               // `updateMany` writes anything (all-or-nothing, like the strip's
+               // locked-in-any-row rule). Runs on the stripped payload, in the
+               // single-id branch's order. Warning-severity violations may log
+               // once per matched row — accepted. With no prior-dependent rules
+               // the payload-only evaluation covers format / json_schema /
+               // non-prior conditional at zero fetch cost.
+               const bulkEvalUser = this.buildEvalUser(opCtx.context);
+               if (rulesNeedRows) {
+                   for (const row of priorRows ?? []) {
+                       try {
+                           evaluateValidationRules(updateSchema as any, hookContext.input.data as Record<string, unknown>, 'update', { previous: row, logger: this.logger, currentUser: bulkEvalUser });
+                       } catch (err) {
+                           if (err instanceof ValidationError && row?.id != null) {
+                               throw new ValidationError(err.fields.map((f) => ({ ...f, message: `${f.message} (record ${String(row.id)})` })));
+                           }
+                           throw err;
+                       }
+                   }
+               } else {
+                   evaluateValidationRules(updateSchema as any, hookContext.input.data as Record<string, unknown>, 'update', { previous: null, logger: this.logger, currentUser: bulkEvalUser });
                }
                result = await driver.updateMany(object, ast, hookContext.input.data as Record<string, unknown>, hookContext.input.options as any);
            } else {

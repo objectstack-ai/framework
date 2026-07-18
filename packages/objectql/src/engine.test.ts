@@ -698,6 +698,150 @@ describe('ObjectQL Engine', () => {
         });
     });
 
+    describe('Bulk update validation enforcement (#3106)', () => {
+        beforeEach(async () => {
+            engine.registerDriver(mockDriver, true);
+            await engine.init();
+            (mockDriver as any).updateMany = vi.fn().mockResolvedValue(2);
+        });
+
+        it('enforces a prior-free format rule on multi without fetching rows', async () => {
+            // format / json_schema need nothing from the prior record, so the
+            // bulk path must evaluate them against the payload with NO fetch.
+            vi.mocked(SchemaRegistry.getObject).mockReturnValue({
+                name: 'acct',
+                fields: { email: { type: 'text' } },
+                validations: [{ type: 'format', name: 'email_format', message: 'email must be a valid email', field: 'email', format: 'email' }],
+            } as any);
+
+            await expect(
+                engine.update('acct', { email: 'not-an-email' }, { where: { status: 'active' }, multi: true } as any),
+            ).rejects.toThrow(/valid email/);
+            expect((mockDriver as any).updateMany).not.toHaveBeenCalled();
+            expect(mockDriver.find).not.toHaveBeenCalled();
+        });
+
+        it('lets a valid payload through the same format rule', async () => {
+            vi.mocked(SchemaRegistry.getObject).mockReturnValue({
+                name: 'acct',
+                fields: { email: { type: 'text' } },
+                validations: [{ type: 'format', name: 'email_format', message: 'email must be a valid email', field: 'email', format: 'email' }],
+            } as any);
+
+            await engine.update('acct', { email: 'a@example.com' }, { where: { status: 'active' }, multi: true } as any);
+            expect((mockDriver as any).updateMany).toHaveBeenCalledTimes(1);
+        });
+
+        it('evaluates a state_machine rule per matched row and rejects the whole batch when one row violates', async () => {
+            vi.mocked(SchemaRegistry.getObject).mockReturnValue({
+                name: 'task',
+                fields: { status: { type: 'select' } },
+                validations: [{ type: 'state_machine', name: 'status_flow', message: 'illegal status transition', field: 'status', transitions: { pending: ['in_flight'], done: ['archived'] } }],
+            } as any);
+            // Rows are fetched with the SAME row-scoped ast the write binds.
+            vi.mocked(mockDriver.find).mockResolvedValue([
+                { id: 'a', status: 'pending' }, // pending → in_flight is legal
+                { id: 'b', status: 'done' },    // done → in_flight is not
+            ] as any);
+
+            await expect(
+                engine.update('task', { status: 'in_flight' }, { where: { status: { $in: ['pending', 'done'] } }, multi: true } as any),
+            ).rejects.toThrow(/illegal status transition \(record b\)/);
+            expect(mockDriver.find).toHaveBeenCalledTimes(1);
+            const [obj, ast] = vi.mocked(mockDriver.find).mock.calls[0];
+            expect(obj).toBe('task');
+            expect((ast as any).where).toEqual({ status: { $in: ['pending', 'done'] } });
+            expect((mockDriver as any).updateMany).not.toHaveBeenCalled();
+        });
+
+        it('proceeds when every matched row passes the state_machine rule', async () => {
+            vi.mocked(SchemaRegistry.getObject).mockReturnValue({
+                name: 'task',
+                fields: { status: { type: 'select' } },
+                validations: [{ type: 'state_machine', name: 'status_flow', message: 'illegal status transition', field: 'status', transitions: { pending: ['in_flight'], done: ['archived'] } }],
+            } as any);
+            vi.mocked(mockDriver.find).mockResolvedValue([
+                { id: 'a', status: 'pending' },
+                { id: 'b', status: 'pending' },
+            ] as any);
+
+            await engine.update('task', { status: 'in_flight' }, { where: { status: 'pending' }, multi: true } as any);
+            expect((mockDriver as any).updateMany).toHaveBeenCalledTimes(1);
+        });
+
+        it('does not fetch rows for a rule-free schema (outbox/settings bulk writes stay zero-cost)', async () => {
+            vi.mocked(SchemaRegistry.getObject).mockReturnValue({ name: 'task', fields: {} } as any);
+
+            await engine.update('task', { status: 'done' }, { where: { status: 'pending' }, multi: true } as any);
+            expect(mockDriver.find).not.toHaveBeenCalled();
+            expect((mockDriver as any).updateMany).toHaveBeenCalledTimes(1);
+        });
+
+        it('enforces requiredWhen against each matched row\'s merged record', async () => {
+            vi.mocked(SchemaRegistry.getObject).mockReturnValue({
+                name: 'ticket',
+                fields: {
+                    status: { type: 'select' },
+                    resolution: { type: 'text', requiredWhen: "record.status == 'closed'" },
+                },
+            } as any);
+            vi.mocked(mockDriver.find).mockResolvedValue([
+                { id: 'a', status: 'open', resolution: 'fixed' }, // merged has a resolution
+                { id: 'b', status: 'open', resolution: null },    // merged is missing it
+            ] as any);
+
+            await expect(
+                engine.update('ticket', { status: 'closed' }, { where: { status: 'open' }, multi: true } as any),
+            ).rejects.toThrow(/resolution is required \(record b\)/);
+            expect((mockDriver as any).updateMany).not.toHaveBeenCalled();
+        });
+
+        it('enforces per-option visibleWhen against each matched row (cascade gating)', async () => {
+            vi.mocked(SchemaRegistry.getObject).mockReturnValue({
+                name: 'case',
+                fields: {
+                    tier: { type: 'select' },
+                    priority: {
+                        type: 'select',
+                        options: [
+                            { value: 'urgent', visibleWhen: "record.tier == 'gold'" },
+                            { value: 'normal' },
+                        ],
+                    },
+                },
+            } as any);
+            vi.mocked(mockDriver.find).mockResolvedValue([
+                { id: 'a', tier: 'gold' },   // 'urgent' is available here
+                { id: 'b', tier: 'silver' }, // hidden option submitted for this row
+            ] as any);
+
+            await expect(
+                engine.update('case', { priority: 'urgent' }, { where: { status: 'open' }, multi: true } as any),
+            ).rejects.toThrow(/option 'urgent' is not available \(record b\)/);
+            expect((mockDriver as any).updateMany).not.toHaveBeenCalled();
+        });
+
+        it('shares ONE row fetch between the readonlyWhen strip and rule evaluation', async () => {
+            vi.mocked(SchemaRegistry.getObject).mockReturnValue({
+                name: 'invoice',
+                fields: {
+                    amount: { type: 'number', readonlyWhen: 'record.locked == true' },
+                },
+                validations: [{ type: 'cross_field', name: 'amount_cap', message: 'amount exceeds limit', condition: 'record.amount > record.limit', fields: ['amount'] }],
+            } as any);
+            vi.mocked(mockDriver.find).mockResolvedValue([
+                { id: 'a', locked: false, amount: 10, limit: 100 },
+            ] as any);
+
+            await engine.update('invoice', { amount: 50 }, { where: { status: 'draft' }, multi: true } as any);
+            expect(mockDriver.find).toHaveBeenCalledTimes(1);
+            expect((mockDriver as any).updateMany).toHaveBeenCalledTimes(1);
+            // The unlocked conditional field survives the strip.
+            const [, , data] = (mockDriver as any).updateMany.mock.calls[0];
+            expect(data).toHaveProperty('amount', 50);
+        });
+    });
+
     describe('Expand Related Records', () => {
         beforeEach(async () => {
             engine.registerDriver(mockDriver, true);

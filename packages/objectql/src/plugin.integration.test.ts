@@ -1451,4 +1451,110 @@ describe('ObjectQLPlugin - Metadata Service Integration', () => {
       expect(bulkUpdates[0].tax_rate).toBe(999); // legitimate bulk edit unaffected
     });
   });
+
+  // #3106 — object-level validation rules, `requiredWhen` and per-option
+  // `visibleWhen` must be enforced on the BULK (updateMany) path too. The
+  // engine reads the matched rows once (shared with the #3042 strip) and
+  // evaluates the payload against each row's prior state.
+  describe('validation rule enforcement on multi-row UPDATE (#3106)', () => {
+    async function bootWithValidationCapture(priorRows: Record<string, any>[], obj: ObjectSchema) {
+      const bulkUpdates: Record<string, any>[] = [];
+      // Count only reads of the object under test — kernel bootstrap issues
+      // its own driver.find calls (sys_metadata restore, authored-hook resync).
+      let findCalls = 0;
+      const mockDriver = {
+        name: 'vr-capture', version: '1.0.0',
+        connect: async () => {}, disconnect: async () => {},
+        find: async (o: string) => { if (o === obj.name) { findCalls += 1; return priorRows; } return []; },
+        findOne: async () => null,
+        create: async (_o: string, d: any) => ({ id: 'rec-1', ...d }),
+        update: async (_o: string, _i: any, d: any) => ({ id: _i, ...d }),
+        updateMany: async (_o: string, _ast: any, d: any) => { bulkUpdates.push({ ...d }); return [{ ...d }]; },
+        delete: async () => true, syncSchema: async () => {},
+      };
+      await kernel.use({
+        name: 'vr-capture-plugin', type: 'driver', version: '1.0.0',
+        init: async (ctx) => { ctx.registerService('driver.vr-capture', mockDriver); },
+      });
+      await kernel.use(new ObjectQLPlugin());
+      await kernel.bootstrap();
+      const objectql = kernel.getService('objectql') as any;
+      objectql.registry.registerObject(obj, 'test', 'test');
+      return { objectql, bulkUpdates, getFindCalls: () => findCalls };
+    }
+
+    it('rejects the whole batch on a prior-free format rule, with no row fetch', async () => {
+      const { objectql, bulkUpdates, getFindCalls } = await bootWithValidationCapture([], {
+        name: 'vr_acct', label: 'VR Acct', datasource: 'vr-capture',
+        fields: { email: { name: 'email', label: 'Email', type: 'text' } },
+        validations: [{ type: 'format', name: 'email_format', message: 'email must be a valid email', field: 'email', format: 'email' }] as any,
+      });
+      await expect(objectql.update(
+        'vr_acct',
+        { email: 'not-an-email' },
+        { multi: true, where: { status: 'active' }, context: { userId: 'user-9' } },
+      )).rejects.toThrow(/valid email/);
+      expect(bulkUpdates.length).toBe(0); // nothing written
+      expect(getFindCalls()).toBe(0);     // format needs no prior state
+    });
+
+    it('evaluates a state_machine rule per matched row: one illegal row rejects, all-legal proceeds', async () => {
+      const schema: ObjectSchema = {
+        name: 'vr_task', label: 'VR Task', datasource: 'vr-capture',
+        fields: { status: { name: 'status', label: 'Status', type: 'text' } },
+        validations: [{ type: 'state_machine', name: 'status_flow', message: 'illegal status transition', field: 'status', transitions: { pending: ['in_flight'], done: ['archived'] } }] as any,
+      };
+      const bad = await bootWithValidationCapture(
+        [{ id: 'a', status: 'pending' }, { id: 'b', status: 'done' }],
+        schema,
+      );
+      await expect(bad.objectql.update(
+        'vr_task',
+        { status: 'in_flight' },
+        { multi: true, where: { status: { $in: ['pending', 'done'] } }, context: { userId: 'user-9' } },
+      )).rejects.toThrow(/illegal status transition \(record b\)/);
+      expect(bad.bulkUpdates.length).toBe(0);
+    });
+
+    it('accepts the batch when every matched row transitions legally', async () => {
+      const schema: ObjectSchema = {
+        name: 'vr_task', label: 'VR Task', datasource: 'vr-capture',
+        fields: { status: { name: 'status', label: 'Status', type: 'text' } },
+        validations: [{ type: 'state_machine', name: 'status_flow', message: 'illegal status transition', field: 'status', transitions: { pending: ['in_flight'], done: ['archived'] } }] as any,
+      };
+      const ok = await bootWithValidationCapture(
+        [{ id: 'a', status: 'pending' }, { id: 'b', status: 'pending' }],
+        schema,
+      );
+      await ok.objectql.update(
+        'vr_task',
+        { status: 'in_flight' },
+        { multi: true, where: { status: 'pending' }, context: { userId: 'user-9' } },
+      );
+      expect(ok.bulkUpdates.length).toBe(1);
+      expect(ok.bulkUpdates[0].status).toBe('in_flight');
+    });
+
+    it('shares ONE row fetch between the readonlyWhen strip and per-row rule evaluation', async () => {
+      const { objectql, bulkUpdates, getFindCalls } = await bootWithValidationCapture(
+        [{ id: 'a', status: 'draft', amount: 10, limit: 100 }],
+        {
+          name: 'vr_invoice', label: 'VR Invoice', datasource: 'vr-capture',
+          fields: {
+            status: { name: 'status', label: 'Status', type: 'text' },
+            amount: { name: 'amount', label: 'Amount', type: 'number', readonlyWhen: "record.status == 'paid'" } as any,
+          },
+          validations: [{ type: 'cross_field', name: 'amount_cap', message: 'amount exceeds limit', condition: 'record.amount > record.limit', fields: ['amount'] }] as any,
+        },
+      );
+      await objectql.update(
+        'vr_invoice',
+        { amount: 50 },
+        { multi: true, where: { status: 'draft' }, context: { userId: 'user-9' } },
+      );
+      expect(getFindCalls()).toBe(1);         // strip + validation share the read
+      expect(bulkUpdates.length).toBe(1);
+      expect(bulkUpdates[0].amount).toBe(50); // unlocked row: edit goes through
+    });
+  });
 });
