@@ -727,6 +727,14 @@ export class SysMetadataRepository implements MetadataRepository {
     Array<{
       type: string;
       name: string;
+      /**
+       * The scope the draft actually lives in — `null` for an env-wide draft,
+       * a string for a per-org overlay draft. The `$or` below surfaces BOTH to
+       * a non-null-org caller, so consumers that then act on a draft (promote /
+       * discard) MUST route the write to THIS scope, not the caller's active
+       * org, or they 404 on the env-wide row they can never match (#3115).
+       */
+      organizationId: string | null;
       packageId: string | null;
       updatedAt: string | null;
       updatedBy: string | null;
@@ -756,6 +764,7 @@ export class SysMetadataRepository implements MetadataRepository {
     return (rows as any[]).map((row) => ({
       type: row.type,
       name: row.name,
+      organizationId: row.organization_id ?? null,
       packageId: row.package_id ?? null,
       updatedAt: row.updated_at ?? row.created_at ?? null,
       updatedBy: row.updated_by ?? row.created_by ?? null,

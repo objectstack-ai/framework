@@ -75,8 +75,14 @@ describe('SysMetadataRepository.listDrafts (ADR-0033)', () => {
       { type: 'object', name: 'other_org', state: 'draft', package_id: 'p', organization_id: 'org_other', updated_at: 't3' },
     ];
     const { repo } = makeRepo(rows, 'org_acme');
-    const names = (await repo.listDrafts()).map((d) => d.name).sort();
-    expect(names).toEqual(['env_wide', 'org_scoped']);
+    const out = await repo.listDrafts();
+    expect(out.map((d) => d.name).sort()).toEqual(['env_wide', 'org_scoped']);
+    // Each draft is projected with the scope it actually lives in, so the
+    // publish/discard paths can promote/delete it in THAT scope rather than the
+    // caller's active org — otherwise the env-wide row 404s as `no_draft`
+    // (#3115). This projection is the contract those callers depend on.
+    expect(out.find((d) => d.name === 'env_wide')?.organizationId).toBeNull();
+    expect(out.find((d) => d.name === 'org_scoped')?.organizationId).toBe('org_acme');
   });
 
   it('filters by type', async () => {
