@@ -215,9 +215,15 @@ the split-brain this ADR exists to end, not extend.
 
 The terminal state is **one backend, not two** — now realized: `service-feed`'s
 runtime (the package + the `feed` capability) is removed; `sys_comment` /
-`sys_activity` stand alone. (The vestigial spec *contracts* — `feed.zod` /
-`feed-api.zod` / `IFeedService` — are a separate type-surface cleanup, since they
-are woven into `component.zod` / `protocol.zod` / objectql; tracked as follow-up.)
+`sys_activity` stand alone. The vestigial spec *contracts* — `feed-api.zod` /
+`IFeedService` / `data/subscription.zod`, plus the `FeedProtocol` slice of
+`protocol.zod`, the never-wired `getFeedService` plumbing in the protocol
+implementation, and the client `feed` SDK accessor — were **removed in #1959**.
+`data/feed.zod` is trimmed to just the `FeedItemType` / `FeedFilterMode` enums,
+which are live UI config for the record activity component (`component.zod`).
+(The residual discovery/dispatcher `feed` capability surface — `routes.feed`,
+`WellKnownCapabilities.feed`, the `/api/v1/feed` dispatcher entry — is a small
+separate follow-up, tracked as #3180.)
 
 ## 5b. Declarative activity — the platform generates it, apps don't code it
 

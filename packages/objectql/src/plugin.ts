@@ -230,7 +230,6 @@ export class ObjectQLPlugin implements Plugin {
     const protocolShim = new ObjectStackProtocolImplementation(
       this.ql,
       () => ctx.getServices ? ctx.getServices() : new Map(),
-      undefined,
       this.environmentId,
     );
 

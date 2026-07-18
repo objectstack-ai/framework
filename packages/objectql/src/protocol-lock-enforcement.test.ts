@@ -40,7 +40,6 @@ function makeProtocol(opts: { environmentId?: string } = {}) {
     const protocol = new ObjectStackProtocolImplementation(
         mockEngine,
         undefined,
-        undefined,
         opts.environmentId ?? 'env_prod',
     );
     return { protocol, mockEngine, registry };
@@ -173,7 +172,7 @@ describe('ADR-0010 L3 lock enforcement — single-kernel bypass', () => {
         };
         // No environmentId — single-kernel / control plane.
         const protocol = new ObjectStackProtocolImplementation(
-            mockEngine, undefined, undefined, undefined,
+            mockEngine, undefined, undefined,
         );
         seedLockedArtifact(registry, 'view', 'case_grid', 'full');
 

@@ -66,20 +66,6 @@ import {
   GetTranslationsResponse,
   GetFieldLabelsResponse,
   RegisterRequest,
-  GetFeedResponse,
-  CreateFeedItemResponse,
-  UpdateFeedItemResponse,
-  DeleteFeedItemResponse,
-  AddReactionResponse,
-  RemoveReactionResponse,
-  PinFeedItemResponse,
-  UnpinFeedItemResponse,
-  StarFeedItemResponse,
-  UnstarFeedItemResponse,
-  SearchFeedResponse,
-  GetChangelogResponse,
-  SubscribeResponse,
-  UnsubscribeResponse,
   WellKnownCapabilities,
   ApiRoutes,
   ImportRequest,
@@ -2768,188 +2754,6 @@ export class ObjectStackClient {
   };
 
   /**
-   * Feed / Chatter Services
-   *
-   * Provides access to the activity timeline (comments, field changes, tasks),
-   * emoji reactions, pin/star, search, changelog, and record subscriptions.
-   * Base path: /api/data/{object}/{recordId}/feed
-   */
-  feed = {
-    /**
-     * List feed items for a record
-     */
-    list: async (object: string, recordId: string, options?: { type?: string; limit?: number; cursor?: string }): Promise<GetFeedResponse> => {
-      const route = this.getRoute('data');
-      const params = new URLSearchParams();
-      if (options?.type) params.set('type', options.type);
-      if (options?.limit) params.set('limit', String(options.limit));
-      if (options?.cursor) params.set('cursor', options.cursor);
-      const qs = params.toString();
-      const res = await this.fetch(`${this.baseUrl}${route}/${encodeURIComponent(object)}/${encodeURIComponent(recordId)}/feed${qs ? `?${qs}` : ''}`);
-      return this.unwrapResponse<GetFeedResponse>(res);
-    },
-
-    /**
-     * Create a new feed item (comment, note, task, etc.)
-     */
-    create: async (object: string, recordId: string, data: { type: string; body?: string; mentions?: any[]; parentId?: string; visibility?: string }): Promise<CreateFeedItemResponse> => {
-      const route = this.getRoute('data');
-      const res = await this.fetch(`${this.baseUrl}${route}/${encodeURIComponent(object)}/${encodeURIComponent(recordId)}/feed`, {
-        method: 'POST',
-        body: JSON.stringify(data)
-      });
-      return this.unwrapResponse<CreateFeedItemResponse>(res);
-    },
-
-    /**
-     * Update an existing feed item
-     */
-    update: async (object: string, recordId: string, feedId: string, data: { body?: string; mentions?: any[]; visibility?: string }): Promise<UpdateFeedItemResponse> => {
-      const route = this.getRoute('data');
-      const res = await this.fetch(`${this.baseUrl}${route}/${encodeURIComponent(object)}/${encodeURIComponent(recordId)}/feed/${encodeURIComponent(feedId)}`, {
-        method: 'PUT',
-        body: JSON.stringify(data)
-      });
-      return this.unwrapResponse<UpdateFeedItemResponse>(res);
-    },
-
-    /**
-     * Delete a feed item
-     */
-    delete: async (object: string, recordId: string, feedId: string): Promise<DeleteFeedItemResponse> => {
-      const route = this.getRoute('data');
-      const res = await this.fetch(`${this.baseUrl}${route}/${encodeURIComponent(object)}/${encodeURIComponent(recordId)}/feed/${encodeURIComponent(feedId)}`, {
-        method: 'DELETE'
-      });
-      return this.unwrapResponse<DeleteFeedItemResponse>(res);
-    },
-
-    /**
-     * Add an emoji reaction to a feed item
-     */
-    addReaction: async (object: string, recordId: string, feedId: string, emoji: string): Promise<AddReactionResponse> => {
-      const route = this.getRoute('data');
-      const res = await this.fetch(`${this.baseUrl}${route}/${encodeURIComponent(object)}/${encodeURIComponent(recordId)}/feed/${encodeURIComponent(feedId)}/reactions`, {
-        method: 'POST',
-        body: JSON.stringify({ emoji })
-      });
-      return this.unwrapResponse<AddReactionResponse>(res);
-    },
-
-    /**
-     * Remove an emoji reaction from a feed item
-     */
-    removeReaction: async (object: string, recordId: string, feedId: string, emoji: string): Promise<RemoveReactionResponse> => {
-      const route = this.getRoute('data');
-      const res = await this.fetch(`${this.baseUrl}${route}/${encodeURIComponent(object)}/${encodeURIComponent(recordId)}/feed/${encodeURIComponent(feedId)}/reactions/${encodeURIComponent(emoji)}`, {
-        method: 'DELETE'
-      });
-      return this.unwrapResponse<RemoveReactionResponse>(res);
-    },
-
-    /**
-     * Pin a feed item to the top of the timeline
-     */
-    pin: async (object: string, recordId: string, feedId: string): Promise<PinFeedItemResponse> => {
-      const route = this.getRoute('data');
-      const res = await this.fetch(`${this.baseUrl}${route}/${encodeURIComponent(object)}/${encodeURIComponent(recordId)}/feed/${encodeURIComponent(feedId)}/pin`, {
-        method: 'POST'
-      });
-      return this.unwrapResponse<PinFeedItemResponse>(res);
-    },
-
-    /**
-     * Unpin a feed item
-     */
-    unpin: async (object: string, recordId: string, feedId: string): Promise<UnpinFeedItemResponse> => {
-      const route = this.getRoute('data');
-      const res = await this.fetch(`${this.baseUrl}${route}/${encodeURIComponent(object)}/${encodeURIComponent(recordId)}/feed/${encodeURIComponent(feedId)}/pin`, {
-        method: 'DELETE'
-      });
-      return this.unwrapResponse<UnpinFeedItemResponse>(res);
-    },
-
-    /**
-     * Star (bookmark) a feed item
-     */
-    star: async (object: string, recordId: string, feedId: string): Promise<StarFeedItemResponse> => {
-      const route = this.getRoute('data');
-      const res = await this.fetch(`${this.baseUrl}${route}/${encodeURIComponent(object)}/${encodeURIComponent(recordId)}/feed/${encodeURIComponent(feedId)}/star`, {
-        method: 'POST'
-      });
-      return this.unwrapResponse<StarFeedItemResponse>(res);
-    },
-
-    /**
-     * Unstar a feed item
-     */
-    unstar: async (object: string, recordId: string, feedId: string): Promise<UnstarFeedItemResponse> => {
-      const route = this.getRoute('data');
-      const res = await this.fetch(`${this.baseUrl}${route}/${encodeURIComponent(object)}/${encodeURIComponent(recordId)}/feed/${encodeURIComponent(feedId)}/star`, {
-        method: 'DELETE'
-      });
-      return this.unwrapResponse<UnstarFeedItemResponse>(res);
-    },
-
-    /**
-     * Search feed items
-     */
-    search: async (object: string, recordId: string, query: string, options?: { type?: string; actorId?: string; dateFrom?: string; dateTo?: string; limit?: number; cursor?: string }): Promise<SearchFeedResponse> => {
-      const route = this.getRoute('data');
-      const params = new URLSearchParams();
-      params.set('query', query);
-      if (options?.type) params.set('type', options.type);
-      if (options?.actorId) params.set('actorId', options.actorId);
-      if (options?.dateFrom) params.set('dateFrom', options.dateFrom);
-      if (options?.dateTo) params.set('dateTo', options.dateTo);
-      if (options?.limit) params.set('limit', String(options.limit));
-      if (options?.cursor) params.set('cursor', options.cursor);
-      const res = await this.fetch(`${this.baseUrl}${route}/${encodeURIComponent(object)}/${encodeURIComponent(recordId)}/feed/search?${params.toString()}`);
-      return this.unwrapResponse<SearchFeedResponse>(res);
-    },
-
-    /**
-     * Get field-level changelog for a record
-     */
-    getChangelog: async (object: string, recordId: string, options?: { field?: string; actorId?: string; dateFrom?: string; dateTo?: string; limit?: number; cursor?: string }): Promise<GetChangelogResponse> => {
-      const route = this.getRoute('data');
-      const params = new URLSearchParams();
-      if (options?.field) params.set('field', options.field);
-      if (options?.actorId) params.set('actorId', options.actorId);
-      if (options?.dateFrom) params.set('dateFrom', options.dateFrom);
-      if (options?.dateTo) params.set('dateTo', options.dateTo);
-      if (options?.limit) params.set('limit', String(options.limit));
-      if (options?.cursor) params.set('cursor', options.cursor);
-      const qs = params.toString();
-      const res = await this.fetch(`${this.baseUrl}${route}/${encodeURIComponent(object)}/${encodeURIComponent(recordId)}/changelog${qs ? `?${qs}` : ''}`);
-      return this.unwrapResponse<GetChangelogResponse>(res);
-    },
-
-    /**
-     * Subscribe to record notifications
-     */
-    subscribe: async (object: string, recordId: string, options?: { events?: string[]; channels?: string[] }): Promise<SubscribeResponse> => {
-      const route = this.getRoute('data');
-      const res = await this.fetch(`${this.baseUrl}${route}/${encodeURIComponent(object)}/${encodeURIComponent(recordId)}/subscribe`, {
-        method: 'POST',
-        body: JSON.stringify(options || {})
-      });
-      return this.unwrapResponse<SubscribeResponse>(res);
-    },
-
-    /**
-     * Unsubscribe from record notifications
-     */
-    unsubscribe: async (object: string, recordId: string): Promise<UnsubscribeResponse> => {
-      const route = this.getRoute('data');
-      const res = await this.fetch(`${this.baseUrl}${route}/${encodeURIComponent(object)}/${encodeURIComponent(recordId)}/subscribe`, {
-        method: 'DELETE'
-      });
-      return this.unwrapResponse<UnsubscribeResponse>(res);
-    },
-  };
-
-  /**
    * Data Operations
    */
   data = {
@@ -3398,6 +3202,10 @@ export class ObjectStackClient {
       notifications: '/api/v1/notifications',
       ai: '/api/v1/ai',
       i18n: '/api/v1/i18n',
+      // NOTE: the `feed` route constant is retained only to satisfy the
+      // discovery `ApiRoutes` type (`routes.feed`), which is a separate
+      // follow-up cleanup. The feed SDK accessor + backend were retired
+      // (ADR-0052 §5); no client code consumes this route.
       feed: '/api/v1/feed',
       graphql: '/graphql',
     };
@@ -3796,20 +3604,6 @@ export type {
   GetFieldLabelsResponse,
   RegisterRequest,
   RefreshTokenRequest,
-  GetFeedResponse,
-  CreateFeedItemResponse,
-  UpdateFeedItemResponse,
-  DeleteFeedItemResponse,
-  AddReactionResponse,
-  RemoveReactionResponse,
-  PinFeedItemResponse,
-  UnpinFeedItemResponse,
-  StarFeedItemResponse,
-  UnstarFeedItemResponse,
-  SearchFeedResponse,
-  GetChangelogResponse,
-  SubscribeResponse,
-  UnsubscribeResponse,
   WellKnownCapabilities,
   GetAuthConfigResponse,
   AuthProviderInfo,

@@ -262,7 +262,7 @@ describe('registry shadow — scoped-kernel lock enforcement is shadow-immune', 
             delete: async () => ({ deleted: 1 }),
         };
         const protocol = new ObjectStackProtocolImplementation(
-            mockEngine, undefined, undefined, 'env_prod',
+            mockEngine, undefined, 'env_prod',
         );
 
         await expect(protocol.saveMetaItem({

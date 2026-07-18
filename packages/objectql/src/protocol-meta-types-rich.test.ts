@@ -113,7 +113,7 @@ describe('ObjectStackProtocolImplementation - getMetaTypes rich response', () =>
 
     it('saveMetaItem honours the env-elevated allow list', async () => {
         // Scoped (project) protocol — overlay gate applies.
-        const scoped = new ObjectStackProtocolImplementation(mockEngine, undefined, undefined, 'env_alpha');
+        const scoped = new ObjectStackProtocolImplementation(mockEngine, undefined, 'env_alpha');
         mockEngine.findOne.mockResolvedValue(null);
 
         // Without env var: `agent` writes blocked — the one remaining

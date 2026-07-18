@@ -32,7 +32,6 @@ export * from './ai-service.js';
 export * from './llm-adapter.js';
 export * from './i18n-service.js';
 export * from './workflow-service.js';
-export * from './feed-service.js';
 export * from './export-service.js';
 export * from './email-service.js';
 export * from './sms-service.js';

@@ -16,7 +16,6 @@
     "errors",
     "events",
     "export",
-    "feed-api",
     "graphql",
     "http",
     "http-cache",

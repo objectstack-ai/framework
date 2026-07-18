@@ -57,8 +57,6 @@ export * from './field-group-layout';
 // create/edit/detail opens by default (full page vs drawer/modal overlay).
 export * from './record-surface';
 
-// Feed & Activity Protocol
+// Feed & Activity Protocol — retains only the UI activity-timeline config enums
+// (FeedItemType / FeedFilterMode); the feed backend contracts were retired (ADR-0052 §5).
 export * from './feed.zod';
-
-// Subscription Protocol
-export * from './subscription.zod';

@@ -5,11 +5,17 @@ description: Feed protocol schemas
 
 {/* ⚠️  AUTO-GENERATED — DO NOT EDIT. Run build-docs.ts to regenerate. Hand-written docs live in the module folders under content/docs/. */}
 
-Feed Item Type
+Activity-timeline UI config enums.
 
-Unified activity types for the record timeline.
+The `service-feed` backend was retired (ADR-0052 §5 / #1955); `sys_comment` /
 
-Covers comments, field changes, tasks, events, and system activities.
+`sys_activity` are the canonical record-collaboration/timeline backend. Only these
+
+two enums remain here — they are pure UI configuration for the record activity
+
+component (`RecordActivityProps` in `../[ui/component.zod.ts](/docs/references/ui/component)`), with no backend
+
+dependency. (A later `feed` → `activity` rename is tracked separately.)
 
 <Callout type="info">
 **Source:** `packages/spec/src/data/feed.zod.ts`
@@ -18,27 +24,12 @@ Covers comments, field changes, tasks, events, and system activities.
 ## TypeScript Usage
 
 ```typescript
-import { FeedActor, FeedFilterMode, FeedItem, FeedItemType, FeedVisibility, FieldChangeEntry, Mention, Reaction } from '@objectstack/spec/data';
-import type { FeedActor, FeedFilterMode, FeedItem, FeedItemType, FeedVisibility, FieldChangeEntry, Mention, Reaction } from '@objectstack/spec/data';
+import { FeedFilterMode, FeedItemType } from '@objectstack/spec/data';
+import type { FeedFilterMode, FeedItemType } from '@objectstack/spec/data';
 
 // Validate data
-const result = FeedActor.parse(data);
+const result = FeedFilterMode.parse(data);
 ```
-
----
-
-## FeedActor
-
-### Properties
-
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| **type** | `Enum<'user' \| 'system' \| 'service' \| 'automation'>` | ✅ | Actor type |
-| **id** | `string` | ✅ | Actor ID |
-| **name** | `string` | optional | Actor display name |
-| **avatarUrl** | `string` | optional | Actor avatar URL |
-| **source** | `string` | optional | Source application (e.g., "Omni", "API", "Studio") |
-
 
 ---
 
@@ -50,37 +41,6 @@ const result = FeedActor.parse(data);
 * `comments_only`
 * `changes_only`
 * `tasks_only`
-
-
----
-
-## FeedItem
-
-### Properties
-
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| **id** | `string` | ✅ | Feed item ID |
-| **type** | `Enum<'comment' \| 'field_change' \| 'task' \| 'event' \| 'email' \| 'call' \| 'note' \| 'file' \| 'record_create' \| 'record_delete' \| 'approval' \| 'sharing' \| 'system'>` | ✅ | Activity type |
-| **object** | `string` | ✅ | Object name (e.g., "account") |
-| **recordId** | `string` | ✅ | Record ID this feed item belongs to |
-| **actor** | `{ type: Enum<'user' \| 'system' \| 'service' \| 'automation'>; id: string; name?: string; avatarUrl?: string; … }` | ✅ | Who performed this action |
-| **body** | `string` | optional | Rich text body (Markdown supported) |
-| **mentions** | `{ type: Enum<'user' \| 'team' \| 'record'>; id: string; name: string; offset: integer; … }[]` | optional | Mentioned users/teams/records |
-| **changes** | `{ field: string; fieldLabel?: string; oldValue?: any; newValue?: any; … }[]` | optional | Field-level changes |
-| **reactions** | `{ emoji: string; userIds: string[]; count: integer }[]` | optional | Emoji reactions on this item |
-| **parentId** | `string` | optional | Parent feed item ID for threaded replies |
-| **replyCount** | `integer` | ✅ | Number of replies |
-| **pinned** | `boolean` | ✅ | Whether the feed item is pinned to the top of the timeline |
-| **pinnedAt** | `string` | optional | Timestamp when the item was pinned |
-| **pinnedBy** | `string` | optional | User ID who pinned the item |
-| **starred** | `boolean` | ✅ | Whether the feed item is starred/bookmarked by the current user |
-| **starredAt** | `string` | optional | Timestamp when the item was starred |
-| **visibility** | `Enum<'public' \| 'internal' \| 'private'>` | ✅ | Visibility: public (all users), internal (team only), private (author + mentioned) |
-| **createdAt** | `string` | ✅ | Creation timestamp |
-| **updatedAt** | `string` | optional | Last update timestamp |
-| **editedAt** | `string` | optional | When comment was last edited |
-| **isEdited** | `boolean` | ✅ | Whether comment has been edited |
 
 
 ---
@@ -102,61 +62,6 @@ const result = FeedActor.parse(data);
 * `approval`
 * `sharing`
 * `system`
-
-
----
-
-## FeedVisibility
-
-### Allowed Values
-
-* `public`
-* `internal`
-* `private`
-
-
----
-
-## FieldChangeEntry
-
-### Properties
-
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| **field** | `string` | ✅ | Field machine name |
-| **fieldLabel** | `string` | optional | Field display label |
-| **oldValue** | `any` | optional | Previous value |
-| **newValue** | `any` | optional | New value |
-| **oldDisplayValue** | `string` | optional | Human-readable old value |
-| **newDisplayValue** | `string` | optional | Human-readable new value |
-
-
----
-
-## Mention
-
-### Properties
-
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| **type** | `Enum<'user' \| 'team' \| 'record'>` | ✅ | Mention target type |
-| **id** | `string` | ✅ | Target ID |
-| **name** | `string` | ✅ | Display name for rendering |
-| **offset** | `integer` | ✅ | Character offset in body text |
-| **length** | `integer` | ✅ | Length of mention token in body text |
-
-
----
-
-## Reaction
-
-### Properties
-
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| **emoji** | `string` | ✅ | Emoji character or shortcode (e.g., "👍", ":thumbsup:") |
-| **userIds** | `string[]` | ✅ | Users who reacted |
-| **count** | `integer` | ✅ | Total reaction count |
 
 
 ---

@@ -82,7 +82,6 @@ function makeProtocol(opts: { environmentId?: string } = {}) {
     const protocol = new ObjectStackProtocolImplementation(
         mockEngine,
         undefined, // getServicesRegistry
-        undefined, // getFeedService
         opts.environmentId,
     );
     return { protocol, mockEngine, registry };

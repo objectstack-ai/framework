@@ -1165,7 +1165,6 @@ describe('ObjectStackProtocolImplementation - Metadata Persistence', () => {
             scoped = new ObjectStackProtocolImplementation(
                 mockEngine,
                 undefined,
-                undefined,
                 'env_alpha',
             );
         });
