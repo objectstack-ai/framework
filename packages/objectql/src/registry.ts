@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import { ServiceObject, ObjectSchema, ObjectOwnership, provisionPrimary } from '@objectstack/spec/data';
+import { ServiceObject, ObjectSchema, ObjectOwnership, provisionPrimary, resolveCrudAffordances } from '@objectstack/spec/data';
 import { resolveMultiOrgEnabled, resolveSearchPinyinEnabled } from '@objectstack/types';
 import { provisionSearchCompanion } from './search-companion.js';
 import { ObjectStackManifest, ManifestSchema, InstalledPackage, InstalledPackageSchema } from '@objectstack/spec/kernel';
@@ -368,6 +368,84 @@ export function applySystemFields(
 }
 
 /**
+ * Generic-write `apiMethods` verbs mapped to the {@link resolveCrudAffordances}
+ * flag each one needs. Read verbs (`get`/`list`/`search`/`history`/…) are
+ * always permitted, so they are absent here and never stripped.
+ */
+const MANAGED_WRITE_VERB_AFFORDANCE: Record<string, 'create' | 'edit' | 'delete'> = {
+  create: 'create',
+  update: 'edit',
+  upsert: 'edit',
+  delete: 'delete',
+  purge: 'delete',
+};
+
+/**
+ * Reconcile a better-auth-managed object's `enable.apiMethods` against the
+ * generic-write affordances it actually grants (ADR-0092 / #1591).
+ *
+ * `managedBy: 'better-auth'` promises generic CRUD is suppressed — identity
+ * writes flow through better-auth's own endpoints, and the plugin-auth
+ * identity write guard fail-closed rejects direct create/update/delete from a
+ * user context. An object that *also* advertises those verbs in
+ * `enable.apiMethods` is internally contradictory: the HTTP exposure gate
+ * (ADR-0049) would admit the request and let it 403 at the engine instead of
+ * answering a clean 405, and the metadata misrepresents what the API offers.
+ *
+ * This is the registration-time backstop that makes the contradiction
+ * impossible to *ship*: any write verb whose CRUD affordance the object does
+ * not grant — via the `managedBy` bucket default plus `userActions` overrides,
+ * exactly as {@link resolveCrudAffordances} computes for the UI — is stripped,
+ * with a warning. Reads are never touched. `sys_user` keeps `update` because
+ * `userActions.edit: true` grants the edit affordance (its writes are clamped
+ * to a field whitelist by the guard); every other identity table derives down
+ * to reads only.
+ *
+ * Scope is deliberately limited to `better-auth`, the only bucket the write
+ * guard enforces today — generalizing to an `externallyManaged`/`writeVia`
+ * capability for the other buckets is ADR-0049 / #1878 (a separate phase),
+ * not this reconciliation.
+ *
+ * Returns the input unchanged when nothing is stripped; otherwise a new schema
+ * with a rewritten `enable.apiMethods` (immutable, like {@link applySystemFields}).
+ */
+export function reconcileManagedApiMethods(
+  schema: ServiceObject,
+  opts?: { warn?: (msg: string) => void },
+): ServiceObject {
+  if ((schema as any).managedBy !== 'better-auth') return schema;
+
+  const methods = (schema as any).enable?.apiMethods;
+  if (!Array.isArray(methods) || methods.length === 0) return schema;
+
+  const affordances = resolveCrudAffordances(schema);
+  const stripped: string[] = [];
+  const kept = methods.filter((m: string) => {
+    const need = MANAGED_WRITE_VERB_AFFORDANCE[m];
+    if (need && !affordances[need]) {
+      stripped.push(m);
+      return false;
+    }
+    return true;
+  });
+
+  if (stripped.length === 0) return schema;
+
+  const warn = opts?.warn ?? ((msg: string) => console.warn(msg));
+  warn(
+    `[Registry] Object "${schema.name}" is managedBy:'better-auth' but advertised ` +
+      `generic write verb(s) [${stripped.join(', ')}] in enable.apiMethods it does not ` +
+      `permit — stripping them (ADR-0092/#1591). Writes on better-auth-managed tables go ` +
+      `through better-auth's endpoints, not the generic data API. Kept: [${kept.join(', ')}].`,
+  );
+
+  return {
+    ...schema,
+    enable: { ...(schema as any).enable, apiMethods: kept },
+  };
+}
+
+/**
  * Platform namespaces that multiple packages may legitimately share, so the
  * install-time namespace-uniqueness gate (ADR-0048 Phase 1) must never fire on
  * them: the FQN-exempt reserved namespaces (`base`, `system`) plus `sys`
@@ -589,6 +667,13 @@ export class SchemaRegistry {
     // sees the same canonical shape. Author-declared fields win — see
     // applySystemFields().
     schema = applySystemFields(schema, { multiTenant: this.multiTenant });
+
+    // [ADR-0092 / #1591] Reconcile generic-write `apiMethods` against the CRUD
+    // affordances a better-auth-managed object actually grants — strip verbs
+    // the identity write guard would reject anyway, so the HTTP exposure gate
+    // answers a clean 405 and the metadata can't contradict itself. No-op for
+    // every non-`better-auth` object.
+    schema = reconcileManagedApiMethods(schema);
 
     // [ADR-0079] Object-materialization seam — DESIGNATE-ONLY primary-title
     // provisioning. Runs AFTER `applySystemFields` (so any designated field
