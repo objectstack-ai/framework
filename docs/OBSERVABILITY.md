@@ -238,27 +238,45 @@ usual culprit behind an inexplicably slow list), 18ms in **3** business hooks,
 and 7ms serializing the response. `db` and `hooks` are aggregates — one member
 carrying the summed duration and the event count, not one member per query.
 
-This is **off by default**: the header discloses internal phase durations,
-which is helpful for profiling but also lets a caller fingerprint the backend.
-Treat it as a perf-tuning toggle you flip in staging (or briefly in production
-behind an allowlist), not a default-on header.
+The header discloses internal phase durations, which is helpful for profiling
+but also lets a caller fingerprint the backend, so disclosure is **gated**.
+There are two ways to turn it on:
 
-Enable it on the Hono server plugin:
+**Global** — every response carries the header. Flip this in staging, or
+briefly on a production environment under active investigation:
 
 ```ts
 new HonoServerPlugin({ serverTiming: true });
 ```
 
 …or, for the default `os serve` server (which constructs the plugin for you),
-via the environment:
+via the environment (`OS_PERF_TIMING=1` and the older `OS_SERVER_TIMING=true`
+are equivalent):
 
 ```bash
-OS_SERVER_TIMING=true os serve
+OS_PERF_TIMING=1 os serve
 ```
 
-When enabled, every response carries `total` (the whole request, measured by
-an outer middleware) plus the sub-phases the request path records out of the
-box:
+**Per-request** — available by default (unless hard-disabled below), with **no
+redeploy**: the caller sends the request header
+
+```
+X-OS-Debug-Timing: 1
+```
+
+and the `Server-Timing` header comes back **only** when the request resolves an
+**admin/service identity** (a platform/tenant admin, a service token, or an
+internal system call). An ordinary user who sends the header gets nothing back —
+they can never pull timings, so this is safe to leave available on a live
+environment. This is the path to reach for when diagnosing "why is *this* request
+slow?" against a running environment.
+
+To hard-disable both paths (no middleware registered at all), set
+`serverTiming: false` explicitly.
+
+When timing is emitted, every response carries `total` (the whole request,
+measured by an outer middleware) plus the sub-phases the request path records
+out of the box:
 
 | Member | Recorded by | Meaning |
 |:---|:---|:---|
@@ -316,5 +334,7 @@ countServerTiming('db', queryMs, 'queries'); // → db;dur=<sum>;desc="<n> queri
 - [ ] Log records include `requestId` field; cross-checked one against the
       response `X-Request-Id` header.
 - [ ] Alerts wired: error rate, p95 latency per route.
-- [ ] (Optional) `Server-Timing` verified in DevTools when `serverTiming` /
-      `OS_SERVER_TIMING=true` is enabled, and confirmed **absent** by default.
+- [ ] (Optional) `Server-Timing` verified in DevTools with global mode
+      (`serverTiming: true` / `OS_PERF_TIMING=1`) on, confirmed **absent** for a
+      normal request, and confirmed the per-request `X-OS-Debug-Timing: 1` header
+      returns timing **only** to an admin/service caller.
