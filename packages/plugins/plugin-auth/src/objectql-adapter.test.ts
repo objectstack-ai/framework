@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   createObjectQLAdapter,
   createObjectQLAdapterFactory,
-  withSystemReadContext,
+  withSystemContext,
   AUTH_MODEL_TO_PROTOCOL,
   resolveProtocolName,
 } from './objectql-adapter';
@@ -226,7 +226,9 @@ describe('createObjectQLAdapter – legacy model name mapping', () => {
   it('create: should call dataEngine.insert with sys_ protocol name', async () => {
     const adapter = createObjectQLAdapter(mockEngine);
     await adapter.create({ model: 'user', data: { email: 'a@b.com' } });
-    expect(mockEngine.insert).toHaveBeenCalledWith('sys_user', { email: 'a@b.com' });
+    // #3164 — adapter writes run as system so the #2948 readonly strip doesn't
+    // drop better-auth's own writes to readonly identity columns.
+    expect(mockEngine.insert).toHaveBeenCalledWith('sys_user', { email: 'a@b.com' }, { context: { isSystem: true } });
   });
 
   it('findOne: should call dataEngine.findOne with sys_ protocol name', async () => {
@@ -262,7 +264,8 @@ describe('createObjectQLAdapter – legacy model name mapping', () => {
       update: { name: 'New' },
     });
     expect(mockEngine.findOne).toHaveBeenCalledWith('sys_user', expect.anything());
-    expect(mockEngine.update).toHaveBeenCalledWith('sys_user', expect.objectContaining({ name: 'New', id: '1' }));
+    // #3164 — the update carries system context (readonly identity writes survive).
+    expect(mockEngine.update).toHaveBeenCalledWith('sys_user', expect.objectContaining({ name: 'New', id: '1' }), { context: { isSystem: true } });
   });
 
   it('delete: should call dataEngine with sys_ protocol name', async () => {
@@ -278,7 +281,7 @@ describe('createObjectQLAdapter – legacy model name mapping', () => {
   it('should pass through unknown model names unchanged', async () => {
     const adapter = createObjectQLAdapter(mockEngine);
     await adapter.create({ model: 'organization', data: { name: 'Acme' } });
-    expect(mockEngine.insert).toHaveBeenCalledWith('organization', { name: 'Acme' });
+    expect(mockEngine.insert).toHaveBeenCalledWith('organization', { name: 'Acme' }, { context: { isSystem: true } });
   });
 });
 
@@ -325,7 +328,7 @@ describe('createObjectQLAdapterFactory – schema-less plugin bridging (@better-
   });
 });
 
-describe('withSystemReadContext – system-scoped reads (org-scope bypass)', () => {
+describe('withSystemContext – system-scoped reads AND writes', () => {
   let mockEngine: IDataEngine;
 
   beforeEach(() => {
@@ -340,7 +343,7 @@ describe('withSystemReadContext – system-scoped reads (org-scope bypass)', () 
   });
 
   it('injects context.isSystem into find / findOne / count', async () => {
-    const e = withSystemReadContext(mockEngine);
+    const e = withSystemContext(mockEngine);
     await e.find('sys_member', { where: { user_id: 'u1' } } as any);
     await e.findOne('sys_organization', { where: { id: 'o1' } } as any);
     await e.count('sys_member', { where: { user_id: 'u1' } } as any);
@@ -350,19 +353,21 @@ describe('withSystemReadContext – system-scoped reads (org-scope bypass)', () 
   });
 
   it('merges isSystem with a caller-supplied context', async () => {
-    const e = withSystemReadContext(mockEngine);
+    const e = withSystemContext(mockEngine);
     await e.find('sys_member', { where: {}, context: { transaction: 'tx1' } } as any);
     expect(mockEngine.find).toHaveBeenCalledWith('sys_member', expect.objectContaining({ context: { transaction: 'tx1', isSystem: true } }));
   });
 
-  it('does NOT alter writes (insert / update / delete pass straight through)', async () => {
-    const e = withSystemReadContext(mockEngine);
+  it('runs WRITES as system too — insert/update carry isSystem, delete merges it into the query (#3164)', async () => {
+    const e = withSystemContext(mockEngine);
     await e.insert('sys_member', { id: 'm1' } as any);
     await e.update('sys_member', { id: 'm1' } as any);
     await e.delete('sys_member', { where: { id: 'm1' } } as any);
-    expect(mockEngine.insert).toHaveBeenCalledWith('sys_member', { id: 'm1' });
-    expect(mockEngine.update).toHaveBeenCalledWith('sys_member', { id: 'm1' });
-    expect(mockEngine.delete).toHaveBeenCalledWith('sys_member', { where: { id: 'm1' } });
+    // Without this the #2948 readonly-UPDATE strip silently drops better-auth's
+    // own writes to readonly identity columns (sys_user.email, banned, …).
+    expect(mockEngine.insert).toHaveBeenCalledWith('sys_member', { id: 'm1' }, { context: { isSystem: true } });
+    expect(mockEngine.update).toHaveBeenCalledWith('sys_member', { id: 'm1' }, { context: { isSystem: true } });
+    expect(mockEngine.delete).toHaveBeenCalledWith('sys_member', { where: { id: 'm1' }, context: { isSystem: true } });
   });
 });
 

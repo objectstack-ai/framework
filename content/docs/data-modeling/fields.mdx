@@ -284,7 +284,7 @@ These properties are available on all field types:
 | `description` | `string` | — | Developer documentation |
 | `inlineHelpText` | `string` | — | Help text shown in UI |
 | `hidden` | `boolean` | `false` | Hide from default views |
-| `readonly` | `boolean` | `false` | Prevent editing — hidden from create/edit forms AND server-enforced: non-system `UPDATE` writes to the field are silently dropped (insert may still seed it) |
+| `readonly` | `boolean` | `false` | Prevent editing — hidden from create/edit forms AND server-enforced on both write paths: a non-system write to the field is silently dropped on `UPDATE` (in the engine) and on `INSERT` through the data API (REST/GraphQL/MCP/import, at the DataProtocol ingress). A stripped field still falls back to its `defaultValue`; **seeding a `readonly` column at create requires a system context** (import/migration/programmatic seed). Platform (`sys_`/`managedBy`) objects are governed by their own guards instead. |
 | `sortable` | `boolean` | `true` | Allow sorting by this field |
 | `group` | `string` | — | Group name for organizing in forms (e.g. `'billing'`) |
 

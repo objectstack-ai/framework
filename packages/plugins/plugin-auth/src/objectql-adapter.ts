@@ -145,28 +145,48 @@ function convertWhere(where: CleanedWhere[]): Record<string, any> {
 // ---------------------------------------------------------------------------
 
 /**
- * Wrap a data engine so its READ operations (find / findOne / count) run as
- * SYSTEM reads — injecting `context.isSystem: true` (merged; any caller-supplied
- * context still wins on other keys). better-auth has already authenticated the
- * session and scopes every query by its OWN where-clauses (e.g. member.userId =
- * session.user). A deployment's control-plane org-scope read hook, however, keys
- * off the CALLER's user id, and these adapter reads carry no caller context — so
- * without isSystem that hook filters sys_member / sys_organization reads down to
- * zero and `organization.list()` returns no orgs for a real member. Writes pass
- * through untouched (org-scope is a read-only hook).
+ * Wrap a data engine so its operations run as SYSTEM against the identity
+ * tables — injecting `context.isSystem: true` (merged; any caller-supplied
+ * context still wins on other keys). better-auth is the identity AUTHORITY: it
+ * has already authenticated the session and scopes every query/write by its OWN
+ * where-clauses (e.g. member.userId = session.user).
+ *
+ * READS run as system so a deployment's control-plane org-scope read hook —
+ * which keys off the CALLER's user id — doesn't filter these caller-context-less
+ * adapter reads of sys_member / sys_organization down to zero (which would make
+ * `organization.list()` return no orgs for a real member).
+ *
+ * WRITES (`update` / `insert` / `delete`) also run as system (#3164). Several
+ * identity columns are declared `readonly` on their schema — `sys_user.email`
+ * (change-email), `banned` / `ban_reason` / `ban_expires` (admin ban) — and the
+ * static-`readonly` UPDATE strip (#2948) runs on any NON-system update. Since
+ * the adapter carries no caller context, `!ctx?.isSystem` was TRUE and the strip
+ * silently DROPPED better-auth's own writes to those columns (change-email /
+ * ban would return success but never persist). Marking the adapter's writes
+ * system exempts them — correct, because these ARE the identity authority's own
+ * writes; user-context writes to `managedBy: 'better-auth'` tables are already
+ * rejected upstream by the identity write guard (ADR-0092 D2), so this path only
+ * ever carries better-auth's internal writes.
  */
-export function withSystemReadContext(engine: IDataEngine): IDataEngine {
+export function withSystemContext(engine: IDataEngine): IDataEngine {
   const e = engine as any;
   const asSystem = (q: any) => ({ ...(q ?? {}), context: { isSystem: true, ...(q?.context ?? {}) } });
   return {
-    insert: (m: string, d: any) => e.insert(m, d),
-    update: (m: string, d: any) => e.update(m, d),
-    delete: (m: string, q?: any) => e.delete(m, q),
+    insert: (m: string, d: any, o?: any) => e.insert(m, d, asSystem(o)),
+    update: (m: string, d: any, o?: any) => e.update(m, d, asSystem(o)),
+    delete: (m: string, q?: any) => e.delete(m, asSystem(q)),
     find: (m: string, q?: any) => e.find(m, asSystem(q)),
     findOne: (m: string, q?: any) => e.findOne(m, asSystem(q)),
     count: (m: string, q?: any) => e.count(m, asSystem(q)),
   } as unknown as IDataEngine;
 }
+
+/**
+ * @deprecated Renamed to {@link withSystemContext} (#3164) now that writes are
+ * system-scoped too, not only reads. Kept as an alias for one release so
+ * external callers / in-flight imports don't break.
+ */
+export const withSystemReadContext = withSystemContext;
 
 /**
  * Create an ObjectQL adapter **factory** for better-auth.
@@ -185,7 +205,7 @@ export function withSystemReadContext(engine: IDataEngine): IDataEngine {
  * @returns better-auth AdapterFactory
  */
 export function createObjectQLAdapterFactory(rawDataEngine: IDataEngine) {
-  const dataEngine = withSystemReadContext(rawDataEngine);
+  const dataEngine = withSystemContext(rawDataEngine);
   // Field-name bridging for better-auth plugins that expose NO `schema` option
   // (e.g. @better-auth/sso): when a model is remapped via AUTH_MODEL_TO_PROTOCOL,
   // its camelCase model fields are also converted to snake_case columns on the
@@ -406,7 +426,7 @@ export function createObjectQLAdapterFactory(rawDataEngine: IDataEngine) {
  * @returns better-auth CustomAdapter (raw, without factory wrapping)
  */
 export function createObjectQLAdapter(rawDataEngine: IDataEngine) {
-  const dataEngine = withSystemReadContext(rawDataEngine);
+  const dataEngine = withSystemContext(rawDataEngine);
   return {
     create: async <T extends Record<string, any>>({ model, data, select: _select }: { model: string; data: T; select?: string[] }): Promise<T> => {
       const objectName = resolveProtocolName(model);
