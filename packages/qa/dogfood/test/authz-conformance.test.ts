@@ -78,6 +78,35 @@ const PROBES: ReadonlyArray<{ file: string; re: RegExp; key: (m: RegExpExecArray
     key: () => 'realtime:in-memory-realtime-adapter.ts:publish(trusted-fan-out)',
   },
 
+  // ── #3167 / ADR-0096 D4 / ADR-0100 — the serve-side MCP tool-execution
+  // surface identity pins (`mcp-tool-exec-identity` row). MCP is default-ON and
+  // agent/external-reachable, so BOTH halves of its admission are pinned:
+  //   (1) the fail-closed 401 gate in handleMcp — a principal-less caller gets
+  //       nothing; drop it and the key goes STALE → red CI.
+  {
+    file: 'packages/runtime/src/http-dispatcher.ts',
+    re: /!ec\.userId\s*&&\s*!ec\.isSystem/g,
+    key: () => 'mcp:http-dispatcher.ts:handleMcp(identity-fail-closed)',
+  },
+  //   (2) the principal-bound bridge — every MCP tool runs AS the caller's
+  //       ExecutionContext through buildMcpBridge (callData(..., ec)). If a
+  //       refactor drops the bridge the key vanishes → STALE → red CI.
+  {
+    file: 'packages/runtime/src/http-dispatcher.ts',
+    re: /private\s+buildMcpBridge\s*\(/g,
+    key: () => 'mcp:http-dispatcher.ts:buildMcpBridge(context-threaded)',
+  },
+  // stdio resource read (`mcp-stdio-resource-read` row): the persistent
+  // bridgeResources record_by_id template reads via dataEngine.findOne with NO
+  // ExecutionContext (ADR-0096 E1) — a context-less full-authority read that is
+  // safe ONLY because stdio is opt-in and never networked. Pinning it keeps the
+  // fall-open classified so it cannot silently ride onto a networked transport.
+  {
+    file: 'packages/mcp/src/mcp-server-runtime.ts',
+    re: /dataEngine\.findOne\s*\(/g,
+    key: () => 'mcp:mcp-server-runtime.ts:record_by_id(stdio-context-less-read)',
+  },
+
   // ── #2992 transport TRIPWIRES — deliberately covered by NO row ──────────
   // Delivery today is a pure fan-out with no per-recipient authorization
   // (subscriptions carry no principal, payload is the full record), which is
