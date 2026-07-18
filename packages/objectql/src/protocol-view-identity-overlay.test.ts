@@ -168,6 +168,44 @@ describe('view overlay identity (#2555)', () => {
         expect(item.label).toBe('My Renamed Grid');
     });
 
+    // #3095 — a standalone ViewItem record's `config` used to strip to `{}`
+    // under the container ViewSchema, so a broken config saved with a false 200.
+    // The `view` type now maps to the union schema that validates it genuinely.
+    it('write path rejects a ViewItem whose kanban config is broken (422)', async () => {
+        const { engine } = makeStubEngine();
+        const protocol = new ObjectStackProtocolImplementation(engine);
+        await expect(
+            protocol.saveMetaItem({
+                type: 'view',
+                name: 'crm_lead.pipeline',
+                item: {
+                    name: 'crm_lead.pipeline',
+                    object: 'crm_lead',
+                    viewKind: 'list',
+                    // kanban config is missing the required groupByField.
+                    config: { type: 'kanban', columns: ['name'], kanban: { summarizeField: 'amount', columns: ['name'] } },
+                },
+            }),
+        ).rejects.toMatchObject({ code: 'invalid_metadata', status: 422 });
+    });
+
+    it('write path accepts a well-formed ViewItem record', async () => {
+        const { engine, rows } = makeStubEngine();
+        const protocol = new ObjectStackProtocolImplementation(engine);
+        const result = await protocol.saveMetaItem({
+            type: 'view',
+            name: 'crm_lead.all',
+            item: {
+                name: 'crm_lead.all',
+                object: 'crm_lead',
+                viewKind: 'list',
+                config: { type: 'grid', columns: ['name'], data: { provider: 'object', object: 'crm_lead' } },
+            },
+        });
+        expect(result.success).toBe(true);
+        expect(Array.from(rows.values()).some((r) => r.type === 'view')).toBe(true);
+    });
+
     it('write path stays a plain name-stamp when the registry has no entry to inherit from', async () => {
         const { engine, rows } = makeStubEngine();
         const protocol = new ObjectStackProtocolImplementation(engine);

@@ -33,7 +33,7 @@ import { DatasourceSchema } from '../data/datasource.zod';
 import { SeedSchema } from '../data/seed.zod';
 import { MappingSchema } from '../data/mapping.zod';
 
-import { ViewSchema } from '../ui/view.zod';
+import { ViewMetadataSchema } from '../ui/view.zod';
 import { PageSchema } from '../ui/page.zod';
 import { DashboardSchema } from '../ui/dashboard.zod';
 import { AppSchema } from '../ui/app.zod';
@@ -75,7 +75,11 @@ const BUILTIN_METADATA_TYPE_SCHEMAS: Partial<Record<MetadataType, z.ZodType>> = 
   mapping: MappingSchema as unknown as z.ZodType, // #2611: reusable import mapping; runtime-creatable so the wizard can save one
 
   // UI Protocol
-  view: ViewSchema,
+  // #3095 — a union over the three runtime `view` shapes (defineView container,
+  // standalone ViewItem record, flattened personalization overlay). The bare
+  // container `ViewSchema` strip-parsed ViewItem/personalization bodies to `{}`,
+  // making save-time 422 validation and read-time diagnostics a no-op for them.
+  view: ViewMetadataSchema,
   page: PageSchema,
   dashboard: DashboardSchema,
   app: AppSchema,

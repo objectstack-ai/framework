@@ -1233,6 +1233,114 @@ export function defineViewItem(config: z.input<typeof ViewItemSchema>): ViewItem
 }
 
 // ───────────────────────────────────────────────────────────────────────────
+// Canonical persisted-`view`-body schema (the runtime metadata-type schema)
+// ───────────────────────────────────────────────────────────────────────────
+//
+// #3095 — the `view` metadata type maps to THIS schema in
+// `metadata-type-schemas.ts` (both the save-time 422 validator and the
+// read-time `computeMetadataDiagnostics` badge consult it). A single
+// container schema ({@link ViewSchema}) is a NO-OP for two of the three shapes
+// a `view` body actually carries at runtime: Zod strips unknown keys, so a
+// standalone {@link ViewItemSchema} record ({ name, object, viewKind, config })
+// and a console personalization overlay (raw view config + inherited identity)
+// both parse to `{}` — silently "valid" while their `config` is never checked.
+//
+// The three legitimate runtime shapes, each validated GENUINELY here:
+//
+//   1. `defineView` aggregate **container** — at least one of
+//      `list`/`form`/`listViews`/`formViews`. An empty container is rejected
+//      (it registers zero views; mirrors the {@link defineView} guard).
+//   2. Standalone **ViewItem record** — `{ viewKind, config, … }`; the nested
+//      `config` is validated against ListView/FormView.
+//   3. **Flattened runtime overlay** — a raw ListView/FormView config at the
+//      top level plus optional identity fields (`viewKind`/`object`/`label`,
+//      inherited from the shadowed registry entry by `normalizeViewMetadata`;
+//      see #2555). This is what a personalization PUT (column sort, inline
+//      edit, …) sends. Discriminated from a record by the ABSENCE of a nested
+//      `config`, and from a container by the ABSENCE of container slots — the
+//      structural guards below make those exclusions explicit so a malformed
+//      record/container can never be rescued by this lenient branch.
+//
+// Auxiliary Studio round-trip keys (`isPinned`, `sortOrder`, …) ride along on
+// every shape: all four members strip-parse (no `.strict()`), so an unknown
+// top-level key never 422s — matching the "persist the payload verbatim"
+// contract in `saveMetaItem` (it validates but stores the original item).
+
+/**
+ * Optional identity + structural-guard fields layered onto the two "flattened
+ * runtime overlay" members. The `config`/`list`/`form`/`listViews`/`formViews`
+ * guards pin those keys to `undefined`: a body carrying any of them is a record
+ * or a container, not a flattened overlay, so it must be validated by the
+ * dedicated member instead of slipping through here with its real payload
+ * stripped away.
+ */
+function flattenedViewOverlayFields() {
+  return {
+    name: z.string().optional().describe('Save name / qualified view id (stamped by the write path).'),
+    object: z.string().optional().describe('Bound object name (inherited from the shadowed entry — #2555).'),
+    viewKind: ViewKindSchema.optional().describe('View family (inherited from the shadowed entry — #2555).'),
+    label: I18nLabelSchema.optional().describe('Display label (inherited from the shadowed entry — #2555).'),
+    isDefault: z.boolean().optional(),
+    order: z.number().int().optional(),
+    scope: ViewScopeSchema.optional(),
+    owner: z.string().optional(),
+    hidden: z.boolean().optional(),
+    protection: ProtectionSchema.optional(),
+    ...MetadataProtectionFields,
+    // Structural guards — a flattened overlay is neither a record nor a container.
+    config: z.undefined().optional(),
+    list: z.undefined().optional(),
+    form: z.undefined().optional(),
+    listViews: z.undefined().optional(),
+    formViews: z.undefined().optional(),
+  };
+}
+
+/**
+ * True when a `view` container defines at least one view. The bare
+ * {@link ViewSchema} accepts `{}` (every slot optional), which would let an
+ * empty overlay pass validation and register nothing — the same footgun
+ * {@link defineView} rejects at authoring time.
+ */
+function containerHasAView(v: unknown): boolean {
+  if (!v || typeof v !== 'object') return false;
+  const c = v as Record<string, unknown>;
+  return Boolean(
+    c.list ||
+    c.form ||
+    (c.listViews && typeof c.listViews === 'object' && Object.keys(c.listViews).length > 0) ||
+    (c.formViews && typeof c.formViews === 'object' && Object.keys(c.formViews).length > 0),
+  );
+}
+
+/**
+ * Canonical schema for ANY persisted `view` metadata body — the schema the
+ * `view` type registers in `metadata-type-schemas.ts`. A union over the three
+ * runtime shapes (see the block comment above), so save-time validation and
+ * read-time diagnostics finally see through `ViewItem`/personalization bodies
+ * instead of stripping them to `{}` (#3095).
+ *
+ * `z.toJSONSchema()` emits this as an `anyOf` of the four members, which the
+ * `/api/v1/meta/types/view` endpoint serves to Studio's SchemaForm.
+ */
+export const ViewMetadataSchema = lazySchema(() =>
+  z.union([
+    // 2. Standalone ViewItem record — nested config validated genuinely.
+    ViewItemSchema,
+    // 1. Non-empty defineView container.
+    ViewSchema.refine(containerHasAView, {
+      message:
+        'A view container must define at least one of `list`, `form`, `listViews`, or `formViews`.',
+    }),
+    // 3. Flattened runtime overlay — inline ListView / FormView config + identity.
+    //    The list member is tried first; a flattened form (no required
+    //    `columns`, disjoint `type` enum) then matches the form member.
+    ListViewSchema.extend(flattenedViewOverlayFields()),
+    FormViewSchema.extend(flattenedViewOverlayFields()),
+  ]),
+);
+
+// ───────────────────────────────────────────────────────────────────────────
 // defineView container → ViewItem expansion (shared by every loader)
 //
 // `defineView({ list, form, listViews, formViews })` aggregates an object's
@@ -1498,6 +1606,8 @@ export function defineForm(
 
 export type View = z.infer<typeof ViewSchema>;
 export type ViewItem = z.infer<typeof ViewItemSchema>;
+/** Any persisted `view` metadata body: container | ViewItem record | flattened overlay (#3095). */
+export type ViewMetadata = z.infer<typeof ViewMetadataSchema>;
 export type ViewScope = z.infer<typeof ViewScopeSchema>;
 export type ViewKind = z.infer<typeof ViewKindSchema>;
 export type ListView = z.infer<typeof ListViewSchema>;
