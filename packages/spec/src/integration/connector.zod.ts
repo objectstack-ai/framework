@@ -259,16 +259,21 @@ export type WebhookSignatureAlgorithm = z.infer<typeof WebhookSignatureAlgorithm
 
 /**
  * Webhook Configuration Schema
- * 
+ *
  * Extends the canonical WebhookSchema with connector-specific event types.
  * This allows connectors to subscribe to both data events and connector lifecycle events.
+ *
+ * ⚠️ NOT YET ENFORCED — declared but ignored at registration (#3197).
+ * `AutomationEngine.registerConnector` reads only `actions`; a connector's
+ * `webhooks` (including `events`) parse and are stored, but no runtime
+ * dispatches, emits, or filters on them.
  */
 export const WebhookConfigSchema = lazySchema(() => WebhookSchema.extend({
   /**
    * Events to listen for
    * Connector-specific events like sync completion, auth expiry, etc.
    */
-  events: z.array(WebhookEventSchema).optional().describe('Connector events to subscribe to'),
+  events: z.array(WebhookEventSchema).optional().describe('Connector events to subscribe to (not yet enforced — no runtime dispatches these; see #3197)'),
   
   /**
    * Signature algorithm for webhook security
@@ -538,6 +543,12 @@ export const ConnectorActionSchema = lazySchema(() => z.object({
 
 /**
  * Connector Trigger Definition
+ *
+ * ⚠️ NOT YET ENFORCED — declared but never read by the runtime (#3197).
+ * `AutomationEngine.registerConnector` ignores a connector's `triggers`; the
+ * only runtime touch is the authoring-time reject rule that forbids triggers
+ * on provider-bound declarative instances (ADR-0097 §5). No polling loop or
+ * webhook receiver is driven by these definitions.
  */
 export const ConnectorTriggerSchema = lazySchema(() => z.object({
   key: z.string().describe('Trigger key'),
@@ -632,7 +643,7 @@ export const ConnectorSchema = lazySchema(() => z.object({
 
   /** Zapier-style Capabilities */
   actions: z.array(ConnectorActionSchema).optional(),
-  triggers: z.array(ConnectorTriggerSchema).optional(),
+  triggers: z.array(ConnectorTriggerSchema).optional().describe('Trigger definitions (not yet enforced — never read at registration; see #3197)'),
   
   /**
    * Data synchronization configuration
@@ -648,7 +659,7 @@ export const ConnectorSchema = lazySchema(() => z.object({
   /**
    * Webhook configuration
    */
-  webhooks: z.array(WebhookConfigSchema).optional().describe('Webhook configurations'),
+  webhooks: z.array(WebhookConfigSchema).optional().describe('Webhook configurations (not yet enforced — never read at registration; see #3197)'),
   
   /**
    * Rate limiting configuration

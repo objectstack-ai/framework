@@ -211,8 +211,16 @@ export const InAppNotificationSchema = lazySchema(() => z.object({
 
 /**
  * Notification Channel Enum
- * 
+ *
  * Supported notification delivery channels.
+ *
+ * ⚠️ PARTIALLY ENFORCED — the delivery channels actually registered by
+ * `service-messaging` are `inbox`, `email`, and `sms` (#3197). `push`,
+ * `slack`, `teams`, and `webhook` have no delivery implementation, and the
+ * dispatcher dead-letters any message addressed to an unregistered channel.
+ * Note also the naming drift: this enum says `in-app` while the implemented
+ * channel registers as `inbox` (which this enum does not contain) —
+ * reconcile before wiring this enum into the runtime.
  */
 export const NotificationChannelSchema = lazySchema(() => z.enum([
   'email',
@@ -222,7 +230,7 @@ export const NotificationChannelSchema = lazySchema(() => z.enum([
   'slack',
   'teams',
   'webhook',
-]));
+]).describe('Notification delivery channel (implemented today: inbox, email, sms — push/slack/teams/webhook are not yet implemented and dead-letter; see #3197)'));
 
 /**
  * Notification Configuration Schema

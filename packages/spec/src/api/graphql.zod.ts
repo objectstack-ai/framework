@@ -326,18 +326,23 @@ export type GraphQLMutationConfigInput = z.input<typeof GraphQLMutationConfigSch
 
 /**
  * GraphQL Subscription Configuration
- * 
+ *
  * Configuration for real-time GraphQL subscriptions.
+ *
+ * ⚠️ NOT YET IMPLEMENTED — declared but has no runtime consumer (#3197). The
+ * GraphQL HTTP entry serves query/mutation only and no subscription transport
+ * is mounted, so configs authored against this schema parse but are never
+ * served. Do not advertise GraphQL subscriptions to end users yet.
  */
 export const GraphQLSubscriptionConfigSchema = lazySchema(() => z.object({
   /** Subscription name */
   name: z.string().describe('Subscription field name (camelCase recommended)'),
-  
+
   /** Source Object */
   object: z.string().describe('Source ObjectQL object name'),
-  
+
   /** Subscription trigger events */
-  events: z.array(z.enum(['created', 'updated', 'deleted', 'custom'])).describe('Events to subscribe to'),
+  events: z.array(z.enum(['created', 'updated', 'deleted', 'custom'])).describe('Events to subscribe to (not yet implemented — no subscription transport exists; see #3197)'),
   
   /** Description */
   description: z.string().optional().describe('Subscription description'),

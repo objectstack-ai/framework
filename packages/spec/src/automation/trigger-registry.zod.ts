@@ -340,8 +340,13 @@ export type ConnectorOperation = z.infer<typeof ConnectorOperationSchema>;
 
 /**
  * Connector Trigger Schema
- * 
+ *
  * Triggers are special operations that watch for events and initiate workflows.
+ *
+ * ⚠️ NOT YET ENFORCED — declared but has no runtime consumer (#3197). No
+ * runtime imports this schema (or `TriggerRegistrySchema` below); in
+ * particular the `stream` trigger mechanism exists only here and has no
+ * implementation anywhere.
  */
 export const ConnectorTriggerSchema = lazySchema(() => z.object({
   /**

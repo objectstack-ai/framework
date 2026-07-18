@@ -15,6 +15,11 @@
 
 /**
  * Supported notification delivery channels
+ *
+ * ⚠️ PARTIALLY ENFORCED — mirrors `NotificationChannelSchema`
+ * (system/notification.zod.ts); the delivery channels actually registered by
+ * `service-messaging` are `inbox`, `email`, and `sms` only (#3197). Messages
+ * addressed to an unregistered channel are dead-lettered, not delivered.
  */
 export type NotificationChannel = 'email' | 'sms' | 'push' | 'in-app' | 'slack' | 'teams' | 'webhook';
 

@@ -181,10 +181,10 @@ Circuit breaker configuration
 | **providerConfig** | `Record<string, any>` | optional | Provider-specific config validated by the provider factory at boot (e.g. `{ spec, baseUrl }` for openapi, where spec is an inline document, a package-relative file path like './billing-openapi.json', or an http(s) URL). Requires `provider`. |
 | **auth** | `{ type: 'none' } \| { type: 'bearer'; credentialRef: string } \| { type: 'api-key'; credentialRef: string; headerName?: string; paramName?: string } \| { type: 'basic'; username: string; credentialRef: string }` | optional | Declarative instance auth — references credentials via `credentialRef` (resolved at boot), never inline secrets. Requires `provider` (ADR-0097). |
 | **actions** | `{ key: string; label: string; description?: string; inputSchema?: Record<string, any>; … }[]` | optional |  |
-| **triggers** | `{ key: string; label: string; description?: string; type: Enum<'polling' \| 'webhook'>; … }[]` | optional |  |
+| **triggers** | `{ key: string; label: string; description?: string; type: Enum<'polling' \| 'webhook'>; … }[]` | optional | Trigger definitions (not yet enforced — never read at registration; see #3197) |
 | **syncConfig** | `{ strategy?: Enum<'full' \| 'incremental' \| 'upsert' \| 'append_only'>; direction?: Enum<'import' \| 'export' \| 'bidirectional'>; schedule?: string \| { dialect: Enum<'cel' \| 'js' \| 'cron' \| 'template'>; source?: string; ast?: any; meta?: object }; realtimeSync?: boolean; … }` | optional | Data sync configuration |
 | **fieldMappings** | `{ source: string; target: string; transform?: { type: 'constant'; value: any } \| { type: 'cast'; targetType: Enum<'string' \| 'number' \| 'boolean' \| 'date'> } \| { type: 'lookup'; table: string; keyField: string; valueField: string } \| { type: 'javascript'; expression: string \| { dialect: Enum<'cel' \| 'js' \| 'cron' \| 'template'>; source?: string; ast?: any; meta?: object } } \| { type: 'map'; mappings: Record<string, any> }; defaultValue?: any; … }[]` | optional | Field mapping rules |
-| **webhooks** | `{ name: string; label?: string; object?: string; triggers?: Enum<'create' \| 'update' \| 'delete'>[]; … }[]` | optional | Webhook configurations |
+| **webhooks** | `{ name: string; label?: string; object?: string; triggers?: Enum<'create' \| 'update' \| 'delete'>[]; … }[]` | optional | Webhook configurations (not yet enforced — never read at registration; see #3197) |
 | **rateLimitConfig** | `{ strategy?: Enum<'fixed_window' \| 'sliding_window' \| 'token_bucket' \| 'leaky_bucket'>; maxRequests: number; windowSeconds: number; burstCapacity?: number; … }` | optional | Rate limiting configuration |
 | **retryConfig** | `{ strategy?: Enum<'exponential_backoff' \| 'linear_backoff' \| 'fixed_delay' \| 'no_retry'>; maxAttempts?: number; initialDelayMs?: number; maxDelayMs?: number; … }` | optional | Retry configuration |
 | **connectionTimeoutMs** | `number` | optional | Connection timeout in ms |
@@ -307,10 +307,10 @@ Connector type
 | **providerConfig** | `Record<string, any>` | optional | Provider-specific config validated by the provider factory at boot (e.g. `{ spec, baseUrl }` for openapi, where spec is an inline document, a package-relative file path like './billing-openapi.json', or an http(s) URL). Requires `provider`. |
 | **auth** | `{ type: 'none' } \| { type: 'bearer'; credentialRef: string } \| { type: 'api-key'; credentialRef: string; headerName?: string; paramName?: string } \| { type: 'basic'; username: string; credentialRef: string }` | optional | Declarative instance auth — references credentials via `credentialRef` (resolved at boot), never inline secrets. Requires `provider` (ADR-0097). |
 | **actions** | `{ key: string; label: string; description?: string; inputSchema?: Record<string, any>; … }[]` | optional |  |
-| **triggers** | `{ key: string; label: string; description?: string; type: Enum<'polling' \| 'webhook'>; … }[]` | optional |  |
+| **triggers** | `{ key: string; label: string; description?: string; type: Enum<'polling' \| 'webhook'>; … }[]` | optional | Trigger definitions (not yet enforced — never read at registration; see #3197) |
 | **syncConfig** | `{ strategy?: Enum<'full' \| 'incremental' \| 'upsert' \| 'append_only'>; direction?: Enum<'import' \| 'export' \| 'bidirectional'>; schedule?: string \| { dialect: Enum<'cel' \| 'js' \| 'cron' \| 'template'>; source?: string; ast?: any; meta?: object }; realtimeSync?: boolean; … }` | optional | Data sync configuration |
 | **fieldMappings** | `{ source: string; target: string; transform?: { type: 'constant'; value: any } \| { type: 'cast'; targetType: Enum<'string' \| 'number' \| 'boolean' \| 'date'> } \| { type: 'lookup'; table: string; keyField: string; valueField: string } \| { type: 'javascript'; expression: string \| { dialect: Enum<'cel' \| 'js' \| 'cron' \| 'template'>; source?: string; ast?: any; meta?: object } } \| { type: 'map'; mappings: Record<string, any> }; defaultValue?: any; … }[]` | optional | Field mapping rules |
-| **webhooks** | `{ name: string; label?: string; object?: string; triggers?: Enum<'create' \| 'update' \| 'delete'>[]; … }[]` | optional | Webhook configurations |
+| **webhooks** | `{ name: string; label?: string; object?: string; triggers?: Enum<'create' \| 'update' \| 'delete'>[]; … }[]` | optional | Webhook configurations (not yet enforced — never read at registration; see #3197) |
 | **rateLimitConfig** | `{ strategy?: Enum<'fixed_window' \| 'sliding_window' \| 'token_bucket' \| 'leaky_bucket'>; maxRequests: number; windowSeconds: number; burstCapacity?: number; … }` | optional | Rate limiting configuration |
 | **retryConfig** | `{ strategy?: Enum<'exponential_backoff' \| 'linear_backoff' \| 'fixed_delay' \| 'no_retry'>; maxAttempts?: number; initialDelayMs?: number; maxDelayMs?: number; … }` | optional | Retry configuration |
 | **connectionTimeoutMs** | `number` | optional | Connection timeout in ms |
@@ -480,7 +480,7 @@ Synchronization strategy
 | **isActive** | `boolean` | ✅ | Whether webhook is active |
 | **description** | `string` | optional | Webhook description |
 | **tags** | `string[]` | optional | Tags for organization |
-| **events** | `Enum<'record.created' \| 'record.updated' \| 'record.deleted' \| 'sync.started' \| 'sync.completed' \| 'sync.failed' \| 'auth.expired' \| 'rate_limit.exceeded'>[]` | optional | Connector events to subscribe to |
+| **events** | `Enum<'record.created' \| 'record.updated' \| 'record.deleted' \| 'sync.started' \| 'sync.completed' \| 'sync.failed' \| 'auth.expired' \| 'rate_limit.exceeded'>[]` | optional | Connector events to subscribe to (not yet enforced — no runtime dispatches these; see #3197) |
 | **signatureAlgorithm** | `Enum<'hmac_sha256' \| 'hmac_sha512' \| 'none'>` | ✅ | Webhook signature algorithm |
 
 

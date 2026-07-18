@@ -23,13 +23,19 @@ export type TransportProtocol = z.infer<typeof TransportProtocol>;
 /**
  * Event Type Enum
  * Types of realtime events that can be subscribed to
+ *
+ * ⚠️ NOT YET ENFORCED — declared but has no runtime consumer (#3197). The
+ * engine publishes realtime events under the `data.record.created/updated/deleted`
+ * names from `DataEventType` (events.zod.ts), which this enum does not match,
+ * and nothing ever emits `field.changed`. Subscriptions authored against these
+ * values are not validated or filtered by any runtime.
  */
 export const RealtimeEventType = z.enum([
   'record.created',
   'record.updated',
   'record.deleted',
   'field.changed',
-]);
+]).describe('Realtime event type (not yet enforced — the runtime emits data.record.* event names instead, and field.changed is never emitted; see #3197)');
 
 export type RealtimeEventType = z.infer<typeof RealtimeEventType>;
 

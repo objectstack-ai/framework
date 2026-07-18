@@ -451,7 +451,7 @@ const result = FederationEntity.parse(data);
 | :--- | :--- | :--- | :--- |
 | **name** | `string` | ✅ | Subscription field name (camelCase recommended) |
 | **object** | `string` | ✅ | Source ObjectQL object name |
-| **events** | `Enum<'created' \| 'updated' \| 'deleted' \| 'custom'>[]` | ✅ | Events to subscribe to |
+| **events** | `Enum<'created' \| 'updated' \| 'deleted' \| 'custom'>[]` | ✅ | Events to subscribe to (not yet implemented — no subscription transport exists; see #3197) |
 | **description** | `string` | optional | Subscription description |
 | **filter** | `{ enabled: boolean; fields?: string[] }` | optional | Subscription filtering |
 | **payload** | `{ includeEntity: boolean; includePreviousValues: boolean; includeMeta: boolean }` | optional | Payload configuration |

@@ -10,11 +10,17 @@ export { PresenceStatus } from './realtime-shared.zod';
 
 /**
  * WebSocket Event Protocol
- * 
+ *
  * Defines the schema for WebSocket-based real-time communication in ObjectStack.
  * Supports event subscriptions, filtering, presence tracking, and collaborative editing.
- * 
+ *
  * Industry alignment: Firebase Realtime Database, Socket.IO, Pusher
+ *
+ * ⚠️ NOT YET SERVED — this protocol is declared but no WebSocket server is
+ * mounted anywhere in the runtime (#2462, #3197): `IRealtimeService.handleUpgrade`
+ * is deliberately unimplemented and discovery advertises `websockets: false`.
+ * These schemas define the future wire contract; nothing consumes them at
+ * runtime today.
  */
 
 // ==========================================
@@ -24,6 +30,9 @@ export { PresenceStatus } from './realtime-shared.zod';
 /**
  * WebSocket Message Type Enum
  * Defines the types of messages that can be sent over WebSocket
+ *
+ * ⚠️ NOT YET SERVED — no WebSocket transport is mounted, so no runtime sends
+ * or dispatches on these message types (see module note above; #3197).
  */
 export const WebSocketMessageType = z.enum([
   'subscribe',       // Client subscribes to events
