@@ -264,6 +264,156 @@ describe('QuickJSScriptRunner — async host APIs', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Nested cross-object writes (#1867).
+//
+// A hook body that issues an engine write (`ctx.api.object('parent').update`)
+// re-enters the sandbox: the host-side write fires the *parent's* hook, which
+// runs its own body inside a fresh VM while the child's hook is still in flight.
+// The old asyncify host-call model crashed here ("memory access out of bounds"
+// — the stack cannot be unwound twice). The deferred-promise + pump model must
+// compose any depth of nesting safely.
+// ---------------------------------------------------------------------------
+describe('QuickJSScriptRunner — nested sandbox re-entrancy (#1867)', () => {
+  it('a host write that re-invokes the runner (parent hook) does not crash and returns correctly', async () => {
+    // The parent's afterUpdate hook body, run when the child writes the parent.
+    const parentBody = {
+      language: 'js' as const,
+      source: 'return { parentTouched: true, doubled: (ctx.input.n || 0) * 2 };',
+      capabilities: [] as const,
+    };
+    const api = {
+      object: (_n: string) => ({
+        update: async (patch: Record<string, unknown>) => {
+          // Re-enter the sandbox exactly as the engine does when the parent
+          // write fires the parent's own hook body.
+          const nested = await runner.run(
+            parentBody,
+            { input: { n: 21 } } as ScriptContext,
+            { origin: { kind: 'hook', name: 'parent_hook' } },
+          );
+          return { updated: patch, nested: nested.value };
+        },
+      }),
+    };
+    const r = await runner.run(
+      {
+        language: 'js',
+        source: "return await ctx.api.object('parent').update({ total: ctx.input.amount });",
+        capabilities: ['api.write'],
+      },
+      ctx({ input: { amount: 100 }, api }),
+      { origin: { kind: 'hook', name: 'child_hook' } },
+    );
+    expect(r.value).toEqual({
+      updated: { total: 100 },
+      nested: { parentTouched: true, doubled: 42 },
+    });
+  }, 15000);
+
+  it('survives a multi-level nested write chain (child → parent → grandparent → …)', async () => {
+    const makeApi = (depth: number): any => ({
+      object: () => ({
+        update: async () => {
+          if (depth <= 0) return { leaf: true };
+          const nested = await runner.run(
+            { language: 'js', source: "return await ctx.api.object('x').update({});", capabilities: ['api.write'] },
+            { input: {}, api: makeApi(depth - 1) } as ScriptContext,
+            { origin: { kind: 'hook', name: `lvl${depth}` } },
+          );
+          return { depth, nested: nested.value };
+        },
+      }),
+    });
+    const r = await runner.run(
+      { language: 'js', source: "return await ctx.api.object('x').update({});", capabilities: ['api.write'] },
+      { input: {}, api: makeApi(4) } as ScriptContext,
+      { origin: { kind: 'hook', name: 'child' }, timeoutMs: 10000 },
+    );
+    // Four levels of nesting resolve without a WASM crash.
+    expect((r.value as any).nested.nested.nested.nested).toEqual({ leaf: true });
+  }, 20000);
+
+  it('runs concurrent nested invocations (fan-out) without cross-VM corruption', async () => {
+    const leaf = { language: 'js' as const, source: 'return { leaf: true };', capabilities: [] as const };
+    const api: any = {
+      object: () => ({
+        update: async () => {
+          const [a, b, c] = await Promise.all([
+            runner.run(leaf, { input: {} } as ScriptContext, { origin: { kind: 'hook', name: 'p1' } }),
+            runner.run(leaf, { input: {} } as ScriptContext, { origin: { kind: 'hook', name: 'p2' } }),
+            runner.run(leaf, { input: {} } as ScriptContext, { origin: { kind: 'hook', name: 'p3' } }),
+          ]);
+          return { a: a.value, b: b.value, c: c.value };
+        },
+      }),
+    };
+    const r = await runner.run(
+      { language: 'js', source: "return await ctx.api.object('x').update({});", capabilities: ['api.write'] },
+      { input: {}, api } as ScriptContext,
+      { origin: { kind: 'hook', name: 'child' }, timeoutMs: 10000 },
+    );
+    expect(r.value).toEqual({ a: { leaf: true }, b: { leaf: true }, c: { leaf: true } });
+  }, 20000);
+});
+
+// ---------------------------------------------------------------------------
+// Timeout resolution (#1867). The engine default is a FALLBACK, not a hard
+// ceiling: a hook body may declare a larger `timeoutMs` (spec allows ≤30s) so a
+// legitimate nested-write rollup has room to settle instead of being clamped to
+// the 250ms hook default and killed mid-flight.
+// ---------------------------------------------------------------------------
+describe('QuickJSScriptRunner — timeout resolution honors body.timeoutMs (#1867)', () => {
+  it('honors a hook body timeoutMs above the 250ms hook default', async () => {
+    // Host call settles at ~600ms — comfortably past the old 250ms hook cap but
+    // within the body's declared 5000ms budget. Must resolve, not time out.
+    const api = {
+      object: () => ({
+        update: async () => {
+          await new Promise<void>((resolve) => setTimeout(resolve, 600));
+          return { ok: true };
+        },
+      }),
+    };
+    const r = await runner.runScript(
+      {
+        language: 'js',
+        source: "return await ctx.api.object('x').update({});",
+        capabilities: ['api.write'],
+        timeoutMs: 5000,
+      },
+      ctx({ api }),
+      hookOpts, // hook origin → old code hard-capped at 250ms
+    );
+    expect(r.value).toEqual({ ok: true });
+  }, 10000);
+
+  it('still applies the 250ms hook default when the body declares no timeoutMs', async () => {
+    const api = { object: () => ({ update: () => new Promise<never>(() => {}) }) };
+    const start = Date.now();
+    await expect(
+      runner.runScript(
+        { language: 'js', source: "return await ctx.api.object('x').update({});", capabilities: ['api.write'] },
+        ctx({ api }),
+        hookOpts,
+      ),
+    ).rejects.toThrow(/timeout/i);
+    // Fired near the 250ms default, not some larger value.
+    expect(Date.now() - start).toBeLessThan(2000);
+  }, 10000);
+
+  it('lets a hook body LOWER its timeout below the default', async () => {
+    const api = { object: () => ({ update: () => new Promise<never>(() => {}) }) };
+    await expect(
+      runner.runScript(
+        { language: 'js', source: "return await ctx.api.object('x').update({});", capabilities: ['api.write'], timeoutMs: 50 },
+        ctx({ api }),
+        hookOpts,
+      ),
+    ).rejects.toThrow(/timeout/i);
+  }, 10000);
+});
+
 describe('QuickJSScriptRunner — long-running async host work (pump budget)', () => {
   // Regression: an action's single `ctx.api.update(...)` can synchronously drive
   // a large amount of awaited host work — e.g. a record-change flow that the

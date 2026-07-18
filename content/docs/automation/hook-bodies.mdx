@@ -131,6 +131,10 @@ The sandbox engine is **`quickjs-emscripten`** — pure-WASM, runs on every JS h
 
 Per-invocation timeouts default to **250ms** for hooks and **5000ms** for actions; per-invocation memory caps at **32 MB**. Both are overridable per body.
 
+### Nested cross-object writes
+
+A body may write *other* objects — e.g. `await ctx.api.object('parent').update({ ... })` from a child's `afterInsert`/`afterUpdate` (requires `api.write`). The target's own hooks fire too: the nested write runs in a **fresh sandbox VM** while the calling body is suspended, and this composes to any depth. This is the natural "when a child changes, roll the total up to the parent" automation — it does **not** need a denormalized, hand-maintained mirror field. The 250ms default suits a single quick write; give a deeper or slower rollup chain headroom by declaring a larger `timeoutMs` on the outer body (up to 30_000ms), so the whole chain settles within budget.
+
 ## L3 — Compiled modules (intentionally disabled)
 
 An earlier design allowed the CLI to emit a sibling `objectstack-runtime.<hash>.mjs` that `objectos` would `import()` at runtime. We removed that path because:

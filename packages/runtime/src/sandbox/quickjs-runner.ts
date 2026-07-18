@@ -104,10 +104,28 @@ export class QuickJSScriptRunner implements ScriptRunner {
     /* no-op — runtimes are per-invocation in v1 */
   }
 
-  /** Pick the smallest of body / opts / engine-default. */
+  /**
+   * Resolve the effective per-invocation timeout.
+   *
+   * The engine default (`hookTimeoutMs` / `actionTimeoutMs`) is a FALLBACK used
+   * only when the caller supplies no explicit timeout — it is NOT a hard
+   * ceiling. Whichever explicit timeout the caller *did* supply wins: the body's
+   * own `timeoutMs` (the spec permits up to 30_000ms — see `ScriptBody.timeoutMs`)
+   * and/or an enclosing hook/action timeout passed via `opts.timeoutMs`; when
+   * both are present the smaller wins, matching the spec's "smaller of this and
+   * the enclosing hook/action timeout wins".
+   *
+   * Previously the default was folded straight into `Math.min(...)`, so for
+   * hooks — whose default is 250ms — it *always* dominated: a body that declared
+   * `timeoutMs: 5000` to give a legitimate nested cross-object write room to
+   * settle was silently clamped back to 250ms and killed mid-flight. That made
+   * the spec's `ScriptBody.timeoutMs` a declared-but-unenforced knob for hooks
+   * and pushed template authors toward denormalized rollup workarounds (#1867).
+   */
   private resolveTimeout(opts: ScriptRunOptions, bodyTimeoutMs: number | undefined): number {
     const def = opts.origin.kind === 'hook' ? this.opts.hookTimeoutMs : this.opts.actionTimeoutMs;
-    return Math.min(...[def, opts.timeoutMs, bodyTimeoutMs].filter((n): n is number => typeof n === 'number'));
+    const explicit = [opts.timeoutMs, bodyTimeoutMs].filter((n): n is number => typeof n === 'number');
+    return explicit.length > 0 ? Math.min(...explicit) : def;
   }
 
   private async execute(args: {
