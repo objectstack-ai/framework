@@ -1,0 +1,56 @@
+{
+  "skill_name": "objectstack-ui",
+  "description": "Inline-vs-dataset / dataset-envelope-ceiling decisions (issue #2502). Every persisted chart is dataset-backed (ADR-0021); the real decision is whether the data need fits the dataset envelope, and if not, which lower layer to escalate to. Naming an inline draft vs a saved dataset is governance, not expressibility.",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "On the sales dashboard, add several widgets that all report the same certified 'revenue' metric (sum of amount) — one grouped by region, one by month, one as a KPI total. Emit the ObjectStack metadata.",
+      "expected_output": "Defines the metric ONCE in a dataset (defineDataset with an amount_sum measure + region and a month-granularity date dimension), then binds each widget to that dataset and selects dimensions/values BY NAME. Does not restate the aggregate inline per widget (the ADR-0021 inline object/valueField/aggregate shape was removed).",
+      "files": [],
+      "assertions": {
+        "must_contain": ["defineDataset", "dataset", "dimensions", "values"],
+        "must_not_contain": ["valueField", "categoryField"]
+      }
+    },
+    {
+      "id": 2,
+      "prompt": "Add a dashboard chart showing 30-day rolling revenue (a moving average / running total over time). Model the data need.",
+      "expected_output": "Recognizes that a window/rolling calculation is BEYOND the dataset envelope (a dataset has no window/having grammar and compareTo only does previous-period/year). Escalates to a hand-authored Cube (raw SQL) or a stored/materialized rolling field — it does not pretend a dataset date-bucket or a plain measure expresses a moving window.",
+      "files": [],
+      "assertions": {
+        "must_contain": ["window", "Cube"],
+        "must_not_contain": ["dateGranularity"]
+      }
+    },
+    {
+      "id": 3,
+      "prompt": "On a projects dashboard I want each project row to show its count of related child tasks (task has a lookup to project). Model it.",
+      "expected_output": "Explains that a to-many rollup ONTO the parent grain is not expressible in a dataset (datasets only do to-one joins; to-many traversal is out of scope). Recommends a stored rollup/summary field on project, OR basing the dataset on the child task and grouping by the project lookup (grain = child). Does not author a to-many join in include.",
+      "files": [],
+      "assertions": {
+        "must_contain": ["rollup", "to-many"],
+        "must_not_contain": []
+      }
+    },
+    {
+      "id": 4,
+      "prompt": "A dashboard has a top-level date-range filter that must re-scope six charts built over different objects. How should each chart pick up the filter? Emit the metadata.",
+      "expected_output": "Uses a dashboard-level variable/filter plus per-chart filterBindings mapping the filter to each widget's own date field (e.g. invoice→created_at, account→signed_at), broadcast into each chart's WHERE (#2501). Charts stay self-contained; it does NOT invent a shared dataset for the filter (a dataset is only implied when a parameter reshapes the query grain/window/join).",
+      "files": [],
+      "assertions": {
+        "must_contain": ["filterBindings"],
+        "must_not_contain": []
+      }
+    },
+    {
+      "id": 5,
+      "prompt": "In a kind:'react' page, drop a quick one-off bar chart of tasks grouped by status. Write the block.",
+      "expected_output": "Uses the inline <ObjectChart objectName=\"task\" aggregate={{ field: '_id', function: 'count', groupBy: 'status' }} /> block directly — an ad-hoc in-page chart does not require a dataset, and the react ObjectChart block has no dataset prop. Naming a dataset would only be for reuse/governance (Level B), not needed here.",
+      "files": [],
+      "assertions": {
+        "must_contain": ["ObjectChart", "aggregate", "groupBy"],
+        "must_not_contain": ["defineDataset"]
+      }
+    }
+  ]
+}

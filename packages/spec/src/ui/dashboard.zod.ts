@@ -276,7 +276,9 @@ export const GlobalFilterSchema = lazySchema(() => z.object({
  * Dashboard Schema
  * Represents a page containing multiple visualizations.
  * 
- * @example Sales Executive Dashboard
+ * @example Sales Executive Dashboard (ADR-0021: widgets bind a `dataset` and
+ * select `dimensions`/`values` BY NAME — each metric/measure is defined once in
+ * `defineDataset`, never inline on the widget)
  * {
  *   name: "sales_overview",
  *   label: "Sales Executive Overview",
@@ -284,18 +286,16 @@ export const GlobalFilterSchema = lazySchema(() => z.object({
  *     {
  *       title: "Total Pipe",
  *       type: "metric",
- *       object: "opportunity",
- *       valueField: "amount",
- *       aggregate: "sum",
+ *       dataset: "opportunity_metrics",
+ *       values: ["amount_sum"],
  *       layout: { x: 0, y: 0, w: 3, h: 2 }
  *     },
  *     {
  *       title: "Revenue by Region",
  *       type: "bar",
- *       object: "order",
- *       categoryField: "region",
- *       valueField: "total",
- *       aggregate: "sum",
+ *       dataset: "order_metrics",
+ *       dimensions: ["region"],
+ *       values: ["total_sum"],
  *       layout: { x: 3, y: 0, w: 6, h: 4 }
  *     }
  *   ]

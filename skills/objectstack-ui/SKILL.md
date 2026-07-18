@@ -531,8 +531,9 @@ export const CrmApp = App.create({
 ## Dashboards
 
 Dashboards are a grid of widgets (`columns` × `rowHeight`) sharing a
-`dateRange` scrubber and `globalFilters`. Each widget declares an `object`,
-an `aggregate` measure or chart spec, and a `layout: {x,y,w,h}`.
+`dateRange` scrubber and `globalFilters`. Each widget **binds a `dataset`** and
+selects named `dimensions` + `values`, picks a chart `type`, and sets a
+`layout: {x,y,w,h}` (ADR-0021).
 
 ### Widget Types
 
@@ -552,12 +553,15 @@ modifier; date bucketing comes from the bound dataset dimension's
 
 ### Dataset-Bound Widgets
 
-For shared metrics, prefer the ADR-0021 dataset shape over per-widget inline
-queries. A widget binds to `dataset` and selects named `dimensions` and
-`values`; the dataset owns the base object, allowed joins, intrinsic filter,
-dimensions, and certified measures. Reports bind the same way (`dataset` +
-`rows` + `values` + `runtimeFilter`). Full guide: **Guides → Analytics Datasets**
-(`content/docs/data-modeling/analytics.mdx`).
+Every persisted chart is **dataset-backed** (ADR-0021 single-form cutover): a
+dashboard widget, a report, and a list `type:'chart'` view all **bind a `dataset`
+and select named `dimensions` + `values`**; the dataset owns the base object,
+allowed joins, intrinsic filter, dimensions, and certified measures. The legacy
+per-widget inline query (`object` + `categoryField` + `valueField` + `aggregate`)
+**was removed** — a widget now requires `dataset` + `values`; the inline fields are
+dropped and a widget lacking `dataset` fails `os validate`. Reports bind the same
+way (`dataset` + `rows` + `values` + `runtimeFilter`). Full guide: **Guides →
+Analytics Datasets** (`content/docs/data-modeling/analytics.mdx`).
 
 A widget's presentation-scope `filter` flows into the query as the runtime
 filter; keep `filter` on the widget when binding a dataset.
@@ -574,9 +578,59 @@ filter; keep `filter` on the widget when binding a dataset.
 }
 ```
 
-- Dataset-bound widgets need at least one `values` entry.
-- Do not mix `dataset` with inline `object` / `valueField` / `aggregate`
-  unless you are intentionally keeping a legacy inline widget shape.
+**The real decision is not "inline vs dataset" — it is "can a dataset express
+this?"** The shape is already fixed (always a dataset), so what you decide is
+whether the *data need fits the dataset envelope*, and if not, which lower layer to
+escalate to. Decide on **expressibility**; reuse/governance is Level B.
+
+**Level A — the dataset envelope:**
+
+| Fits a dataset → author one | Beyond the envelope → escalate |
+|:--|:--|
+| one base object + **to-one** joins (`include`, ≤3 hops) | a join that **changes grain** / a **to-many** rollup onto the parent |
+| 0..N dimensions; date-bucket `day/week/month/quarter/year` | a **computed dimension** / CASE bucket / numeric bin |
+| measures `count/sum/avg/min/max/count_distinct` | `array_agg`/`string_agg` or any custom-SQL metric |
+| **derived measures** — `ratio/sum/difference/product` of other measures | scalar math on raw fields (`amount*0.8`), aggregate-of-aggregate |
+| WHERE (`$and/$or/$not` on the base object) + measure-scoped filters | **HAVING** (filtering the aggregate result) |
+| `compareTo` (previous period/year) + `totals` (matrix subtotals) | **window** (rank, running total, lag/lead, %-of-total); **union**; reshaping params |
+
+> **The iron rule:** a dataset is a governed, *narrow* semantic layer — NOT a
+> general analytics escape hatch (no raw SQL, no hand-authored joins, no
+> window/having). If the need is in the right column, a dataset **cannot** express
+> it — escalate to a hand-authored **Cube** (raw SQL / explicit joins), a **stored
+> rollup or formula field** on the object (to-many rollups, computed columns), or
+> app code. Do not force it into a dataset: it fails to compile or renders an empty
+> series.
+
+Standardized answers to the recurring ambiguous cases:
+
+- **"Count of child tasks per project."** Base the dataset on the **child** (`task`)
+  and group by the parent lookup (`project`) — grain = child. A rollup onto the
+  **parent** grain ("on `project`, count related tasks") is a to-many rollup:
+  **not** dataset-expressible — use a **stored rollup field** on `project`.
+- **To-one enrichment** ("revenue by `account.industry`") is fine and does **not**
+  change grain — put `account` in `include`, add `account.industry` as a dimension.
+- **Computed column.** Formatting/currency → a measure's `format`/`currency`;
+  arithmetic over declared measures (`margin = difference(revenue, cost)`) → a
+  **derived measure**; CASE / bins / `revenue*0.8` / computed dimensions → **not** a
+  dataset.
+- **Filter by a parent's attribute** → model it as a **dimension** (guaranteed to
+  join); a lookup-path *filter* is not a reliable analytics-path construct.
+- **A dashboard filter driving several charts** (date/region) → **not** a dataset:
+  a dashboard variable + per-chart `filterBindings` broadcast into each chart's
+  WHERE (#2501). A dataset is implied only when a parameter **reshapes** the query
+  (grain/window/join) — and those are beyond the envelope anyway.
+
+**Level B — naming is governance, not expressibility.** An inline dataset draft
+(Studio Live Canvas) and a saved named dataset have **identical** expressibility;
+naming one is a reuse/governance call (canonical/shared metric, RLS, shared
+labels/formats → `defineDataset`). Persisted widgets already require a named
+dataset, so Level B only surfaces in Studio previews and hand-coded react-page
+`<ObjectChart>` blocks (a single-object inline `aggregate`, no dataset binding).
+
+- Dataset-bound widgets need at least one `values` entry, and every
+  `dataset`/`dimensions`/`values` name must resolve to its `defineDataset` —
+  `os validate` fails on an unresolved name (an empty chart otherwise).
 - Studio's Dashboard Widget Inspector can author per-widget `dataset`,
   `dimensions`, and `values`; curated metadata-admin forms merge
   server-only fields back into the payload, so saving through Studio should
