@@ -770,32 +770,59 @@ export class SeedLoaderService implements ISeedLoaderService {
               resultEntry.referencesDeferred--;
             }
           } catch (err: any) {
-            this.logger.warn('[SeedLoader] Failed to resolve deferred reference', {
+            // LOUD FAILURE (framework#2805): the target resolved but the
+            // back-fill WRITE failed (a transient error that outlasted the
+            // retry budget, a validation veto, …). The reference stays NULL —
+            // the very corruption pass 2 exists to prevent — so this must be a
+            // reported, counted error, never a silent warning. Swallowing it
+            // returned `success: true` / `totalErrored: 0` over a load that
+            // left a circular relationship half-written.
+            this.logger.warn('[SeedLoader] Failed to write deferred reference', {
               object: deferred.objectName,
               field: deferred.field,
-              error: err.message,
+              error: err?.message,
             });
+            this.recordDeferredError(deferred, allResults, allErrors,
+              `Failed to write deferred reference: ${deferred.objectName}.${deferred.field} = '${deferred.attemptedValue}' → ${deferred.targetObject}.${deferred.targetField}: ${err?.message ?? String(err)}`);
           }
         }
       } else {
-        // Still unresolved after pass 2
-        const error: ReferenceResolutionError = {
-          sourceObject: deferred.objectName,
-          field: deferred.field,
-          targetObject: deferred.targetObject,
-          targetField: deferred.targetField,
-          attemptedValue: deferred.attemptedValue,
-          recordIndex: deferred.recordIndex,
-          message: `Deferred reference unresolved after pass 2: ${deferred.objectName}.${deferred.field} = '${deferred.attemptedValue}' → ${deferred.targetObject}.${deferred.targetField} not found`,
-        };
-
-        const resultEntry = allResults.find(r => r.object === deferred.objectName);
-        if (resultEntry) {
-          resultEntry.errors.push(error);
-        }
-        allErrors.push(error);
+        // Still unresolved after pass 2 — the target never materialized.
+        this.recordDeferredError(deferred, allResults, allErrors,
+          `Deferred reference unresolved after pass 2: ${deferred.objectName}.${deferred.field} = '${deferred.attemptedValue}' → ${deferred.targetObject}.${deferred.targetField} not found`);
       }
     }
+  }
+
+  /**
+   * Record a pass-2 (deferred) reference failure as a first-class error: it
+   * lands in the object's per-result `errors`, bumps its `errored` count (so
+   * `summary.totalErrored` is truthful), and joins `allErrors` (so the load
+   * reports `success: false`). Both pass-2 failure modes — target still
+   * missing, or the back-fill write threw — route through here so neither can
+   * leave an incomplete relationship reported as a clean load (framework#2805).
+   */
+  private recordDeferredError(
+    deferred: DeferredUpdate,
+    allResults: SeedLoadResult[],
+    allErrors: ReferenceResolutionError[],
+    message: string,
+  ): void {
+    const error: ReferenceResolutionError = {
+      sourceObject: deferred.objectName,
+      field: deferred.field,
+      targetObject: deferred.targetObject,
+      targetField: deferred.targetField,
+      attemptedValue: deferred.attemptedValue,
+      recordIndex: deferred.recordIndex,
+      message,
+    };
+    const resultEntry = allResults.find(r => r.object === deferred.objectName);
+    if (resultEntry) {
+      resultEntry.errors.push(error);
+      resultEntry.errored++;
+    }
+    allErrors.push(error);
   }
 
   // ==========================================================================
