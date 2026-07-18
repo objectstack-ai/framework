@@ -374,7 +374,7 @@ List chart view configuration
 | **conditionalFormatting** | `{ condition: string \| { dialect: Enum<'cel' \| 'js' \| 'cron' \| 'template'>; source?: string; ast?: any; meta?: object }; style: Record<string, string> }[]` | optional | Conditional formatting rules for list rows |
 | **inlineEdit** | `boolean` | optional | Allow inline editing of records directly in the list view |
 | **exportOptions** | `Enum<'csv' \| 'xlsx' \| 'pdf' \| 'json'>[]` | optional | Available export format options |
-| **userActions** | `{ sort?: boolean; search?: boolean; filter?: boolean; rowHeight?: boolean; … }` | optional | User action toggles for the view toolbar |
+| **userActions** | `{ sort?: boolean; search?: boolean; filter?: boolean; refresh?: boolean; … }` | optional | User action toggles for the view toolbar |
 | **appearance** | `{ showDescription?: boolean; allowedVisualizations?: Enum<'grid' \| 'kanban' \| 'gallery' \| 'calendar' \| 'timeline' \| 'gantt' \| 'map' \| 'chart' \| 'tree'>[] }` | optional | Appearance and visualization configuration |
 | **tabs** | `{ name: string; label?: string; icon?: string; view?: string; … }[]` | optional | Tab definitions for multi-tab view interface |
 | **addRecord** | `{ enabled?: boolean; position?: Enum<'top' \| 'bottom' \| 'both'>; mode?: Enum<'inline' \| 'form' \| 'modal'>; formView?: string }` | optional | Add record entry point configuration |
@@ -462,7 +462,7 @@ List chart view configuration
 | **conditionalFormatting** | `{ condition: string \| { dialect: Enum<'cel' \| 'js' \| 'cron' \| 'template'>; source?: string; ast?: any; meta?: object }; style: Record<string, string> }[]` | optional | Conditional formatting rules for list rows |
 | **inlineEdit** | `boolean` | optional | Allow inline editing of records directly in the list view |
 | **exportOptions** | `Enum<'csv' \| 'xlsx' \| 'pdf' \| 'json'>[]` | optional | Available export format options |
-| **userActions** | `{ sort?: boolean; search?: boolean; filter?: boolean; rowHeight?: boolean; … }` | optional | User action toggles for the view toolbar |
+| **userActions** | `{ sort?: boolean; search?: boolean; filter?: boolean; refresh?: boolean; … }` | optional | User action toggles for the view toolbar |
 | **appearance** | `{ showDescription?: boolean; allowedVisualizations?: Enum<'grid' \| 'kanban' \| 'gallery' \| 'calendar' \| 'timeline' \| 'gantt' \| 'map' \| 'chart' \| 'tree'>[] }` | optional | Appearance and visualization configuration |
 | **tabs** | `{ name: string; label?: string; icon?: string; view?: string; … }[]` | optional | Tab definitions for multi-tab view interface |
 | **addRecord** | `{ enabled?: boolean; position?: Enum<'top' \| 'bottom' \| 'both'>; mode?: Enum<'inline' \| 'form' \| 'modal'>; formView?: string }` | optional | Add record entry point configuration |
@@ -584,6 +584,7 @@ User action toggles for the view toolbar
 | **sort** | `boolean` | ✅ | Allow users to sort records |
 | **search** | `boolean` | ✅ | Allow users to search records |
 | **filter** | `boolean` | ✅ | Allow users to filter records |
+| **refresh** | `boolean` | ✅ | Allow users to reload the view data from the backend without a full page reload |
 | **rowHeight** | `boolean` | ✅ | Allow users to toggle row height/density |
 | **addRecordForm** | `boolean` | ✅ | Add records through a form instead of inline |
 | **editInline** | `boolean` | ✅ | Allow users to edit records inline — click a cell to edit it with the field's type-aware widget (the same control the form uses). Off by default: the list is read-only unless the author opts in. |
