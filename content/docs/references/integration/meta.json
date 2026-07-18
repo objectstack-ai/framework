@@ -1,15 +1,18 @@
 {
   "title": "Integration Protocol",
   "pages": [
+    "---Connectors---",
     "connector",
     "connector-auth",
-    "http",
     "mapping",
+    "translation",
+    "---Transport & Storage---",
+    "http",
     "message-queue",
-    "misc",
     "object-storage",
     "offline",
-    "tenant",
-    "translation"
+    "---Tenancy---",
+    "misc",
+    "tenant"
   ]
 }

@@ -433,6 +433,103 @@ function generateZodFileMarkdown(zodFile: string, schemas: Array<{name: string, 
   return md;
 }
 
+/**
+ * Reference-sidebar section grouping, per category. #1862 grouped each category's
+ * `references/{cat}/meta.json` by hand, but `gen:docs` rewrites those files as a flat
+ * alphabetical list on every run (in the docs production build), so the grouping was
+ * silently lost. Owning it here makes it durable (#1880).
+ *
+ * A page is placed under the FIRST section that names it. The mapping degrades
+ * gracefully: names that produce no page are ignored, and pages present on disk but
+ * not named here still appear (sorted, under a trailing `More` separator) — so adding
+ * or removing a schema never drops it from the sidebar. Categories with no entry keep
+ * the legacy flat sorted list.
+ */
+const SECTION_GROUPS: Record<string, Array<{ section: string; pages: string[] }>> = {
+  ai: [
+    { section: 'Agents & Tools', pages: ['agent', 'tool', 'skill', 'solution-blueprint', 'mcp'] },
+    { section: 'Knowledge & RAG', pages: ['knowledge-document', 'knowledge-source', 'embedding'] },
+    { section: 'Models & Runtime', pages: ['model-registry', 'conversation', 'usage'] },
+  ],
+  api: [
+    { section: 'Contract & Routing', pages: ['protocol', 'contract', 'endpoint', 'router', 'registry', 'discovery', 'documentation', 'versioning', 'errors', 'batch'] },
+    { section: 'Transport & Realtime', pages: ['http', 'http-cache', 'rest-server', 'websocket', 'realtime', 'realtime-shared', 'graphql', 'odata', 'query-adapter', 'dispatcher'] },
+    { section: 'Service APIs', pages: ['core-services', 'auth', 'auth-endpoints', 'identity', 'metadata', 'metadata-plugin', 'automation-api', 'analytics', 'export', 'storage', 'notification', 'events', 'connector', 'package-api', 'package-registry', 'plugin-rest-api'] },
+  ],
+  automation: [
+    { section: 'Flow & Execution', pages: ['flow', 'control-flow', 'execution', 'node-executor', 'state-machine', 'trigger-registry'] },
+    { section: 'Integration & Data', pages: ['sync', 'etl', 'connector', 'webhook', 'bpmn-interop', 'offline'] },
+    { section: 'Approvals & Jobs', pages: ['approval', 'job'] },
+  ],
+  cloud: [
+    { section: 'Environments & Packages', pages: ['environment', 'environment-artifact', 'environment-package', 'package', 'package-version', 'template-manifest', 'provisioning'] },
+    { section: 'Marketplace & Distribution', pages: ['marketplace', 'marketplace-admin', 'app-store', 'developer-portal'] },
+    { section: 'Tenancy & Security', pages: ['tenant', 'plugin-security'] },
+  ],
+  data: [
+    { section: 'Objects & Fields', pages: ['object', 'field', 'validation', 'hook', 'hook-body', 'mapping'] },
+    { section: 'Query & Analytics', pages: ['query', 'filter', 'data-engine', 'analytics', 'date-macros'] },
+    { section: 'Datasources & Drivers', pages: ['datasource', 'driver', 'driver-sql', 'driver-nosql', 'external-catalog', 'external-lookup'] },
+    { section: 'Documents & Seed', pages: ['document', 'seed', 'seed-loader', 'feed'] },
+  ],
+  integration: [
+    { section: 'Connectors', pages: ['connector', 'connector-auth', 'mapping', 'translation'] },
+    { section: 'Transport & Storage', pages: ['http', 'message-queue', 'object-storage', 'offline'] },
+    { section: 'Tenancy', pages: ['tenant', 'misc'] },
+  ],
+  kernel: [
+    { section: 'Plugin Lifecycle', pages: ['plugin', 'plugin-lifecycle-events', 'plugin-lifecycle-advanced', 'plugin-runtime', 'plugin-loading', 'plugin-registry', 'plugin-structure', 'plugin-validator'] },
+    { section: 'Plugin Security & Dependencies', pages: ['plugin-security', 'plugin-security-advanced', 'plugin-capability', 'plugin-versioning', 'dependency-resolution', 'manifest'] },
+    { section: 'Packages', pages: ['package-artifact', 'package-registry', 'package-upgrade'] },
+    { section: 'Metadata & Runtime', pages: ['metadata-plugin', 'metadata-loader', 'metadata-customization', 'metadata-protection', 'metadata-persistence', 'misc', 'context', 'execution-context', 'service-registry', 'startup-orchestrator', 'cluster', 'feature', 'cli-extension', 'dev-plugin', 'state-machine'] },
+  ],
+  system: [
+    { section: 'Config & Settings', pages: ['settings-manifest', 'settings-client', 'registry-config', 'auth-config', 'email-config', 'email-template', 'license', 'migration', 'deploy-bundle', 'environment-artifact', 'app-install', 'provisioning', 'tenant'] },
+    { section: 'Services & Infrastructure', pages: ['core-services', 'http-server', 'cache', 'message-queue', 'object-storage', 'search-engine', 'worker', 'job', 'notification', 'translation', 'metadata-loader', 'metadata-persistence'] },
+    { section: 'Observability', pages: ['logging', 'metrics', 'tracing', 'audit'] },
+    { section: 'Security & Compliance', pages: ['encryption', 'security-context', 'incident-response', 'supplier-security', 'disaster-recovery', 'change-management', 'training'] },
+    { section: 'Content & Collaboration', pages: ['doc', 'book', 'collaboration'] },
+  ],
+  ui: [
+    { section: 'Apps & Navigation', pages: ['app', 'page', 'portal', 'view', 'action'] },
+    { section: 'Visualization', pages: ['chart', 'dashboard', 'dataset', 'report', 'widget', 'component'] },
+    { section: 'Interaction & Layout', pages: ['animation', 'dnd', 'keyboard', 'touch', 'responsive', 'theme', 'offline'] },
+    { section: 'Platform', pages: ['i18n', 'notification', 'sharing', 'http'] },
+  ],
+};
+
+/**
+ * Build a category's `meta.json` `pages` array. With a SECTION_GROUPS entry, emit
+ * fumadocs `"---Section---"` separators around the grouped pages; otherwise fall back
+ * to the legacy flat alphabetical list. `emitted` is the set of pages that actually
+ * produced a reference file this run.
+ */
+function buildCategoryPages(category: string, emitted: string[]): string[] {
+  const groups = SECTION_GROUPS[category];
+  if (!groups) return [...emitted].sort();
+
+  const present = new Set(emitted);
+  const used = new Set<string>();
+  const out: string[] = [];
+
+  for (const { section, pages } of groups) {
+    const inSection = pages.filter(p => present.has(p) && !used.has(p)).sort();
+    if (inSection.length === 0) continue;
+    out.push(`---${section}---`);
+    for (const p of inSection) { out.push(p); used.add(p); }
+  }
+
+  // Pages on disk that no section claimed still appear — never drop a page. Only
+  // label them when something above was grouped; a lone "More" over an otherwise
+  // ungrouped category would read oddly, so degrade to a flat list in that case.
+  const leftover = emitted.filter(p => !used.has(p)).sort();
+  if (leftover.length) {
+    if (out.length) out.push('---More---');
+    out.push(...leftover);
+  }
+  return out;
+}
+
 // === EXECUTION ===
 
 console.log('Building documentation...');
@@ -501,10 +598,11 @@ Object.keys(CATEGORIES).forEach(category => {
     emit(path.join(categoryDir, fileName), mdx);
   });
 
-  // Generate Category Meta
+  // Generate Category Meta. Group into fumadocs `---Section---` separators when the
+  // category has a SECTION_GROUPS entry; otherwise a flat sorted list (see #1880).
   const meta = {
     title: CATEGORIES[category],
-    pages: Array.from(zodFileSchemas.keys()).sort()
+    pages: buildCategoryPages(category, Array.from(zodFileSchemas.keys()))
   };
   emit(path.join(categoryDir, 'meta.json'), JSON.stringify(meta, null, 2));
 });
