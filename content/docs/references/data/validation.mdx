@@ -171,7 +171,7 @@ const result = ConditionalValidation.parse(data);
 | **message** | `string` | ✅ | Error message to display to the user |
 | **type** | `'cross_field'` | ✅ |  |
 | **condition** | `string \| { dialect: Enum<'cel' \| 'js' \| 'cron' \| 'template'>; source?: string; ast?: any; meta?: object }` | ✅ | Predicate (CEL) comparing fields. e.g. P`record.end_date > record.start_date` |
-| **fields** | `string[]` | ✅ | Fields involved in the validation |
+| **fields** | `string[]` | ✅ | Fields involved. Only fields[0] is read (labels which field the violation attaches to); the rest are advisory. Shares script’s evaluation path. |
 
 
 ---
@@ -360,7 +360,7 @@ This schema accepts one of the following structures:
 | **message** | `string` | ✅ | Error message to display to the user |
 | **type** | `'cross_field'` | ✅ |  |
 | **condition** | `string \| { dialect: Enum<'cel' \| 'js' \| 'cron' \| 'template'>; source?: string; ast?: any; meta?: object }` | ✅ | Predicate (CEL) comparing fields. e.g. P`record.end_date > record.start_date` |
-| **fields** | `string[]` | ✅ | Fields involved in the validation |
+| **fields** | `string[]` | ✅ | Fields involved. Only fields[0] is read (labels which field the violation attaches to); the rest are advisory. Shares script’s evaluation path. |
 
 ---
 

@@ -246,10 +246,8 @@ const HAND_CRAFTED_SCHEMAS: Record<string, Record<string, unknown>> = {
             fields: {
                 type: 'array',
                 items: { type: 'string' },
-                description: 'Fields (type=unique / cross_field).',
+                description: 'Fields (type=cross_field).',
             },
-            scope: { type: 'string', description: 'CEL scope predicate (type=unique).' },
-            caseSensitive: { type: 'boolean', default: true },
             field: { type: 'string', description: 'Single field (type=state_machine / format).' },
             transitions: {
                 type: 'object',
@@ -262,8 +260,6 @@ const HAND_CRAFTED_SCHEMAS: Record<string, Record<string, unknown>> = {
                 enum: ['email', 'url', 'phone', 'json'],
                 description: 'Built-in format (type=format).',
             },
-            url: { type: 'string', description: 'Endpoint URL (type=async).' },
-            handler: { type: 'string', description: 'Handler reference (type=custom).' },
             when: { type: 'string', description: 'Outer condition (type=conditional).' },
         },
         required: ['name', 'type', 'message'],

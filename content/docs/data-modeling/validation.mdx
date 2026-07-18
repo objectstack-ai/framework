@@ -13,6 +13,7 @@ Three patterns that look like validation rules are deliberately **not** rule typ
 - **Uniqueness** → a unique index (`ObjectSchema.indexes`, `{ fields, unique: true }`, with `partial` for a scoped constraint) or field-level `unique: true`. A SELECT-then-INSERT rule is inherently racy (TOCTOU); a DB unique constraint is not.
 - **Async / remote validation** → a client-form concern, and an SSRF/latency hazard on the server write path. Keep it in the form layer, or enforce the invariant with a `unique` index / lifecycle hook.
 - **Custom handler** → a `beforeInsert` / `beforeUpdate` lifecycle hook, the supported extension point for arbitrary validation code.
+- **Delete-time guards** → a `beforeDelete` lifecycle hook. Validation rules run only on insert/update (a delete carries no record payload to validate), so there is no `'delete'` validation event — block or gate deletions from a `beforeDelete` hook.
 </Callout>
 
 ## Basic Structure
@@ -196,6 +197,10 @@ Validate relationships between multiple fields:
   events: ['insert', 'update'],
 }
 ```
+
+<Callout type="info">
+`cross_field` evaluates identically to `script` — both run the same CEL predicate. The only difference is `fields[0]`, which labels the field the error attaches to (a plain `script` error attaches to the record). The remaining `fields` are advisory/documentation. Reach for `cross_field` when you want the error targeted at a specific field; otherwise `script` is equivalent.
+</Callout>
 
 ### JSON Schema Validation
 

@@ -82,6 +82,13 @@ import { ExpressionInputSchema } from '../shared/expression.zod';
  * - **Label/Description**: Essential for governance in large systems with thousands of rules.
  * - **Events**: granular control over validation timing (Context-aware validation).
  * - **Tags**: categorization for reporting and management.
+ *
+ * `label`, `description` and `tags` are **governance / editor metadata**: they are
+ * surfaced to the Studio validation-rule editor form (via the `/meta/types` form
+ * schema) and to rule listings, but are NOT evaluated on the write path — the
+ * rule validator only reads `type`/`condition`/`field`/`events`/`severity`/`message`.
+ * They are declared here on purpose (not silent no-ops): they carry authoring intent,
+ * not enforcement.
  */
 import { lazySchema } from '../shared/lazy-schema';
 const BaseValidationSchema = z.object({
@@ -197,10 +204,16 @@ export const FormatValidationSchema = lazySchema(() => BaseValidationSchema.exte
  * }
  * ```
  */
+// NOTE: `cross_field` shares the exact evaluation path as `script` — both dispatch
+// to the same predicate checker. `fields` is advisory: only `fields[0]` is read, to
+// label which field the violation attaches to (a `script` rule attaches to `_record`);
+// `fields[1..]` are documentation only. Prefer `script` unless you want the error
+// targeted at a specific field. Kept as a distinct variant for that field-targeting
+// affordance and for backward compatibility.
 export const CrossFieldValidationSchema = lazySchema(() => BaseValidationSchema.extend({
   type: z.literal('cross_field'),
   condition: ExpressionInputSchema.describe('Predicate (CEL) comparing fields. e.g. P`record.end_date > record.start_date`'),
-  fields: z.array(z.string()).describe('Fields involved in the validation'),
+  fields: z.array(z.string()).describe('Fields involved. Only fields[0] is read (labels which field the violation attaches to); the rest are advisory. Shares script’s evaluation path.'),
 }));
 
 /**
