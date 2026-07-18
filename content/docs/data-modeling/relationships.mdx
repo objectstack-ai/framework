@@ -36,8 +36,9 @@ contact: Field.lookup('contact', {
 ```
 
 <Callout type="warn">
-  The legacy `referenceFilters: string[]` property (e.g. `['is_active = true']`) is accepted
-  by the schema but is **not** read by the record-picker UI — it filters nothing. Use the
+  The legacy `referenceFilters: string[]` property (e.g. `['is_active = true']`) was **removed**
+  (#2377, ADR-0049) and is no longer a recognized field property — the schema strips it as an
+  unknown key, and it was never read by the record-picker UI, so it filters nothing. Use the
   structured `lookupFilters` (`{ field, operator, value }`) and `dependsOn` shown above instead.
 </Callout>
 

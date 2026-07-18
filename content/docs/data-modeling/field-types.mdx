@@ -301,7 +301,7 @@ Reference to a record in another object (foreign key).
 | Property | Type | Default | Description |
 |:---|:---|:---|:---|
 | `reference` | `string` | **required** | Target object name (snake_case) |
-| `referenceFilters` | `string[]` | — | **Legacy** — accepted by the schema but not read by the record-picker (filters nothing). Use structured `lookupFilters` + `dependsOn` instead; see [Relationships](/docs/data-modeling/relationships) |
+| `referenceFilters` | `string[]` | — | **Removed** (#2377, ADR-0049) — no longer a recognized field property (unknown keys are stripped by the schema). Use structured `lookupFilters` + `dependsOn` instead; see [Relationships](/docs/data-modeling/relationships) |
 | `deleteBehavior` | `'restrict' \| 'cascade' \| 'set_null'` | `'set_null'` | Behavior when referenced record is deleted (a *required* lookup left at the default `set_null` is escalated to `restrict`, since a NOT NULL foreign key cannot be cleared) |
 
 ```typescript
@@ -323,7 +323,7 @@ Parent-child relationship (cascading delete by default).
 | Property | Type | Default | Description |
 |:---|:---|:---|:---|
 | `reference` | `string` | **required** | Target (master) object name |
-| `referenceFilters` | `string[]` | — | **Legacy** — accepted by the schema but not read by the record-picker (filters nothing). Use structured `lookupFilters` + `dependsOn` instead; see [Relationships](/docs/data-modeling/relationships) |
+| `referenceFilters` | `string[]` | — | **Removed** (#2377, ADR-0049) — no longer a recognized field property (unknown keys are stripped by the schema). Use structured `lookupFilters` + `dependsOn` instead; see [Relationships](/docs/data-modeling/relationships) |
 | `deleteBehavior` | `'restrict' \| 'cascade' \| 'set_null'` | `'cascade'` | Behavior when parent is deleted (master-detail cascades unless set to `restrict`) |
 | `inlineEdit` | `boolean \| 'grid' \| 'form'` | — | Edit child records inline on the parent create/edit form (`true` = auto-pick, `'grid'`, or `'form'`) |
 | `inlineColumns` | `array` | — | Optional explicit inline grid columns |
@@ -355,43 +355,20 @@ Self-referential hierarchy (e.g., categories, org chart).
 
 ## Media Types
 
-All media types support the `fileAttachmentConfig` property:
-
-| Property | Type | Description |
-|:---|:---|:---|
-| `maxSize` | `number` | Maximum file size in bytes |
-| `minSize` | `number` | Minimum file size in bytes |
-| `allowedTypes` | `string[]` | Allowed file extensions |
-| `blockedTypes` | `string[]` | Blocked file extensions |
-| `allowedMimeTypes` | `string[]` | Allowed MIME types |
-| `blockedMimeTypes` | `string[]` | Blocked MIME types |
-| `virusScan` | `boolean` | Enable virus scanning |
-| `storageProvider` | `string` | Storage provider name |
-| `storageBucket` | `string` | Storage bucket name |
-| `allowMultiple` | `boolean` | Allow multiple files |
-| `versioningEnabled` | `boolean` | Enable file versioning |
-| `maxVersions` | `number` | Maximum version count |
-| `publicRead` | `boolean` | Publicly accessible |
-| `presignedUrlExpiry` | `number` | URL expiry in seconds |
+Media fields store a reference to an uploaded file. They take the universal field properties (`multiple` is honored for `file` and `image`); there is no per-field file-attachment config object in the field schema — file constraints and storage are configured at the storage-provider layer, not on the field.
 
 ### `image`
 Image file with optional validation.
 
 ```typescript
-{
-  name: 'photo', label: 'Photo', type: 'image',
-  fileAttachmentConfig: { maxSize: 5242880, allowedMimeTypes: ['image/png', 'image/jpeg'] }
-}
+{ name: 'photo', label: 'Photo', type: 'image' }
 ```
 
 ### `file`
 Generic file attachment.
 
 ```typescript
-{
-  name: 'attachment', label: 'Attachment', type: 'file',
-  fileAttachmentConfig: { maxSize: 10485760, virusScan: true }
-}
+{ name: 'attachment', label: 'Attachment', type: 'file', multiple: true }
 ```
 
 ### `avatar`
@@ -405,20 +382,14 @@ Profile image (typically square, small).
 Video file attachment.
 
 ```typescript
-{
-  name: 'demo_video', label: 'Demo Video', type: 'video',
-  fileAttachmentConfig: { maxSize: 104857600, allowedMimeTypes: ['video/mp4'] }
-}
+{ name: 'demo_video', label: 'Demo Video', type: 'video' }
 ```
 
 ### `audio`
 Audio file attachment.
 
 ```typescript
-{
-  name: 'recording', label: 'Recording', type: 'audio',
-  fileAttachmentConfig: { maxSize: 52428800 }
-}
+{ name: 'recording', label: 'Recording', type: 'audio' }
 ```
 
 ---
@@ -432,7 +403,6 @@ Calculated field using a CEL expression (see [Expressions](/docs/data-modeling/f
 |:---|:---|:---|:---|
 | `expression` | `string \| Expression` | **required** | CEL calculation expression |
 | `returnType` | `'number' \| 'text' \| 'boolean' \| 'date'` | — | Declared value type of the computed result |
-| `dependencies` | `string[]` | — | Fields the formula depends on |
 
 ```typescript
 { name: 'total', label: 'Total', type: 'formula', expression: 'record.quantity * record.unit_price', returnType: 'number' }
@@ -608,7 +578,7 @@ Vector embeddings for semantic search and similarity.
 |:---|:---|:---|:---|
 | `dimensions` | `number` | **required** | Vector dimensionality (e.g., 1536 for OpenAI embeddings) |
 
-The nested `vectorConfig` object (with `distanceMetric`, `indexed`, `indexType`, …) is retained for back-compat only and is a runtime no-op — set the flat `dimensions` property instead.
+An earlier nested `vectorConfig` object was removed — the field builder no longer emits it and it is ignored. Set the flat `dimensions` property instead.
 
 ```typescript
 { name: 'embedding', label: 'Embedding', type: 'vector', dimensions: 1536 }
@@ -635,14 +605,13 @@ These properties are available on **all** field types:
 | `sortable` | `boolean` | `true` | Allow sorting by this field |
 | `hidden` | `boolean` | `false` | Hide from default views |
 | `readonly` | `boolean` | `false` | Prevent user edits |
-| `index` | `boolean` | `false` | Create database index |
 | `externalId` | `boolean` | `false` | External system identifier |
 | `defaultValue` | `any` | — | Default value for new records |
 | `group` | `string` | — | Field grouping / section |
 | `inlineHelpText` | `string` | — | Inline help tooltip |
 | `trackHistory` | `boolean` | — | Render this field's value changes as entries on the record activity timeline |
 | `requiredPermissions` | `string[]` | — | Capabilities required to read/edit this field (masked on read, denied on write) |
-| `dependencies` | `string[]` | — | Names of fields this field depends on (formulas, visibility rules, etc.) |
+| `dependsOn` | `string[]` | — | Fields whose values scope this field's options (lookup candidate query; select/radio option gating) |
 | `visibleWhen` | `Expression` | — | Show field only when predicate is true |
 | `readonlyWhen` | `Expression` | — | Make field read-only when predicate is true |
 | `requiredWhen` | `Expression` | — | Require field when predicate is true |

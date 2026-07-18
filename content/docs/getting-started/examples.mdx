@@ -38,7 +38,7 @@ metadata, run `os validate`, and verify in the Console — the loop in
 
 <Callout type="info">
   **Looking for a production server shape?** Build an artifact with `os compile`,
-  then run it with `os start` or `os serve --artifact`. The framework repo no
+  then run it with `os start` or `os serve`. The framework repo no
   longer contains a separate `apps/objectos` production host.
 </Callout>
 
@@ -84,7 +84,7 @@ examples/app-todo/
 │   │   └── task.report.ts     # Tabular + summary reports
 │   ├── datasets/              # Saved query datasets for charts
 │   ├── flows/
-│   │   └── task.flow.ts       # Auto-assignment automation
+│   │   └── task.flow.ts       # Reminder, escalation & recurrence flows
 │   ├── translations/          # Locale bundles
 │   └── data/
 │       └── index.ts           # Seed data via defineSeed()
@@ -206,7 +206,7 @@ const tasks = defineSeed(Task, {
 export const TodoSeedData = [tasks];
 ```
 
-**3. The server auto-detects** what you need: ObjectQL engine → InMemory driver → Hono HTTP server → REST API at `/api/v1/data/todo_task`.
+**3. The server auto-detects** what you need: ObjectQL engine → SQLite driver → Hono HTTP server → REST API at `/api/v1/data/todo_task`.
 
 ---
 
@@ -299,7 +299,7 @@ import CrmApp from '../examples/app-crm/objectstack.config';
 import TodoApp from '../examples/app-todo/objectstack.config';
 
 // composeStacks merges objects, apps, and other metadata from each stack.
-// The combined manifest is selected per the `manifest` option; the first
+// The combined manifest is selected per the `manifest` option; the last
 // stack's manifest is used by default. Duplicate object names throw unless
 // you pass an `objectConflict` strategy ('override' | 'merge').
 export default composeStacks([CrmApp, TodoApp]);

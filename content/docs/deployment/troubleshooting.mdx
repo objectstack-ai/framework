@@ -211,7 +211,7 @@ client.data.find('project_task', { /* query */ });
 // ❌ View references non-existent object
 defineStack({
   objects: [{ name: 'task', /* ... */ }],
-  views: [{ name: 'contact_list', object: 'contact', /* ... */ }]  // 'contact' not defined!
+  views: [{ list: { type: 'grid', data: { provider: 'object', object: 'contact' }, columns: ['name'] } }]  // 'contact' not defined!
 });
 
 // ✅ All references resolve
@@ -220,7 +220,7 @@ defineStack({
     { name: 'task', /* ... */ },
     { name: 'contact', /* ... */ }
   ],
-  views: [{ name: 'contact_list', object: 'contact', /* ... */ }]
+  views: [{ list: { type: 'grid', data: { provider: 'object', object: 'contact' }, columns: ['name'] } }]
 });
 ```
 
@@ -274,7 +274,7 @@ console.log(field.maxLength?.toString() ?? 'no limit');
 ### "Query is slow"
 
 **Checklist:**
-1. **Add indexes** — Set `index: true` on fields used in `where` clauses
+1. **Add indexes** — Declare indexes in the object's `indexes[]` array (e.g. `indexes: [{ fields: ['status'] }]`) for fields used in `where` clauses — there is no field-level `index` flag
 2. **Limit fields** — Only request fields you need (`fields: ['id', 'name']`)
 3. **Use pagination** — Always set `limit` to avoid returning all records
 4. **Avoid deep nesting** — Limit nested `$and`/`$or` depth

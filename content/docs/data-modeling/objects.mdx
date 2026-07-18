@@ -52,7 +52,6 @@ export const Account = ObjectSchema.create({
 | `pluralLabel` | `string` | optional | Plural label (e.g. `'Accounts'`) |
 | `description` | `string` | optional | Developer documentation |
 | `icon` | `string` | optional | Icon name (Lucide/Material) |
-| `tags` | `string[]` | optional | Categorization tags (e.g. `['sales', 'system']`) |
 
 ### Data
 
@@ -70,7 +69,6 @@ export const Account = ObjectSchema.create({
 | `titleFormat` | `string` | optional | Deprecated (ADR-0079 → `nameField`). Render-only title template (e.g. `'{{record.name}} - {{record.code}}'`); an explicit `nameField` takes precedence |
 | `highlightFields` | `string[]` | optional | Most-important fields in priority order — default list columns, cards, previews, detail highlight strip (ADR-0085; formerly `compactLayout` — the old spelling was retired and is now rejected) |
 | `stageField` | `string \| false` | optional | Linear lifecycle field; `false` declares the status field non-linear and suppresses stage heuristics (ADR-0085) |
-| `recordName` | `object` | optional | Record name auto-generation config |
 
 ### Capabilities (`enable`)
 
@@ -98,8 +96,8 @@ enable: {
 | `apiEnabled` | `true` | Expose object via automatic APIs |
 | `apiMethods` | all | Whitelist of allowed API operations |
 | `files` | `false` | Enable file attachments |
-| `feeds` | `false` | Enable social feed and comments |
-| `activities` | `false` | Enable tasks and events tracking |
+| `feeds` | `true` | Enable social feed and comments |
+| `activities` | `true` | Enable tasks and events tracking |
 | `trash` | `true` | Enable soft delete with restore |
 | `mru` | `true` | Track Most Recently Used list |
 | `clone` | `true` | Allow record deep cloning |
@@ -117,27 +115,6 @@ not object metadata.
 tenancy: {
   enabled: true,
   tenantField: 'tenant_id',
-}
-```
-
-#### Soft Delete
-
-```typescript
-softDelete: {
-  enabled: true,
-  field: 'deleted_at',
-  cascadeDelete: false,
-}
-```
-
-#### Versioning
-
-```typescript
-versioning: {
-  enabled: true,
-  strategy: 'snapshot',       // 'snapshot' | 'delta' | 'event-sourcing'
-  retentionDays: 365,
-  versionField: 'version',
 }
 ```
 
@@ -215,24 +192,6 @@ sets years while dev keeps days), row `quotas` and `growth_alert_rows`
 (observe-and-alert only). `OS_LIFECYCLE_DISABLED=1` disables sweeping
 entirely.
 
-### Record Name
-
-Auto-generate unique record identifiers:
-
-```typescript
-recordName: {
-  type: 'autonumber',
-  displayFormat: 'ACC-{0000}',   // ACC-0001, ACC-0002, ...
-  startNumber: 1,
-}
-```
-
-| Property | Type | Description |
-| :--- | :--- | :--- |
-| `type` | `'text' \| 'autonumber'` | Generation mode |
-| `displayFormat` | `string` | Pattern (e.g. `'INV-{YYYY}-{0000}'`) |
-| `startNumber` | `number` | Starting number (default: 1) |
-
 ### Indexes
 
 Optimize query performance:
@@ -257,11 +216,8 @@ indexes: [
 
 | Property | Type | Description |
 | :--- | :--- | :--- |
-| `active` | `boolean` | Is object active (default: `true`) |
 | `isSystem` | `boolean` | System object, protected from deletion (default: `false`) |
-| `abstract` | `boolean` | Abstract base, cannot be instantiated (default: `false`) |
 | `sharingModel` | `enum` | Org-Wide Default record visibility (ADR-0055/0056/0090). Canonical four only: `'private'`, `'public_read'`, `'public_read_write'`, `'controlled_by_parent'` (detail visibility derived from its master). The legacy aliases (`'read'`, `'read_write'`, `'full'`) were removed from the enum (ADR-0090 D4) — authoring rejects them. Unset on a custom object resolves to `'private'` (ADR-0090 D1) |
-| `keyPrefix` | `string` | Short prefix for record IDs (e.g. `'001'`) |
 | `ownership` | `enum` | Record-ownership model: `'user'` (default — injects the reassignable `owner_id` lookup, engaging owner-scoped RLS, "My" views and owner reports), `'org'`, or `'none'` (no per-record owner — Dataverse-style catalog / junction tables, skips `owner_id`). Distinct from the package `own`/`extend` contribution kind. |
 | `validations` | `ValidationRule[]` | Object-level validation rules (see [Validation](/docs/data-modeling/validation)) |
 

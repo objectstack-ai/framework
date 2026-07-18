@@ -155,7 +155,7 @@ export const taskViews = defineView({
     type: 'grid',
     data: { provider: 'object', object: 'task' },
     columns: ['title', 'status', 'priority', 'assigned_to', 'due_date'],
-    filter: [['status', '!=', 'closed']],
+    filter: [{ field: 'status', operator: 'not_equals', value: 'closed' }],
     sort: [
       { field: 'priority', order: 'desc' },
       { field: 'due_date', order: 'asc' }
