@@ -445,10 +445,12 @@ GET /api/v1/automation/{flow}/runs/{runId}/screen  # re-fetch a paused screen
 ```
 
 Each run's `steps[]` records every executed node — including loop iterations,
-parallel branch bodies, and try/catch region steps — and the Studio flow
-designer surfaces the same data in its **Runs** side panel. Run history is an
-in-memory ring buffer (the durable rows in `sys_automation_run` hold only
-*live pauses*), so history starts fresh on each boot.
+parallel branch bodies, and try/catch region steps — which the Studio flow
+designer surfaces, nested by iteration / branch / handler, in its **Runs** side
+panel. Recent runs are held in an in-memory ring buffer; terminal runs
+(completed / failed) are also mirrored to `sys_automation_run` as durable
+history with a bounded step log, so `listRuns` / `getRun` still report a run's
+status, steps, and failure reason after a restart or ring-buffer eviction.
 
 ## Edges
 
