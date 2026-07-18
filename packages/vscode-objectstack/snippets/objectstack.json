@@ -9,7 +9,6 @@
       "  name: '${2:my_object}',",
       "  label: '${3:My Object}',",
       "  pluralLabel: '${3:My Object}s',",
-      "  ownership: 'own',",
       "  fields: {",
       "    name: {",
       "      type: 'text',",

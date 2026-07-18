@@ -262,6 +262,7 @@ indexes: [
 | `abstract` | `boolean` | Abstract base, cannot be instantiated (default: `false`) |
 | `sharingModel` | `enum` | Org-Wide Default record visibility (ADR-0055/0056/0090). Canonical four only: `'private'`, `'public_read'`, `'public_read_write'`, `'controlled_by_parent'` (detail visibility derived from its master). The legacy aliases (`'read'`, `'read_write'`, `'full'`) were removed from the enum (ADR-0090 D4) — authoring rejects them. Unset on a custom object resolves to `'private'` (ADR-0090 D1) |
 | `keyPrefix` | `string` | Short prefix for record IDs (e.g. `'001'`) |
+| `ownership` | `enum` | Record-ownership model: `'user'` (default — injects the reassignable `owner_id` lookup, engaging owner-scoped RLS, "My" views and owner reports), `'org'`, or `'none'` (no per-record owner — Dataverse-style catalog / junction tables, skips `owner_id`). Distinct from the package `own`/`extend` contribution kind. |
 | `validations` | `ValidationRule[]` | Object-level validation rules (see [Validation](/docs/data-modeling/validation)) |
 
 ## Naming Conventions
