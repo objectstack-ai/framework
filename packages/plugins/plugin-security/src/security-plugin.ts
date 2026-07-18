@@ -84,6 +84,20 @@ const PLATFORM_ADMIN_ONLY_CAPABILITIES: readonly string[] = [
 ];
 
 /**
+ * [ADR-0099 P0] Pure form of the platform-admin capability probe: does the held
+ * capability set contain any platform-EXCLUSIVE capability? Exported so the
+ * authz matrix gate (`authz-matrix-gate.test.ts`) can assert probe-vs-carried-rung
+ * equivalence against the EXACT predicate enforcement runs — the P0 gate the
+ * ADR-0099 P1 flip lands behind.
+ */
+export function hasPlatformAdminCapability(held: ReadonlySet<string>): boolean {
+  for (const cap of PLATFORM_ADMIN_ONLY_CAPABILITIES) {
+    if (held.has(cap)) return true;
+  }
+  return false;
+}
+
+/**
  * [ADR-0066 D3/⑤] Object `requiredPermissions` normalized into per-CRUD buckets.
  * `all` holds capabilities required for EVERY operation (the `string[]` form);
  * the per-op buckets hold capabilities from the `{read,create,update,delete}`
@@ -2388,11 +2402,7 @@ export class SecurityPlugin implements Plugin {
    * the ONLY signal permitted to cross the Layer 0 tenant wall.
    */
   private hasPlatformAdminPosture(permissionSets: PermissionSet[]): boolean {
-    const held = this.permissionEvaluator.getSystemPermissions(permissionSets);
-    for (const cap of PLATFORM_ADMIN_ONLY_CAPABILITIES) {
-      if (held.has(cap)) return true;
-    }
-    return false;
+    return hasPlatformAdminCapability(this.permissionEvaluator.getSystemPermissions(permissionSets));
   }
 
   private async computeLayeredRlsFilter(
