@@ -4737,6 +4737,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         drafts: Array<{
             type: string;
             name: string;
+            organizationId: string | null;
             packageId: string | null;
             updatedAt: string | null;
             updatedBy: string | null;
@@ -4860,8 +4861,12 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         const commitItems: Array<{ type: string; name: string; existedBefore: boolean; prevVersion: number | null }> = [];
         for (const d of ordered) {
             try {
+                // Read the pre-publish active row in the draft's OWN scope
+                // (env-wide drafts have env-wide active rows). Using the
+                // request's active org here would miss an env-wide edit and
+                // mis-record it as a create in the revert plan (#3115).
                 const activeRow = (await this.engine.findOne('sys_metadata', {
-                    where: { organization_id: orgId, type: d.type, name: d.name, state: 'active' },
+                    where: { organization_id: d.organizationId ?? null, type: d.type, name: d.name, state: 'active' },
                 })) as { version?: number } | null;
                 commitItems.push({
                     type: d.type,
@@ -4911,19 +4916,29 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             await inTxn(async () => {
                 for (const d of ordered) {
                     try {
+                        // Promote each draft in the scope `listDrafts` surfaced
+                        // it from (#3115). Studio/package authoring writes the
+                        // draft env-wide (`organization_id = NULL`) while the
+                        // publishing session may carry a non-null active org;
+                        // `listDrafts` includes those env-wide rows via its `$or`,
+                        // so the promote MUST target the draft's own org or it
+                        // 404s (`no_draft`) on a row it can never match.
+                        const draftOrgId = d.organizationId ?? null;
                         if (d.type === 'seed') {
                             // Capture the body BEFORE promote (the draft row is
                             // deleted by the promote, and a post-publish read-back
                             // has org-scope resolution pitfalls — reading the
-                            // draft is unambiguous).
-                            const ref = { type: d.type, name: d.name, org: orgId ?? 'env' } as unknown as Parameters<typeof repo.get>[0];
-                            const draft = await repo.get(ref, { state: 'draft' });
+                            // draft is unambiguous). Read from the draft's own
+                            // scope, not the request's active org.
+                            const seedRepo = this.getOverlayRepo(draftOrgId);
+                            const ref = { type: d.type, name: d.name, org: draftOrgId ?? 'env' } as unknown as Parameters<typeof seedRepo.get>[0];
+                            const draft = await seedRepo.get(ref, { state: 'draft' });
                             if (draft?.body) seedBodies.push(draft.body);
                         }
                         const { singularType, result } = await this.promoteDraftForPublish({
                             type: d.type,
                             name: d.name,
-                            ...(request.organizationId ? { organizationId: request.organizationId } : {}),
+                            ...(draftOrgId ? { organizationId: draftOrgId } : {}),
                             ...(request.actor ? { actor: request.actor } : {}),
                             message: `publish app package '${request.packageId}'`,
                         });
@@ -5123,11 +5138,16 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
 
         for (const d of drafts) {
             try {
+                // Discard the draft in the scope it lives in (#3115). Like
+                // publish, `listDrafts` surfaces env-wide drafts to a non-null
+                // active org via `$or`; deleting under the request's active org
+                // would silently no-op on those env-wide rows.
+                const draftOrgId = d.organizationId ?? null;
                 await this.deleteMetaItem({
                     type: d.type,
                     name: d.name,
                     state: 'draft',
-                    ...(request.organizationId ? { organizationId: request.organizationId } : {}),
+                    ...(draftOrgId ? { organizationId: draftOrgId } : {}),
                     ...(request.actor ? { actor: request.actor } : {}),
                 });
                 discarded.push({ type: d.type, name: d.name });
