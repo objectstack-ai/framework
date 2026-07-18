@@ -58,10 +58,10 @@ The Data Engine runs hooks around record reads and mutations. Write operations f
 | Event | When |
 | :--- | :--- |
 | `beforeInsert` / `afterInsert` | Around record creation. |
-| `beforeUpdate` / `afterUpdate` | Around record update. |
-| `beforeDelete` / `afterDelete` | Around record deletion. |
+| `beforeUpdate` / `afterUpdate` | Around record update — single-id **and** bulk (`multi: true`). |
+| `beforeDelete` / `afterDelete` | Around record deletion — single-id **and** bulk (`multi: true`). |
 
-Read and bulk variants (`beforeFind`/`afterFind`, `beforeCount`, `beforeAggregate`, `beforeUpdateMany`, `beforeDeleteMany`, …) also exist.
+Reads fire `beforeFind` / `afterFind`, for **both** `find` and `findOne` (one read event covers every read shape). There are no per-method (`findOne`/`count`/`aggregate`) or `*Many` events: read authorization and row filtering are handled by RLS/permission rules, field masking by field-level metadata, and bulk writes by the same `before*`/`after*` write events (with the row-scoping predicate in `ctx.input.ast`).
 
 ### The HookContext
 

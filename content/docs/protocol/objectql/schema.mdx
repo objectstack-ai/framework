@@ -594,12 +594,15 @@ const customerHook: Hook = {
 export default customerHook;
 ```
 
-**Event Types** (camelCase):
+**Event Types** (camelCase) — 8 events:
 - `beforeInsert` / `afterInsert`
-- `beforeUpdate` / `afterUpdate`
-- `beforeDelete` / `afterDelete`
-- Query-side: `beforeFind` / `afterFind`, `beforeCount` / `afterCount`, and the
-  bulk variants `beforeUpdateMany` / `beforeDeleteMany`, etc.
+- `beforeUpdate` / `afterUpdate` — fire for single-id **and** bulk (`multi: true`) updates
+- `beforeDelete` / `afterDelete` — fire for single-id **and** bulk (`multi: true`) deletes
+- `beforeFind` / `afterFind` — fire for **both** `find` and `findOne`
+
+There are no per-method (`findOne` / `count` / `aggregate`) or `*Many` events: read
+authorization and row filtering are RLS/permission-rule concerns, field masking is
+field-level metadata, and bulk writes reuse the singular write events.
 
 ## Advanced Features
 

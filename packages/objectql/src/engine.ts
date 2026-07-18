@@ -46,6 +46,22 @@ import { validateRecord, normalizeMultiValueFields, coerceBooleanFields, Validat
 import { evaluateValidationRules, needsPriorRecord, stripReadonlyWhenFields, stripReadonlyWhenFieldsMulti, hasReadonlyWhenInPayload, stripReadonlyFields } from './validation/rule-validator.js';
 import { applyInMemoryAggregation } from './in-memory-aggregation.js';
 
+/**
+ * The lifecycle events the engine actually dispatches via `triggerHooks`. This
+ * is the single source of truth for what a hook can subscribe to — kept in
+ * lockstep with the `triggerHooks(...)` call sites and with `HookEvent` in the
+ * spec. `beforeFind`/`afterFind` cover both `find` and `findOne`; the write
+ * events cover both single-id and bulk (`multi: true`) writes (#3195). A hook
+ * subscribing to anything outside this set would silently never fire, so
+ * `registerHook` warns rather than accepting it blindly.
+ */
+const DISPATCHABLE_HOOK_EVENTS: ReadonlySet<string> = new Set([
+  'beforeFind', 'afterFind',
+  'beforeInsert', 'afterInsert',
+  'beforeUpdate', 'afterUpdate',
+  'beforeDelete', 'afterDelete',
+]);
+
 interface FormulaPlanEntry { name: string; expression: Expression; }
 
 function planFormulaProjection(
@@ -437,6 +453,18 @@ export class ObjectQL implements IDataEngine {
     /** Stable name from metadata (set by `bindHooksToEngine`). */
     hookName?: string;
   }) {
+    // [#3195] Guard against enum-vs-dispatch drift: a hook on an event the
+    // engine never triggers would register "successfully" and then silently
+    // never fire. Warn loudly rather than swallow it. Not a hard reject — a
+    // custom driver/plugin may dispatch its own events via `triggerHooks`.
+    if (!DISPATCHABLE_HOOK_EVENTS.has(event)) {
+      this.logger.warn(
+        `Hook registered for '${event}', which the engine never dispatches — it will never fire. ` +
+          `Dispatchable events: ${[...DISPATCHABLE_HOOK_EVENTS].join(', ')}. ` +
+          `(Read filtering → RLS/permissions; field masking → field metadata; delete guards → beforeDelete.)`,
+        { event, object: options?.object, hookName: options?.hookName },
+      );
+    }
     if (!this.hooks.has(event)) {
         this.hooks.set(event, []);
     }
@@ -2207,8 +2235,23 @@ export class ObjectQL implements IDataEngine {
     };
 
     await this.executeWithMiddleware(opCtx, async () => {
-      const findOneOpts = this.buildDriverOptions(opCtx.context);
-      let result = await driver.findOne(objectName, opCtx.ast as QueryAST, findOneOpts);
+      // [#3195] `findOne` fires the SAME `beforeFind`/`afterFind` hooks as
+      // `find` — the read event attaches to record materialization, not to the
+      // engine method, so one subscription covers every read shape (there is no
+      // separate `beforeFindOne`/`afterFindOne`). Mirrors `find()` above.
+      const hookContext: HookContext = {
+          object: objectName,
+          event: 'beforeFind',
+          input: { ast: opCtx.ast, options: opCtx.options },
+          session: this.buildSession(opCtx.context),
+          api: this.buildHookApi(opCtx.context),
+          transaction: opCtx.context?.transaction,
+          ql: this
+      };
+      await this.triggerHooks('beforeFind', hookContext);
+      hookContext.input.options = this.buildDriverOptions(opCtx.context, hookContext.input.options as any);
+
+      let result = await driver.findOne(objectName, hookContext.input.ast as QueryAST, hookContext.input.options as any);
 
       // Post-process: evaluate formula virtual fields against the raw row
       if (result != null) applyFormulaPlan(_findOneFormula.plan, [result], opCtx.context);
@@ -2219,10 +2262,14 @@ export class ObjectQL implements IDataEngine {
         result = expanded[0];
       }
 
-      // Mask secret fields — plaintext never leaves through the read path.
-      this.maskSecretFields(objectName, result);
+      hookContext.event = 'afterFind';
+      hookContext.result = result;
+      await this.triggerHooks('afterFind', hookContext);
 
-      return result;
+      // Mask secret fields — plaintext never leaves through the read path.
+      this.maskSecretFields(objectName, hookContext.result);
+
+      return hookContext.result;
     });
 
     return opCtx.result;

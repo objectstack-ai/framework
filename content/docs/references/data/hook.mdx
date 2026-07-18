@@ -33,7 +33,7 @@ const result = HookContext.parse(data);
 | :--- | :--- | :--- | :--- |
 | **id** | `string` | optional | Unique execution ID for tracing |
 | **object** | `string` | ✅ |  |
-| **event** | `Enum<'beforeFind' \| 'afterFind' \| 'beforeFindOne' \| 'afterFindOne' \| 'beforeCount' \| 'afterCount' \| 'beforeAggregate' \| 'afterAggregate' \| 'beforeInsert' \| 'afterInsert' \| 'beforeUpdate' \| 'afterUpdate' \| 'beforeDelete' \| 'afterDelete' \| 'beforeUpdateMany' \| 'afterUpdateMany' \| 'beforeDeleteMany' \| 'afterDeleteMany'>` | ✅ |  |
+| **event** | `Enum<'beforeFind' \| 'afterFind' \| 'beforeInsert' \| 'afterInsert' \| 'beforeUpdate' \| 'afterUpdate' \| 'beforeDelete' \| 'afterDelete'>` | ✅ |  |
 | **input** | `Record<string, any>` | ✅ | Mutable input parameters |
 | **result** | `any` | optional | Operation result (After hooks only) |
 | **previous** | `Record<string, any>` | optional | Record state before operation |
@@ -52,22 +52,12 @@ const result = HookContext.parse(data);
 
 * `beforeFind`
 * `afterFind`
-* `beforeFindOne`
-* `afterFindOne`
-* `beforeCount`
-* `afterCount`
-* `beforeAggregate`
-* `afterAggregate`
 * `beforeInsert`
 * `afterInsert`
 * `beforeUpdate`
 * `afterUpdate`
 * `beforeDelete`
 * `afterDelete`
-* `beforeUpdateMany`
-* `afterUpdateMany`
-* `beforeDeleteMany`
-* `afterDeleteMany`
 
 
 ---
