@@ -37,9 +37,10 @@
  * (uniqueness → DB index, async → form layer, custom → lifecycle hook). The
  * engine invokes this evaluator on insert, single-id update, and — per matched
  * row — multi-row (`multi: true`) update (#3106), so no declared rule is a
- * silent no-op on the write path. Known gap: rules declaring
- * `events: ['delete']` are never evaluated (`engine.delete` does not call this
- * evaluator; tracked separately — see below).
+ * silent no-op on the write path. The `events` enum admits only `insert`/`update`
+ * to match: `delete` carries no record payload to validate, so it was removed
+ * from the spec rather than advertised-but-unenforced (#3184). Guard deletions
+ * with a `beforeDelete` lifecycle hook instead.
  *
  * ## Execution-control semantics (from `BaseValidationSchema`)
  *
@@ -83,7 +84,7 @@ interface BaseRule {
   name: string;
   message: string;
   active?: boolean;
-  events?: Array<'insert' | 'update' | 'delete'>;
+  events?: Array<'insert' | 'update'>;
   priority?: number;
   severity?: 'error' | 'warning' | 'info';
 }

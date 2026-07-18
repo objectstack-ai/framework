@@ -23,9 +23,11 @@ no I/O. Everything advertised here runs on the write path (see
 
 `objectql/src/validation/rule-validator.ts`) — insert, single-id update, and multi-row
 
-(`multi: true`) update, where the evaluator runs once per matched row (#3106). One known gap:
+(`multi: true`) update, where the evaluator runs once per matched row (#3106); nothing is a
 
-rules declaring `events: ['delete']` are not yet evaluated on delete (tracked separately).
+silent no-op. The `events` enum admits only `insert`/`update` for this reason — see the
+
+`delete` note under "Deliberately NOT validation rules" below.
 
 The system supports these validation types:
 
@@ -64,6 +66,14 @@ the form layer, or enforce the underlying invariant with a `unique` index / life
 - **Custom handler** → a `beforeInsert` / `beforeUpdate` lifecycle hook, the typed, supported
 
 extension point for arbitrary validation code.
+
+- **Delete-time guards** (`events: ['delete']`) → a `beforeDelete` lifecycle hook. The evaluator
+
+only runs on the insert/update write path (a delete carries no record payload to validate), so
+
+a `delete` event was a proven silent no-op — the enum value was removed rather than left
+
+advertised-but-unenforced (#3184; see docs/audits/2026-06-validationschema-property-liveness.md).
 
 ## Salesforce Comparison
 
@@ -131,7 +141,7 @@ const result = ConditionalValidation.parse(data);
 | **label** | `string` | optional | Human-readable label for the rule listing |
 | **description** | `string` | optional | Administrative notes explaining the business reason |
 | **active** | `boolean` | optional |  |
-| **events** | `Enum<'insert' \| 'update' \| 'delete'>[]` | optional | Validation contexts |
+| **events** | `Enum<'insert' \| 'update'>[]` | optional | Write contexts the rule runs on. `delete` is intentionally absent — the evaluator only runs on the insert/update write path; guard deletions with a `beforeDelete` lifecycle hook |
 | **priority** | `integer` | optional | Execution priority (lower runs first, default: 100) |
 | **tags** | `string[]` | optional | Categorization tags (e.g., "compliance", "billing") |
 | **severity** | `Enum<'error' \| 'warning' \| 'info'>` | optional |  |
@@ -154,7 +164,7 @@ const result = ConditionalValidation.parse(data);
 | **label** | `string` | optional | Human-readable label for the rule listing |
 | **description** | `string` | optional | Administrative notes explaining the business reason |
 | **active** | `boolean` | optional |  |
-| **events** | `Enum<'insert' \| 'update' \| 'delete'>[]` | optional | Validation contexts |
+| **events** | `Enum<'insert' \| 'update'>[]` | optional | Write contexts the rule runs on. `delete` is intentionally absent — the evaluator only runs on the insert/update write path; guard deletions with a `beforeDelete` lifecycle hook |
 | **priority** | `integer` | optional | Execution priority (lower runs first, default: 100) |
 | **tags** | `string[]` | optional | Categorization tags (e.g., "compliance", "billing") |
 | **severity** | `Enum<'error' \| 'warning' \| 'info'>` | optional |  |
@@ -176,7 +186,7 @@ const result = ConditionalValidation.parse(data);
 | **label** | `string` | optional | Human-readable label for the rule listing |
 | **description** | `string` | optional | Administrative notes explaining the business reason |
 | **active** | `boolean` | ✅ |  |
-| **events** | `Enum<'insert' \| 'update' \| 'delete'>[]` | ✅ | Validation contexts |
+| **events** | `Enum<'insert' \| 'update'>[]` | ✅ | Write contexts the rule runs on. `delete` is intentionally absent — the evaluator only runs on the insert/update write path; guard deletions with a `beforeDelete` lifecycle hook |
 | **priority** | `integer` | ✅ | Execution priority (lower runs first, default: 100) |
 | **tags** | `string[]` | optional | Categorization tags (e.g., "compliance", "billing") |
 | **severity** | `Enum<'error' \| 'warning' \| 'info'>` | ✅ |  |
@@ -199,7 +209,7 @@ const result = ConditionalValidation.parse(data);
 | **label** | `string` | optional | Human-readable label for the rule listing |
 | **description** | `string` | optional | Administrative notes explaining the business reason |
 | **active** | `boolean` | ✅ |  |
-| **events** | `Enum<'insert' \| 'update' \| 'delete'>[]` | ✅ | Validation contexts |
+| **events** | `Enum<'insert' \| 'update'>[]` | ✅ | Write contexts the rule runs on. `delete` is intentionally absent — the evaluator only runs on the insert/update write path; guard deletions with a `beforeDelete` lifecycle hook |
 | **priority** | `integer` | ✅ | Execution priority (lower runs first, default: 100) |
 | **tags** | `string[]` | optional | Categorization tags (e.g., "compliance", "billing") |
 | **severity** | `Enum<'error' \| 'warning' \| 'info'>` | ✅ |  |
@@ -221,7 +231,7 @@ const result = ConditionalValidation.parse(data);
 | **label** | `string` | optional | Human-readable label for the rule listing |
 | **description** | `string` | optional | Administrative notes explaining the business reason |
 | **active** | `boolean` | optional |  |
-| **events** | `Enum<'insert' \| 'update' \| 'delete'>[]` | optional | Validation contexts |
+| **events** | `Enum<'insert' \| 'update'>[]` | optional | Write contexts the rule runs on. `delete` is intentionally absent — the evaluator only runs on the insert/update write path; guard deletions with a `beforeDelete` lifecycle hook |
 | **priority** | `integer` | optional | Execution priority (lower runs first, default: 100) |
 | **tags** | `string[]` | optional | Categorization tags (e.g., "compliance", "billing") |
 | **severity** | `Enum<'error' \| 'warning' \| 'info'>` | optional |  |
@@ -242,7 +252,7 @@ const result = ConditionalValidation.parse(data);
 | **label** | `string` | optional | Human-readable label for the rule listing |
 | **description** | `string` | optional | Administrative notes explaining the business reason |
 | **active** | `boolean` | ✅ |  |
-| **events** | `Enum<'insert' \| 'update' \| 'delete'>[]` | ✅ | Validation contexts |
+| **events** | `Enum<'insert' \| 'update'>[]` | ✅ | Write contexts the rule runs on. `delete` is intentionally absent — the evaluator only runs on the insert/update write path; guard deletions with a `beforeDelete` lifecycle hook |
 | **priority** | `integer` | ✅ | Execution priority (lower runs first, default: 100) |
 | **tags** | `string[]` | optional | Categorization tags (e.g., "compliance", "billing") |
 | **severity** | `Enum<'error' \| 'warning' \| 'info'>` | ✅ |  |
@@ -272,7 +282,7 @@ This schema accepts one of the following structures:
 | **label** | `string` | optional | Human-readable label for the rule listing |
 | **description** | `string` | optional | Administrative notes explaining the business reason |
 | **active** | `boolean` | optional |  |
-| **events** | `Enum<'insert' \| 'update' \| 'delete'>[]` | optional | Validation contexts |
+| **events** | `Enum<'insert' \| 'update'>[]` | optional | Write contexts the rule runs on. `delete` is intentionally absent — the evaluator only runs on the insert/update write path; guard deletions with a `beforeDelete` lifecycle hook |
 | **priority** | `integer` | optional | Execution priority (lower runs first, default: 100) |
 | **tags** | `string[]` | optional | Categorization tags (e.g., "compliance", "billing") |
 | **severity** | `Enum<'error' \| 'warning' \| 'info'>` | optional |  |
@@ -294,7 +304,7 @@ This schema accepts one of the following structures:
 | **label** | `string` | optional | Human-readable label for the rule listing |
 | **description** | `string` | optional | Administrative notes explaining the business reason |
 | **active** | `boolean` | optional |  |
-| **events** | `Enum<'insert' \| 'update' \| 'delete'>[]` | optional | Validation contexts |
+| **events** | `Enum<'insert' \| 'update'>[]` | optional | Write contexts the rule runs on. `delete` is intentionally absent — the evaluator only runs on the insert/update write path; guard deletions with a `beforeDelete` lifecycle hook |
 | **priority** | `integer` | optional | Execution priority (lower runs first, default: 100) |
 | **tags** | `string[]` | optional | Categorization tags (e.g., "compliance", "billing") |
 | **severity** | `Enum<'error' \| 'warning' \| 'info'>` | optional |  |
@@ -317,7 +327,7 @@ This schema accepts one of the following structures:
 | **label** | `string` | optional | Human-readable label for the rule listing |
 | **description** | `string` | optional | Administrative notes explaining the business reason |
 | **active** | `boolean` | optional |  |
-| **events** | `Enum<'insert' \| 'update' \| 'delete'>[]` | optional | Validation contexts |
+| **events** | `Enum<'insert' \| 'update'>[]` | optional | Write contexts the rule runs on. `delete` is intentionally absent — the evaluator only runs on the insert/update write path; guard deletions with a `beforeDelete` lifecycle hook |
 | **priority** | `integer` | optional | Execution priority (lower runs first, default: 100) |
 | **tags** | `string[]` | optional | Categorization tags (e.g., "compliance", "billing") |
 | **severity** | `Enum<'error' \| 'warning' \| 'info'>` | optional |  |
@@ -341,7 +351,7 @@ This schema accepts one of the following structures:
 | **label** | `string` | optional | Human-readable label for the rule listing |
 | **description** | `string` | optional | Administrative notes explaining the business reason |
 | **active** | `boolean` | optional |  |
-| **events** | `Enum<'insert' \| 'update' \| 'delete'>[]` | optional | Validation contexts |
+| **events** | `Enum<'insert' \| 'update'>[]` | optional | Write contexts the rule runs on. `delete` is intentionally absent — the evaluator only runs on the insert/update write path; guard deletions with a `beforeDelete` lifecycle hook |
 | **priority** | `integer` | optional | Execution priority (lower runs first, default: 100) |
 | **tags** | `string[]` | optional | Categorization tags (e.g., "compliance", "billing") |
 | **severity** | `Enum<'error' \| 'warning' \| 'info'>` | optional |  |
@@ -364,7 +374,7 @@ This schema accepts one of the following structures:
 | **label** | `string` | optional | Human-readable label for the rule listing |
 | **description** | `string` | optional | Administrative notes explaining the business reason |
 | **active** | `boolean` | optional |  |
-| **events** | `Enum<'insert' \| 'update' \| 'delete'>[]` | optional | Validation contexts |
+| **events** | `Enum<'insert' \| 'update'>[]` | optional | Write contexts the rule runs on. `delete` is intentionally absent — the evaluator only runs on the insert/update write path; guard deletions with a `beforeDelete` lifecycle hook |
 | **priority** | `integer` | optional | Execution priority (lower runs first, default: 100) |
 | **tags** | `string[]` | optional | Categorization tags (e.g., "compliance", "billing") |
 | **severity** | `Enum<'error' \| 'warning' \| 'info'>` | optional |  |
@@ -387,7 +397,7 @@ This schema accepts one of the following structures:
 | **label** | `string` | optional | Human-readable label for the rule listing |
 | **description** | `string` | optional | Administrative notes explaining the business reason |
 | **active** | `boolean` | optional |  |
-| **events** | `Enum<'insert' \| 'update' \| 'delete'>[]` | optional | Validation contexts |
+| **events** | `Enum<'insert' \| 'update'>[]` | optional | Write contexts the rule runs on. `delete` is intentionally absent — the evaluator only runs on the insert/update write path; guard deletions with a `beforeDelete` lifecycle hook |
 | **priority** | `integer` | optional | Execution priority (lower runs first, default: 100) |
 | **tags** | `string[]` | optional | Categorization tags (e.g., "compliance", "billing") |
 | **severity** | `Enum<'error' \| 'warning' \| 'info'>` | optional |  |

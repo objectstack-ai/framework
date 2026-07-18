@@ -265,8 +265,11 @@ severity: 'info'     // Informational only
 events: ['insert']              // Only on create
 events: ['update']              // Only on update
 events: ['insert', 'update']    // On create and update (default)
-events: ['delete']              // Only on delete
 ```
+
+> Validation rules run only on the insert/update write path — there is no `'delete'`
+> event (a delete carries no record payload to validate). To block or guard a deletion,
+> use a `beforeDelete` lifecycle hook instead (see `references/data-hooks.md`).
 
 ### Priority
 

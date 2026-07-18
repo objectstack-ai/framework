@@ -224,7 +224,7 @@ field editor is shared by both Records (selected column) and Fields (selected fi
 union of six declarative rule types (`packages/spec/src/data/validation.zod.ts`):
 `script` (CEL predicate → fails when true), `cross_field`, `format`,
 `state_machine`, `json`, `conditional`. Each carries `message`, `severity`
-(error/warning/info), and `events` (insert/update/delete).
+(error/warning/info), and `events` (insert/update).
 
 - **Field-level** (required / unique / format) → configured in the **field editor**
   (they belong to the field).

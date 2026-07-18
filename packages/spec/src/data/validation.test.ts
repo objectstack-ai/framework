@@ -1116,3 +1116,45 @@ describe('ValidationRule - priority property', () => {
     })).toThrow();
   });
 });
+
+describe('ValidationRule - events property (#3184)', () => {
+  it('should accept insert / update events', () => {
+    const rule = ScriptValidationSchema.parse({
+      type: 'script',
+      name: 'on_write',
+      message: 'x',
+      condition: 'true',
+      events: ['insert', 'update'],
+    });
+    expect(rule.events).toEqual(['insert', 'update']);
+  });
+
+  it('should default events to insert + update', () => {
+    const rule = ScriptValidationSchema.parse({
+      type: 'script',
+      name: 'default_events',
+      message: 'x',
+      condition: 'true',
+    });
+    expect(rule.events).toEqual(['insert', 'update']);
+  });
+
+  it("should reject events: ['delete'] — the evaluator never runs on delete; guard deletions with a beforeDelete hook", () => {
+    expect(() => ScriptValidationSchema.parse({
+      type: 'script',
+      name: 'on_delete',
+      message: 'x',
+      condition: 'true',
+      events: ['delete'],
+    })).toThrow();
+
+    // also rejected via the discriminated-union entry point
+    expect(() => ValidationRuleSchema.parse({
+      type: 'script',
+      name: 'on_delete_union',
+      message: 'x',
+      condition: 'true',
+      events: ['insert', 'delete'],
+    })).toThrow();
+  });
+});

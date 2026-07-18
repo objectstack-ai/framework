@@ -198,7 +198,7 @@ const HAND_CRAFTED_SCHEMAS: Record<string, Record<string, unknown>> = {
         additionalProperties: true,
     },
     // Validation rules live inside `object.validations[]`. The canonical
-    // ValidationRuleSchema is a discriminated union of 9 variants; the
+    // ValidationRuleSchema is a discriminated union of 6 variants; the
     // generic SchemaForm renderer treats unions as opaque JSON, so we
     // ship a *flat* form-friendly schema covering the common base
     // properties plus every variant-specific field as optional. Save-time
@@ -215,13 +215,10 @@ const HAND_CRAFTED_SCHEMAS: Record<string, Record<string, unknown>> = {
                 type: 'string',
                 enum: [
                     'script',
-                    'unique',
                     'state_machine',
                     'format',
                     'cross_field',
-                    'json',
-                    'async',
-                    'custom',
+                    'json_schema',
                     'conditional',
                 ],
                 default: 'script',
@@ -230,7 +227,7 @@ const HAND_CRAFTED_SCHEMAS: Record<string, Record<string, unknown>> = {
             active: { type: 'boolean', default: true },
             events: {
                 type: 'array',
-                items: { type: 'string', enum: ['insert', 'update', 'delete'] },
+                items: { type: 'string', enum: ['insert', 'update'] },
                 default: ['insert', 'update'],
             },
             priority: { type: 'number', default: 100, minimum: 0, maximum: 9999 },

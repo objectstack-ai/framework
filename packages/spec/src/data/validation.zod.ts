@@ -16,8 +16,9 @@ import { ExpressionInputSchema } from '../shared/expression.zod';
  * record** — it must be decidable from the incoming write (and, on update, the prior record) with
  * no I/O. Everything advertised here runs on the write path (see
  * `objectql/src/validation/rule-validator.ts`) — insert, single-id update, and multi-row
- * (`multi: true`) update, where the evaluator runs once per matched row (#3106). One known gap:
- * rules declaring `events: ['delete']` are not yet evaluated on delete (tracked separately).
+ * (`multi: true`) update, where the evaluator runs once per matched row (#3106); nothing is a
+ * silent no-op. The `events` enum admits only `insert`/`update` for this reason — see the
+ * `delete` note under "Deliberately NOT validation rules" below.
  *
  * The system supports these validation types:
  *
@@ -42,7 +43,11 @@ import { ExpressionInputSchema } from '../shared/expression.zod';
  *   the form layer, or enforce the underlying invariant with a `unique` index / lifecycle hook.
  * - **Custom handler** → a `beforeInsert` / `beforeUpdate` lifecycle hook, the typed, supported
  *   extension point for arbitrary validation code.
- * 
+ * - **Delete-time guards** (`events: ['delete']`) → a `beforeDelete` lifecycle hook. The evaluator
+ *   only runs on the insert/update write path (a delete carries no record payload to validate), so
+ *   a `delete` event was a proven silent no-op — the enum value was removed rather than left
+ *   advertised-but-unenforced (#3184; see docs/audits/2026-06-validationschema-property-liveness.md).
+ *
  * ## Salesforce Comparison
  * 
  * ObjectStack validation rules are inspired by Salesforce validation rules but enhanced:
@@ -87,7 +92,7 @@ const BaseValidationSchema = z.object({
   
   // Execution Control
   active: z.boolean().default(true),
-  events: z.array(z.enum(['insert', 'update', 'delete'])).default(['insert', 'update']).describe('Validation contexts'),
+  events: z.array(z.enum(['insert', 'update'])).default(['insert', 'update']).describe('Write contexts the rule runs on. `delete` is intentionally absent — the evaluator only runs on the insert/update write path; guard deletions with a `beforeDelete` lifecycle hook'),
   priority: z.number().int().min(0).max(9999).default(100).describe('Execution priority (lower runs first, default: 100)'),
   
   // Classification
@@ -225,7 +230,7 @@ export interface BaseValidationRuleShape {
   label?: string;
   description?: string;
   active?: boolean;
-  events?: ('insert' | 'update' | 'delete')[];
+  events?: ('insert' | 'update')[];
   priority?: number;
   tags?: string[];
   severity?: 'error' | 'warning' | 'info';

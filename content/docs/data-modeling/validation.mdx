@@ -69,7 +69,7 @@ All validation types share these base properties:
 | `active` | `boolean` | optional | Is the rule active (default: `true`) |
 | `severity` | `enum` | optional | `'error'` (blocks save), `'warning'`, `'info'` (default: `'error'`) |
 | `message` | `string` | ✅ | User-facing error message |
-| `events` | `enum[]` | optional | When to run: `'insert'`, `'update'`, `'delete'` (default: `['insert', 'update']`) |
+| `events` | `enum[]` | optional | When to run: `'insert'`, `'update'` (default: `['insert', 'update']`). No `'delete'` — guard deletions with a `beforeDelete` lifecycle hook |
 | `priority` | `number` | optional | Execution order (0-9999, lower runs first, default: 100) |
 | `tags` | `string[]` | optional | Categorization tags |
 
