@@ -38,6 +38,18 @@ type AnalyticsResultWithDrill = AnalyticsResult & {
    * from these, never from the display labels.
    */
   drillRawRows?: Array<Record<string, unknown>>;
+  /**
+   * RAW grouped values for the totals/subtotal rows (#3214), the totals-side
+   * companion to `drillRawRows`: `drillRawTotals[i]` aligns to `result.totals[i]`
+   * and `drillRawTotals[i][j]` to `result.totals[i].rows[j]`. Each map holds that
+   * grouping's DRILLABLE dimension NAME → stored value, snapshotted in the SAME
+   * pre-label-resolution pass (the totals loop below overwrites a subtotal row's
+   * dimension value with its display label just like the data rows). Restricted
+   * to the drillable dims present in the grouping, so the grand-total grouping
+   * (`[]`) contributes an empty map per row — which keeps the index alignment
+   * intact and correctly drills the whole (unfiltered) object.
+   */
+  drillRawTotals?: Array<Array<Record<string, unknown>>>;
 };
 
 /**
@@ -505,6 +517,22 @@ export class AnalyticsService implements IAnalyticsService {
         for (const d of drillDims) raw[d.name] = row[d.name];
         return raw;
       });
+      // #3214 — the totals/subtotal rows (#1753) carry dimension values too and
+      // go through the SAME label resolution below, so snapshot their raw
+      // grouped values here in the same pre-label pass. Aligned to `result.totals`
+      // by index; each grouping is restricted to the drillable dims it actually
+      // groups by (the grand-total grouping `[]` keeps empty maps, so a subtotal
+      // drill filters by the stored value while the grand total drills unfiltered).
+      if (result.totals?.length) {
+        (result as AnalyticsResultWithDrill).drillRawTotals = result.totals.map((total) => {
+          const groupingDims = drillDims.filter((d) => total.dimensions.includes(d.name));
+          return total.rows.map((row) => {
+            const raw: Record<string, unknown> = {};
+            for (const d of groupingDims) raw[d.name] = row[d.name];
+            return raw;
+          });
+        });
+      }
     }
 
     // ADR-0021 — resolve grouped dimension values to human display labels

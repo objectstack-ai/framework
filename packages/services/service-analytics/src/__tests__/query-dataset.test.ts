@@ -212,4 +212,83 @@ describe('AnalyticsService.queryDataset', () => {
     expect(result.dimensionFields).toEqual({ account: 'account' });
     expect(result.drillRawRows).toEqual([{ account: 'acc_123' }]);
   });
+
+  // ── #3214 — raw-value drill sidecar for totals / subtotal rows ────────────
+  it('snapshots raw values for totals rows too (#3214), aligned to result.totals', async () => {
+    const captured: { sql: string; params: unknown[] }[] = [];
+    const result = await service(captured).queryDataset(
+      dataset,
+      { dimensions: ['region'], measures: ['revenue'], totals: { groupings: [['region'], []] } },
+      { tenantId: 'org_A' } as ExecutionContext,
+    ) as any;
+    // drillRawTotals[i] ↔ result.totals[i]; drillRawTotals[i][j] ↔ result.totals[i].rows[j].
+    expect(result.drillRawTotals).toEqual([
+      // The ['region'] subtotal grouping snapshots its drillable dim's raw value…
+      [{ region: 'NA' }],
+      // …while the grand-total grouping ([]) has no drillable dim → an empty map
+      // per row, which keeps index alignment and drills the unfiltered object.
+      [{}],
+    ]);
+    // The data-row sidecar is unchanged (regression guard).
+    expect(result.drillRawRows).toEqual([{ region: 'NA' }]);
+  });
+
+  it('preserves the raw FK for a subtotal row even after label resolution overwrites it (#3214)', async () => {
+    const byAccount = DatasetSchema.parse({
+      name: 'sales_matrix', label: 'Sales', object: 'opportunity', include: [],
+      dimensions: [
+        { name: 'account', field: 'account', type: 'lookup', label: 'Account' },
+        { name: 'stage', field: 'stage', type: 'string' },
+      ],
+      measures: [{ name: 'revenue', aggregate: 'sum', field: 'amount' }],
+    });
+    const svc = new AnalyticsService({
+      queryCapabilities: () => ({ nativeSql: false, objectqlAggregate: true, inMemory: false }),
+      executeAggregate: async (_object, { groupBy }) => {
+        const g = groupBy ?? [];
+        // Main grid: account × stage.
+        if (g.includes('stage')) return [
+          { account: 'acc1', stage: 'won', revenue: 30 },
+          { account: 'acc2', stage: 'won', revenue: 20 },
+        ];
+        // Per-account subtotal grouping (raw FK values, pre-label).
+        if (g.includes('account')) return [
+          { account: 'acc1', revenue: 30 },
+          { account: 'acc2', revenue: 20 },
+        ];
+        // Grand total.
+        return [{ revenue: 50 }];
+      },
+      labelResolver: {
+        getObjectFields: (obj) => ({
+          opportunity: { account: { type: 'lookup', reference: 'crm_account' } },
+          crm_account: { name: { type: 'text' } },
+        } as Record<string, Record<string, { type?: string; reference?: string }>>)[obj],
+        fetchRecordLabels: async (target, ids) => {
+          const names: Record<string, string> = { acc1: 'Acme Corp', acc2: 'Globex' };
+          const m = new Map<unknown, string>();
+          if (target === 'crm_account') for (const id of ids) if (names[String(id)]) m.set(id, names[String(id)]);
+          return m;
+        },
+      },
+    });
+    const result = await svc.queryDataset(
+      byAccount,
+      { dimensions: ['account', 'stage'], measures: ['revenue'], totals: { groupings: [['account'], []] } },
+      { tenantId: 'org_A' } as ExecutionContext,
+    ) as any;
+    // The subtotal row now reads the display NAME (label resolution ran on it)…
+    expect(result.totals[0].dimensions).toEqual(['account']);
+    expect(result.totals[0].rows).toEqual([
+      { account: 'Acme Corp', revenue: 30 },
+      { account: 'Globex', revenue: 20 },
+    ]);
+    // …but the sidecar still carries the raw FK id, restricted to the grouping's
+    // drillable dim (stage is not part of the ['account'] grouping), so a drill
+    // from the subtotal filters by the stored value, not the record name.
+    expect(result.drillRawTotals[0]).toEqual([{ account: 'acc1' }, { account: 'acc2' }]);
+    // Grand total: no drillable dim → an empty map for its single row.
+    expect(result.totals[1].dimensions).toEqual([]);
+    expect(result.drillRawTotals[1]).toEqual([{}]);
+  });
 });
