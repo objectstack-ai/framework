@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { SchemaRegistry, applySystemFields, reconcileManagedApiMethods, computeFQN, parseFQN, RESERVED_NAMESPACES } from './registry';
+import { SchemaRegistry, applySystemFields, reconcileManagedApiMethods, computeFQN, parseFQN } from './registry';
 
 describe('SchemaRegistry', () => {
     let registry: SchemaRegistry;
