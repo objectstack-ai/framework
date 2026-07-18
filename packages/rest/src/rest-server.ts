@@ -6103,7 +6103,7 @@ export class RestServer {
                         const byName = new Map<string, any>(items.map((o: any) => [o?.name, o]));
                         const checked = new Set<string>();
                         for (const op of ops) {
-                            const key = `${op.object} ${op.action}`;
+                            const key = `${op.object}\u0000${op.action}`;
                             if (checked.has(key)) continue;
                             checked.add(key);
                             const obj = byName.get(op.object);
