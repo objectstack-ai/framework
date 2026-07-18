@@ -74,7 +74,8 @@ export default class Info extends Command {
         console.log(chalk.bold('  Objects:'));
         for (const obj of config.objects) {
           const fieldCount = obj.fields ? Object.keys(obj.fields).length : 0;
-          const ownership = obj.ownership || 'own';
+          // Record-ownership model (#3175); defaults to user-owned when unset.
+          const ownership = obj.ownership || 'user';
           console.log(
             `    ${chalk.cyan(obj.name || '?')}` +
             chalk.dim(` (${fieldCount} fields, ${ownership})`) +

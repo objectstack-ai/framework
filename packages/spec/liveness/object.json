@@ -97,6 +97,11 @@
       "evidence": "packages/objectql/src/registry.ts:208",
       "note": "default perms; ui crudAffordances."
     },
+    "ownership": {
+      "status": "live",
+      "evidence": "packages/objectql/src/registry.ts:272",
+      "note": "#3175 record-ownership model. applySystemFields injects the reassignable owner_id lookup by default (ownership:'user'); 'org'|'none' opt out (Dataverse-style catalog/junction tables). Proven in objectql/src/registry.test.ts."
+    },
     "access": {
       "status": "live",
       "evidence": "packages/plugins/plugin-security/src/permission-evaluator.ts",

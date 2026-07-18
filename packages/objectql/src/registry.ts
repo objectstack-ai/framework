@@ -269,7 +269,9 @@ export function applySystemFields(
   // junction tables). Note this is the SAFE default direction: forgetting the
   // opt-out leaves a harmless spare column, whereas the old opt-IN model let
   // authors silently ship objects with no working ownership at all.
-  const ownership = (schema as any).ownership as 'user' | 'org' | 'none' | undefined;
+  // `ownership` is now a declared ObjectSchema field (record-ownership model),
+  // so it reads off the typed schema — no `as any` (#3175).
+  const ownership = schema.ownership;
   const wantOwner =
     ownership !== 'org' &&
     ownership !== 'none' &&
