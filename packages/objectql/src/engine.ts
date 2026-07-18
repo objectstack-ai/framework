@@ -2274,6 +2274,25 @@ export class ObjectQL implements IDataEngine {
           result = await driver.create(object, rows[0], driverOptions);
         }
 
+        // Driver-result contract guard (framework#3151): a batch write must
+        // return one record per input row. A short / non-array return would
+        // otherwise be padded with `undefined` below and fed to afterInsert
+        // hooks (`ctx.result === undefined`) and back to the caller as phantom
+        // records — corrupting seed externalId→id maps and import undo logs.
+        // Refuse it: throw so the caller sees a real failure rather than
+        // silent data loss. (Every driver in this repo already returns
+        // one-per-row in order; this defends against third-party drivers.)
+        if (isBatch && (!Array.isArray(result) || result.length !== rows.length)) {
+          throw Object.assign(
+            new Error(
+              `bulkCreate for '${object}' returned ${
+                Array.isArray(result) ? `${result.length} record(s)` : String(typeof result)
+              } for ${rows.length} input row(s) — refusing to fabricate afterInsert contexts`,
+            ),
+            { code: 'ERR_BULK_RESULT_MISMATCH' },
+          );
+        }
+
         // Coerce `boolean` fields (SQLite/libsql return 0/1) to real booleans on
         // the after-hook view so flow trigger conditions (`record.is_escalated
         // != true`) and `{record.<bool>}` interpolation see JS booleans, not
