@@ -447,6 +447,61 @@ const CLONE_STRIP_FIELDS: readonly string[] = [
 ];
 
 /**
+ * [#3043] Drop caller-supplied writes to statically `readonly: true` fields from
+ * an INSERT payload, at the external DATA-WRITE INGRESS.
+ *
+ * #2948/#3003 made static `readonly` server-enforced on UPDATE (the engine strips
+ * a non-system caller's write). INSERT was left exempt — but for approval/status
+ * columns that exemption is the SHORTER attack: instead of the #3003
+ * draft-then-PATCH move, a non-system caller can POST a record already
+ * `approval_status: 'approved'` in one step. This closes it symmetrically, but at
+ * the INGRESS rather than in the engine: every EXTERNAL programmatic create — the
+ * REST CRUD route, the GraphQL/MCP dispatcher (`bridge.create` → `callData` →
+ * here), and bulk import — lands in the DataProtocol, while TRUSTED internal
+ * writers (better-auth's adapter, the metadata repository, the seed loader) call
+ * `engine.insert` DIRECTLY and never pass through here. Keeping the strip at the
+ * ingress therefore protects every agent/caller path at once WITHOUT stripping
+ * the internal writers that legitimately seed read-only columns on create
+ * (identity provisioning, provenance stamps, event-log cursors) — the blast
+ * radius an engine-level insert strip would have.
+ *
+ * Silent by contract (like the UPDATE / `readonlyWhen` strips): the forged key is
+ * dropped, the create still succeeds, and the engine re-derives the field's
+ * `defaultValue` (a forged `approval_status` becomes `draft`, the enforced
+ * initial state, not NULL). `isSystem` writes are exempt. `readonlyWhen` stays
+ * INSERT-exempt (a conditional lock needs a prior record, which a create lacks).
+ * Handles a single record or a batch array.
+ *
+ * SCOPE — author-defined business objects only. PLATFORM objects (`managedBy`
+ * set, or the reserved `sys_` namespace) carry their OWN field-write governance
+ * that a silent strip must not pre-empt: e.g. ADR-0086 REJECTS (403) a forged
+ * `managed_by:'package'` / `package_id` on `sys_permission_set`, and #3004
+ * rejects a forged `owner_id` anchor — several of those columns are `readonly`,
+ * so stripping them here would silently swallow the payload the guard is meant to
+ * reject. The #3043 threat is app approval/status/verdict fields (the issue's
+ * `sporadic_application` / `assessment`), never `sys_`; this is the same
+ * platform-vs-authored boundary `applySystemFields` uses for ownership.
+ */
+function stripReadonlyForInsert(schema: any, data: any, context: any): any {
+    if (context?.isSystem) return data;
+    if (!schema || schema.managedBy || String(schema.name ?? '').startsWith('sys_')) return data;
+    const fields = schema?.fields;
+    if (!fields || data == null) return data;
+    const stripRow = (row: any): any => {
+        if (row == null || typeof row !== 'object') return row;
+        let out = row;
+        for (const name of Object.keys(fields)) {
+            if (!fields[name]?.readonly) continue;
+            if (!(name in out)) continue;
+            if (out === row) out = { ...row };
+            delete out[name];
+        }
+        return out;
+    };
+    return Array.isArray(data) ? data.map(stripRow) : stripRow(data);
+}
+
+/**
  * Service Configuration for Discovery
  * Maps service names to their routes and plugin providers.
  *
@@ -2685,9 +2740,16 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
     }
 
     async createData(request: { object: string, data: any, context?: any }) {
+        // [#3043] Ingress-level static-`readonly` strip — a non-system caller
+        // cannot seed a read-only column (e.g. `approval_status`) on create.
+        const data = stripReadonlyForInsert(
+            this.engine.registry?.getObject(request.object),
+            request.data,
+            request.context,
+        );
         const result = await this.engine.insert(
             request.object,
-            request.data,
+            data,
             request.context !== undefined ? { context: request.context } as any : undefined,
         );
         return {
@@ -2765,7 +2827,13 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             Object.assign(data, request.overrides);
         }
 
-        const result = await this.engine.insert(request.object, data, ctxOpt as any);
+        // [#3043] A clone is a create: a non-system caller must not carry over (or
+        // override in) a read-only column — copying the source's `approval_status`
+        // or forging one via `overrides` would mint an approved record. Strip them
+        // so the insert re-derives their `defaultValue`, symmetric with createData.
+        const insertData = stripReadonlyForInsert(schema, data, ctx);
+
+        const result = await this.engine.insert(request.object, insertData, ctxOpt as any);
         return {
             object: request.object,
             id: result.id,
@@ -3101,11 +3169,15 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         let succeeded = 0;
         let failed = 0;
 
+        // [#3043] The batch endpoint is an external ingress and threads no
+        // context, so its creates are non-system: strip forged read-only columns.
+        const batchSchema = this.engine.registry?.getObject(object);
+
         for (const record of records) {
             try {
                 switch (operation) {
                     case 'create': {
-                        const created = await this.engine.insert(object, record.data || record);
+                        const created = await this.engine.insert(object, stripReadonlyForInsert(batchSchema, record.data || record, undefined));
                         results.push({ id: created.id, success: true, record: created });
                         succeeded++;
                         break;
@@ -3175,9 +3247,16 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
     }
     
     async createManyData(request: { object: string, records: any[], context?: any }): Promise<any> {
+        // [#3043] Ingress-level static-`readonly` strip (per row) — mirrors
+        // createData for the bulk-create / import surface.
+        const rows = stripReadonlyForInsert(
+            this.engine.registry?.getObject(request.object),
+            request.records,
+            request.context,
+        );
         const records = await this.engine.insert(
             request.object,
-            request.records,
+            rows,
             request.context !== undefined ? { context: request.context } as any : undefined,
         );
         return {

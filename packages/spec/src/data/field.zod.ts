@@ -613,7 +613,7 @@ export const FieldSchema = lazySchema(() => z.object({
 
   /** Security & Visibility */
   hidden: z.boolean().default(false).describe('Hidden from default UI'),
-  readonly: z.boolean().default(false).describe('Read-only — never editable in forms, AND server-enforced on UPDATE: a non-system write to this field is silently dropped from the payload (#2948/#3003; symmetric with `readonlyWhen`). INSERT may still seed it (defaultValue, import).'),
+  readonly: z.boolean().default(false).describe('Read-only — never editable in forms, AND server-enforced on BOTH write paths: a non-system write to this field is silently dropped from the payload on UPDATE (#2948/#3003) and on INSERT (#3043; a create can no longer directly seed e.g. `approval_status: "approved"`), symmetric with `readonlyWhen`. A stripped INSERT field still falls back to its `defaultValue`; system-context writes (import, seed replay, migration) are exempt.'),
 
   /**
    * [ADR-0066 D3] Capabilities required to READ/EDIT this field. A field
