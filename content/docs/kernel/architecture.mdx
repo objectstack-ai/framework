@@ -45,7 +45,7 @@ After all plugins have successfully initialized, the optional `start(ctx)` hook 
 - HTTP servers start listening.
 - Background jobs are scheduled.
 
-Plugins may also implement an optional `destroy()` hook, which the kernel calls in reverse dependency order during `shutdown()` to release resources.
+Plugins may also implement an optional `destroy()` hook, which the kernel calls in reverse registration order during `shutdown()` to release resources.
 
 ## ObjectKernel Public API
 
@@ -68,7 +68,7 @@ class ObjectKernel {
 
     /**
      * Gracefully shut down the kernel, calling each plugin's destroy() hook
-     * in reverse dependency order.
+     * in reverse registration order.
      */
     shutdown(): Promise<void>;
 

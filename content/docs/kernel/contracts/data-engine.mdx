@@ -28,7 +28,7 @@ import type {
   EngineAggregateOptions,
   EngineCountOptions,
   DataEngineRequest,
-} from '@objectstack/spec';
+} from '@objectstack/spec/data';
 
 export interface IDataEngine {
   // Query
@@ -333,16 +333,11 @@ const result = await engine.execute?.(
 
 ## Error Codes
 
-| Code | Description |
-|:---|:---|
-| `RECORD_NOT_FOUND` | No record exists with the given ID |
-| `DUPLICATE_KEY` | A unique constraint was violated |
-| `VALIDATION_ERROR` | Data does not match the object schema |
-| `REFERENCE_ERROR` | A lookup/master_detail target record does not exist |
-| `DELETE_RESTRICTED` | Cannot delete; child records exist (master_detail) |
-| `TRANSACTION_FAILED` | Transaction was rolled back due to an error |
-| `QUERY_TIMEOUT` | Query exceeded the configured timeout |
-| `BULK_PARTIAL_FAILURE` | Some records in a bulk operation failed |
+| Code | HTTP | Description |
+|:---|:---|:---|
+| `RECORD_NOT_FOUND` | 404 | No record exists with the given ID |
+| `VALIDATION_FAILED` | 400 | Data does not match the object schema |
+| `DELETE_RESTRICTED` | 409 | Cannot delete; dependent child records reference it via a `restrict` delete behavior |
 
 ---
 
@@ -360,7 +355,6 @@ The following legacy parameter names are accepted by the RPC layer for backward 
 | `sort` | `orderBy` | Array of `{ field, order }` |
 | `skip` | `offset` | Number |
 | `populate` | `expand` | Record of field → QueryAST |
-| `top` | `limit` | Number (OData alias, still supported) |
 
 The deprecated `DataEngineQueryOptionsSchema`, `DataEngineUpdateOptionsSchema`, `DataEngineDeleteOptionsSchema`, and `DataEngineAggregateOptionsSchema` are maintained in `@objectstack/spec` for backward compatibility but will be removed in a future major version. Migrate to the QueryAST-aligned equivalents: `EngineQueryOptionsSchema`, `EngineUpdateOptionsSchema`, `EngineDeleteOptionsSchema`, `EngineAggregateOptionsSchema`.
 </Callout>

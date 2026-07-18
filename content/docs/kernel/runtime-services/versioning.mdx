@@ -15,8 +15,8 @@ description: Stability labels and how to track runtime service API breaking chan
 When a runtime service API changes in a breaking way:
 
 1. Update the relevant page in this chapter.
-2. Add a breaking-change note to root `CHANGELOG.md`.
-3. Include migration guidance and affected methods.
+2. Add a changeset entry under `.changeset/` — changesets generates each package's `CHANGELOG.md` from these entries. (The root `CHANGELOG.md` is retained for historical entries and is not hand-edited.)
+3. Record migration guidance and affected methods in the per-major release page under `content/docs/releases/`.
 
 ## Current Matrix
 

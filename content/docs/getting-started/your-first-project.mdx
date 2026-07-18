@@ -50,8 +50,8 @@ The scaffolder (`create-objectstack`) does four things:
    project conventions — including the rule to run `npm run validate` after
    every metadata change.
 
-Steps 3–4 cost nothing if you never use an agent; skip them with
-`--skip-skills` if you prefer.
+Steps 3–4 cost nothing if you never use an agent; skip step 3 (the skills
+bundle) with `--skip-skills` if you prefer — `AGENTS.md` is always written.
 
 ### Templates
 
@@ -84,7 +84,7 @@ the npm package and always works offline.
 ```
 my-app/
 ├── objectstack.config.ts        # defineStack() — the single entry point
-├── objectstack.manifest.json    # name, namespace, version
+├── objectstack.manifest.json    # name, namespace, specVersion
 ├── package.json
 ├── tsconfig.json
 ├── AGENTS.md                    # conventions for coding agents
