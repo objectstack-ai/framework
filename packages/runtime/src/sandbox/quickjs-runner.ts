@@ -221,10 +221,26 @@ export class QuickJSScriptRunner implements ScriptRunner {
       // are parked on a host promise, so this deadline check is the backstop).
       // The previous fixed `pumps < 1000` cap fired in ~tens of ms on legitimate
       // work and surfaced as "did not resolve after 1000 pump iterations".
+      // Adaptive idle backoff (#3233): while the script is progressing we pump
+      // on setImmediate (near-zero latency); once it is only *waiting* on an
+      // in-flight host promise — 0 VM jobs executed per pump — we ramp the yield
+      // up to a small capped setTimeout instead of spinning setImmediate
+      // ~200k×/s doing nothing. Any executed job (a settled host call, a resumed
+      // continuation) resets the fast path, so sequential host calls and
+      // multi-turn work keep their low latency; only a genuinely idle wait backs
+      // off, and by at most IDLE_BACKOFF_CAP_MS.
+      const FAST_PUMPS = 4;
+      const IDLE_BACKOFF_CAP_MS = 8;
       let pumps = 0;
+      let idle = 0;
       for (;;) {
-        // Yield to host event loop so any in-flight host promises resolve.
-        await new Promise<void>((resolve) => setImmediate(resolve));
+        // Yield to the host event loop so in-flight host promises can settle.
+        if (idle < FAST_PUMPS) {
+          await new Promise<void>((resolve) => setImmediate(resolve));
+        } else {
+          const backoffMs = Math.min(IDLE_BACKOFF_CAP_MS, 1 << Math.min(idle - FAST_PUMPS, 3));
+          await new Promise<void>((resolve) => setTimeout(resolve, backoffMs));
+        }
 
         const pending = runtime.executePendingJobs();
         if (pending.error) {
@@ -261,6 +277,9 @@ export class QuickJSScriptRunner implements ScriptRunner {
             `${args.origin.kind} '${args.origin.name}' exceeded timeout of ${args.timeoutMs}ms (after ${pumps} pump iterations)`,
           );
         }
+        // Progress this pump → reset to the fast path; genuinely idle → ramp the
+        // counter so the next yield backs off.
+        idle = pending.value > 0 ? 0 : idle + 1;
         pumps++;
       }
     } finally {
