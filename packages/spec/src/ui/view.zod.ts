@@ -376,10 +376,10 @@ export const ListChartConfigSchema = lazySchema(() => z.object({
  * Calendar Settings
  */
 export const CalendarConfigSchema = lazySchema(() => z.object({
-  startDateField: z.string(),
-  endDateField: z.string().optional(),
-  titleField: z.string(),
-  colorField: z.string().optional(),
+  startDateField: z.string().describe('Field providing the event start date/time'),
+  endDateField: z.string().optional().describe('Field providing the event end date/time (defaults to a single-day event)'),
+  titleField: z.string().describe('Field displayed as the event title'),
+  colorField: z.string().optional().describe('Field whose value determines the event color'),
 }));
 
 /**
@@ -405,11 +405,11 @@ export const GanttQuickFilterSchema = lazySchema(() => z.object({
  * dynamic grouping, a resource/workload view, hover tooltips and quick filters.
  */
 export const GanttConfigSchema = lazySchema(() => z.object({
-  startDateField: z.string(),
-  endDateField: z.string(),
-  titleField: z.string(),
-  progressField: z.string().optional(),
-  dependenciesField: z.string().optional(),
+  startDateField: z.string().describe('Field providing the task start date'),
+  endDateField: z.string().describe('Field providing the task end date'),
+  titleField: z.string().describe('Field displayed as the task title'),
+  progressField: z.string().optional().describe('Field providing the task completion percentage'),
+  dependenciesField: z.string().optional().describe("Field listing the task's predecessor (dependency) record ids"),
   colorField: z.string().optional().describe('Field that drives the bar color'),
   // Two-level hierarchy: a parent task id (summary bar) and a row type.
   parentField: z.string().optional().describe('Field holding the parent task id (builds the summary → step tree)'),
@@ -583,13 +583,13 @@ export const ListViewSchema = lazySchema(() => z.object({
   pagination: PaginationConfigSchema.optional().describe('Pagination configuration'),
 
   /** Type Specific Config */
-  kanban: KanbanConfigSchema.optional(),
-  calendar: CalendarConfigSchema.optional(),
-  gantt: GanttConfigSchema.optional(),
+  kanban: KanbanConfigSchema.optional().describe('Kanban-board configuration — applies when the view renders as a kanban layout'),
+  calendar: CalendarConfigSchema.optional().describe('Calendar configuration — applies when the view renders as a calendar layout'),
+  gantt: GanttConfigSchema.optional().describe('Gantt-timeline configuration — applies when the view renders as a gantt layout'),
   gallery: GalleryConfigSchema.optional(),
   timeline: TimelineConfigSchema.optional(),
   chart: ListChartConfigSchema.optional(),
-  tree: TreeConfigSchema.optional(),
+  tree: TreeConfigSchema.optional().describe('Tree/hierarchy configuration — applies when the view renders as a tree layout'),
 
   /** View Metadata (Airtable-style view management) */
   description: I18nLabelSchema.optional().describe('View description for documentation/tooltips'),
