@@ -25,7 +25,7 @@ const dataset = DatasetSchema.parse({
   object: 'opportunity',
   include: ['account'],
   dimensions: [{ name: 'region', field: 'account.region', type: 'string' }],
-  measures: [{ name: 'revenue', aggregate: 'sum', field: 'amount', certified: true }],
+  measures: [{ name: 'revenue', aggregate: 'sum', field: 'amount' }],
 });
 
 /**

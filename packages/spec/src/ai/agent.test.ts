@@ -522,30 +522,11 @@ Be precise, data-driven, and clear in your explanations.`,
         role: 'Strategic Planner',
         instructions: 'Plan and execute complex tasks.',
         planning: {
-          strategy: 'plan_and_execute',
           maxIterations: 20,
-          allowReplan: true,
         },
       });
 
-      expect(agent.planning?.strategy).toBe('plan_and_execute');
       expect(agent.planning?.maxIterations).toBe(20);
-      expect(agent.planning?.allowReplan).toBe(true);
-    });
-
-    it('should accept all planning strategies', () => {
-      const strategies = ['react', 'plan_and_execute', 'reflexion', 'tree_of_thought'] as const;
-
-      strategies.forEach(strategy => {
-        const agent = AgentSchema.parse({
-          name: 'test_agent',
-          label: 'Test',
-          role: 'Test',
-          instructions: 'Test',
-          planning: { strategy },
-        });
-        expect(agent.planning?.strategy).toBe(strategy);
-      });
     });
 
     it('should apply default planning values', () => {
@@ -557,9 +538,9 @@ Be precise, data-driven, and clear in your explanations.`,
         planning: {},
       });
 
-      expect(agent.planning?.strategy).toBe('react');
+      // Only maxIterations is live; the dead strategy/allowReplan knobs were
+      // removed in 16.0 (#2377).
       expect(agent.planning?.maxIterations).toBe(10);
-      expect(agent.planning?.allowReplan).toBe(true);
     });
 
     it('should enforce maxIterations constraints', () => {

@@ -16,9 +16,9 @@ const base = {
 };
 
 describe('DatasetSchema', () => {
-  it('accepts a well-formed dataset and applies defaults (certified=false)', () => {
+  it('accepts a well-formed dataset', () => {
     const ds = DatasetSchema.parse(base);
-    expect(ds.measures[0].certified).toBe(false);
+    expect(ds.measures[0].name).toBe('revenue');
     expect(ds.object).toBe('opportunity');
   });
 

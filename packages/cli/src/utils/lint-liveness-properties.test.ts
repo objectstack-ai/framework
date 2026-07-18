@@ -9,7 +9,7 @@ import {
 /**
  * These run against the REAL ledgers shipped by `@objectstack/spec` (the same
  * files the gate enforces), so they double as a contract test: if an
- * `authorWarn` annotation is removed from `versioning` / `columnName` / etc.,
+ * `authorWarn` annotation is removed from `abstract` / `columnName` / etc.,
  * the matching assertion fails.
  */
 
@@ -18,9 +18,9 @@ const rules = (findings: { rule: string }[]) => findings.map((f) => f.rule);
 const paths = (findings: { message: string }[]) => findings.map((f) => f.message);
 
 describe('lintLivenessProperties', () => {
-  it('warns on a present dead object block (versioning)', () => {
-    const findings = lintLivenessProperties(objStack({ versioning: { enabled: true } }));
-    const v = findings.find((f) => f.message.includes('versioning'));
+  it('warns on a present dead object prop (abstract)', () => {
+    const findings = lintLivenessProperties(objStack({ abstract: true }));
+    const v = findings.find((f) => f.message.includes('abstract'));
     expect(v).toBeDefined();
     expect(v!.rule).toBe(LIVENESS_DEAD_PROPERTY);
     expect(v!.where).toBe("object 'widget'");
@@ -71,7 +71,7 @@ describe('lintLivenessProperties', () => {
 
   it('handles objects as a keyed record (not just arrays)', () => {
     const findings = lintLivenessProperties({
-      objects: { widget: { name: 'widget', versioning: { enabled: true } } },
+      objects: { widget: { name: 'widget', abstract: true } },
     });
     expect(rules(findings)).toContain(LIVENESS_DEAD_PROPERTY);
   });
@@ -112,9 +112,9 @@ describe('lintLivenessProperties', () => {
     expect(hits[0].where).toBe("flow 'f1'");
   });
 
-  it('warns on action.timeout (no runtime enforcement)', () => {
-    const findings = lintLivenessProperties({ actions: [{ name: 'a1', timeout: 5000 }] });
-    expect(paths(findings).some((m) => m.includes('`timeout`'))).toBe(true);
+  it('warns on action.undoable (experimental — declared but not enforced)', () => {
+    const findings = lintLivenessProperties({ actions: [{ name: 'a1', undoable: true }] });
+    expect(paths(findings).some((m) => m.includes('`undoable`'))).toBe(true);
   });
 
   it('warns on the security-shaped dead props (tool.permissions / permission.contextVariables)', () => {
@@ -129,13 +129,6 @@ describe('lintLivenessProperties', () => {
 
     const perm = lintLivenessProperties({ permissions: [{ name: 'p1', contextVariables: { region: 'emea' } }] });
     expect(paths(perm).some((m) => m.includes('contextVariables'))).toBe(true);
-  });
-
-  it('warns on dataset measure certified flag via array fan-out', () => {
-    const findings = lintLivenessProperties({
-      datasets: [{ name: 'd1', measures: [{ name: 'arr', certified: true }] }],
-    });
-    expect(paths(findings).some((m) => m.includes('measures.certified'))).toBe(true);
   });
 
   it('stays silent on clean flat-collection items', () => {

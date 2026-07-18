@@ -52,7 +52,7 @@
     "planning": {
       "status": "live",
       "evidence": "packages/services/service-ai/src/agent-runtime.ts",
-      "note": "PARTIAL — only planning.maxIterations live; strategy/allowReplan DEAD."
+      "note": "Only planning.maxIterations remains; the dead strategy/allowReplan knobs were removed in 16.0 (#2377)."
     },
     "access": {
       "status": "live",

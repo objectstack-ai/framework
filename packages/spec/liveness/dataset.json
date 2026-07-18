@@ -98,13 +98,6 @@
           "evidence": "packages/services/service-analytics/src/analytics-service.ts:531",
           "note": "measure-declared currency (ISO 4217) enriched onto result fields alongside label/format, so the renderer formats the amount with a locale-correct Intl symbol rather than a '$' baked into format."
         },
-        "certified": {
-          "status": "dead",
-          "evidence": "no runtime consumer — analytics execution never reads it; not compiled into the Cube",
-          "note": "measure trust/governance flag, declared but unenforced (ADR-0049 enforce-or-remove candidate). Not authorWarn'd: it may surface as an objectui badge, so it is not necessarily misleading.",
-          "authorWarn": true,
-          "authorHint": "Declared but unenforced — analytics execution never reads it, so nothing badges or restricts \"certified\" measures. Do not present governance guarantees based on this flag."
-        },
         "derived": {
           "status": "live",
           "evidence": "packages/services/service-analytics/src/dataset-executor.ts:247",

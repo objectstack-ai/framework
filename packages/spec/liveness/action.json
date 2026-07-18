@@ -157,12 +157,6 @@
       "evidence": "objectui ActionRunner.executeUrl (objectui issue #2043)",
       "note": "Declarative new-tab control for STATIC type:'url' targets. ActionRunner.executeUrl reads action.openIn with priority over the legacy params.newTab/external-URL heuristic; action-button/icon/menu/group + basic/elements renderers forward it. Distinct from opensInNewTab/newTabUrl (async SSO pre-open)."
     },
-    "timeout": {
-      "status": "dead",
-      "evidence": "action-level timeout DEAD — server uses body.timeoutMs; no UI consumer",
-      "authorWarn": true,
-      "authorHint": "No action-level timeout is enforced at runtime — remove it. Per-action execution time limits are not configurable today."
-    },
     "aria": {
       "status": "live",
       "note": "PARTIAL — honored by a few objectui renderers, not the core action buttons/menus."

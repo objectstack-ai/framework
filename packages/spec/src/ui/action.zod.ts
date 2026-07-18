@@ -527,9 +527,6 @@ export const ActionSchema = lazySchema(() => z.object({
    */
   newTabUrl: z.string().optional().describe('Direct new-tab URL template ({recordId} placeholder). When set with opensInNewTab, the renderer navigates the pre-opened tab here immediately — no action POST. The endpoint must enforce auth itself.'),
 
-  /** Execution */
-  timeout: z.number().optional().describe('Maximum execution time in milliseconds for the action'),
-
   /** ARIA accessibility attributes */
   aria: AriaPropsSchema.optional().describe('ARIA accessibility attributes'),
 }).transform((data) => {

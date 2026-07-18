@@ -16,10 +16,10 @@ const salesDataset = DatasetSchema.parse({
     { name: 'close_month', label: 'Close Month', field: 'close_date', type: 'date', dateGranularity: 'month' },
   ],
   measures: [
-    { name: 'revenue', label: 'Revenue', aggregate: 'sum', field: 'amount', certified: true, format: '$0,0.00' },
-    { name: 'deal_count', label: 'Deals', aggregate: 'count', certified: false },
-    { name: 'won_amount', label: 'Won', aggregate: 'sum', field: 'amount', certified: false, filter: { stage: 'won' } },
-    { name: 'win_rate', label: 'Win Rate', aggregate: 'sum', certified: false, derived: { op: 'ratio', of: ['won_amount', 'revenue'] } },
+    { name: 'revenue', label: 'Revenue', aggregate: 'sum', field: 'amount', format: '$0,0.00' },
+    { name: 'deal_count', label: 'Deals', aggregate: 'count' },
+    { name: 'won_amount', label: 'Won', aggregate: 'sum', field: 'amount', filter: { stage: 'won' } },
+    { name: 'win_rate', label: 'Win Rate', aggregate: 'sum', derived: { op: 'ratio', of: ['won_amount', 'revenue'] } },
   ],
 });
 

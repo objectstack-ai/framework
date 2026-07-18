@@ -50,7 +50,7 @@ function chartStack(widgetOverrides: Record<string, unknown> = {}) {
       object: 'expense_line',
       dimensions: [{ name: 'category', field: 'category' }],
       measures: [
-        { name: 'sum_amount', label: 'sum_amount', aggregate: 'sum', field: 'amount', certified: true },
+        { name: 'sum_amount', label: 'sum_amount', aggregate: 'sum', field: 'amount' },
         { name: 'ticket_count', label: 'ticket_count', aggregate: 'count' },
       ],
     }],

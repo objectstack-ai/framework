@@ -180,14 +180,8 @@ export const AgentSchema = lazySchema(() => z.object({
 
   /** Autonomous Reasoning */
   planning: z.object({
-    /** Planning strategy for autonomous reasoning loops */
-    strategy: z.enum(['react', 'plan_and_execute', 'reflexion', 'tree_of_thought']).default('react').describe('Autonomous reasoning strategy'),
-
     /** Maximum reasoning iterations before stopping */
     maxIterations: z.number().int().min(1).max(100).default(10).describe('Maximum planning loop iterations'),
-
-    /** Whether the agent can revise its own plan mid-execution */
-    allowReplan: z.boolean().default(true).describe('Allow dynamic re-planning based on intermediate results'),
   }).optional().describe('Autonomous reasoning and planning configuration'),
 
   /** Memory Management */

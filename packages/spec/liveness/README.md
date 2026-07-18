@@ -189,17 +189,17 @@ EOF
 
 | Type | live | exp | dead | planned | Notes |
 |---|---|---|---|---|---|
-| object | 37 | – | 12 | 1 | versioning/partitioning/cdc tier dead; ObjectCapabilities fully live post-#2707/#2727; `tenancy.strategy`/`crossTenantAccess` REMOVED post-15.0 (#2763) — tenancy block is now strict with tombstone guidance |
-| field | 55 | – | 6 | – | near-healthy; dead = referenceFilters/columnName/index/vectorConfig/fileAttachmentConfig/dependencies, all authorWarn'd |
+| object | 37 | – | 7 | 1 | aspirational tier (versioning/softDelete/search/recordName/keyPrefix) REMOVED in 16.0 (#2377) — tombstoned in UNKNOWN_KEY_GUIDANCE; remaining dead = tags/active/isSystem/abstract + enable.searchable/trash/mru (authoring-form-surfaced, deferred); ObjectCapabilities otherwise live post-#2707/#2727; `tenancy.strategy`/`crossTenantAccess` REMOVED post-15.0 (#2763) |
+| field | 55 | – | 3 | – | near-healthy; vectorConfig/fileAttachmentConfig/dependencies REMOVED in 16.0 (#2377); remaining dead = referenceFilters/columnName/index (authoring-form-surfaced, deferred), all authorWarn'd |
 | flow | 27 | – | 4 | – | dead = description/template/nodes.outputSchema/errorHandling.fallbackNodeId (engine uses fault edges) |
-| action | 34 | 1 | 1 | – | `disabled` went LIVE via metadata-admin authoring UI (2026-06 audit missed objectui); only `timeout` dead |
+| action | 35 | 1 | 0 | – | `disabled` went LIVE via metadata-admin authoring UI (2026-06 audit missed objectui); dead `timeout` REMOVED in 16.0 (#2377) |
 | hook | 11 | – | 2 | – | model-healthy; only label/description dead (benign) |
 | permission | 32 | – | 1 | – | CRUD/FLS/RLS live; `contextVariables` dead (RLS uses current_user.* built-ins only) |
 | position | 4 | – | – | – | (role's ADR-0090 successor) fully live |
-| agent | 14 | 5 | 1 | – | `tenantId` dead (tenancy comes from request context); autonomy tier experimental |
+| agent | 14 | 5 | 1 | – | `tenantId` dead (authoring-form-surfaced, deferred); dead `planning.strategy`/`allowReplan` REMOVED in 16.0 (#2377), only `planning.maxIterations` live; autonomy tier experimental |
 | tool | 9 | 1 | 1 | – | `permissions` dead — tool invocation not permission-gated by it |
 | skill | 10 | – | – | – | fully live |
-| dataset | 19 | – | 1 | – | `measures.certified` declared-but-unenforced governance flag |
+| dataset | 19 | – | 0 | – | `measures.certified` (declared-but-unenforced governance flag) REMOVED in 16.0 (#2377) |
 | page | 16 | – | – | 1 | fully live + one planned |
 | view | 68 | 2 | 5 | – | list/form drilled via `children` (#2998 Track B); dead = list.{responsive,performance} + form.{data,defaultSort,aria}, all but aria authorWarn'd; exp = form.{buttons,defaults} awaiting objectui#2545; audit-era DEAD lines superseded by re-verification (submitBehavior, sharing.lockedBy, list ViewData providers, and the ADR-0021 chart shape — all live now); level-2 dead residue (userActions.buttons, addRecord.mode/formView, tabs[].order) noted on parents — one drill level only |
 

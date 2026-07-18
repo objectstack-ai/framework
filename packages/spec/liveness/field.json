@@ -1,6 +1,6 @@
 {
   "type": "field",
-  "_note": "FieldSchema (flat — all field-type configs are top-level optional props). Seeded from docs/audits/2026-06-fieldschema-property-liveness.md. ~half dead. Nested config objects (currencyConfig/vectorConfig/fileAttachmentConfig/encryptionConfig/maskingRule/cached/dataQuality) are wholly dead → classified at top level. Naming-drift props are server-live but client-snake. Framework evidence cited with paths; objectui-renderer evidence as prose.",
+  "_note": "FieldSchema (flat — all field-type configs are top-level optional props). Seeded from docs/audits/2026-06-fieldschema-property-liveness.md. The wholly-dead nested config objects (vectorConfig/fileAttachmentConfig/encryptionConfig/maskingRule/cached/dataQuality) were removed (#2377 + earlier pruning); currencyConfig is LIVE via the objectui renderer. Naming-drift props are server-live but client-snake. Framework evidence cited with paths; objectui-renderer evidence as prose.",
   "props": {
     "name": {
       "status": "live",
@@ -229,25 +229,7 @@
     },
     "dimensions": {
       "status": "live",
-      "note": "vector field — objectui VectorField.tsx:11 reads the flat `dimensions` prop. The live authoring path (cf. dead `vectorConfig`); `Field.vector(n)` emits this."
-    },
-    "vectorConfig": {
-      "status": "dead",
-      "evidence": "nested config — renderers read flat dimensions; no consumer, no vector-index DDL",
-      "authorWarn": true,
-      "authorHint": "This nested block is not read (no vector-index DDL). Set the flat `dimensions` sibling instead."
-    },
-    "fileAttachmentConfig": {
-      "status": "dead",
-      "evidence": "nested config — renderers read flat multiple/accept/maxSize (FileField.tsx:16); no size/type/virus enforcement in write path",
-      "authorWarn": true,
-      "authorHint": "This nested block is not read — and note no size/type enforcement happens on write. Use the flat `multiple`/`accept`/`maxSize` siblings for the renderer."
-    },
-    "dependencies": {
-      "status": "dead",
-      "evidence": "no consumer",
-      "authorWarn": true,
-      "authorHint": "No consumer — field dependency/cascade behavior is not implemented. Formula inputs are inferred from the expression itself; visibility rules use their own conditions."
+      "note": "vector field — objectui VectorField.tsx:11 reads the flat `dimensions` prop. The live authoring path; `Field.vector(n)` emits this. (The dead nested `vectorConfig` block was removed in 16.0, #2377.)"
     },
     "inlineTitle": {
       "status": "live",

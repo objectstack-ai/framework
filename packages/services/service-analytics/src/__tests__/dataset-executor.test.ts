@@ -52,7 +52,7 @@ const dataset = DatasetSchema.parse({
   filter: { is_deleted: { $ne: true } },
   dimensions: [{ name: 'region', field: 'account.region', type: 'string' }],
   measures: [
-    { name: 'revenue', aggregate: 'sum', field: 'amount', certified: true },
+    { name: 'revenue', aggregate: 'sum', field: 'amount' },
     { name: 'won_amount', aggregate: 'sum', field: 'amount', filter: { stage: 'won' } },
     { name: 'win_rate', aggregate: 'sum', derived: { op: 'ratio', of: ['won_amount', 'revenue'] } },
   ],

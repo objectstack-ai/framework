@@ -80,8 +80,6 @@ export const DatasetMeasureSchema = lazySchema(() => z.object({
    * layer) when the aggregated field is a fixed-currency amount.
    */
   currency: z.string().length(3).optional().describe('Display currency code (ISO 4217)'),
-  /** Governance: a human-blessed metric — the review checkpoint. */
-  certified: z.boolean().default(false).describe('Blessed metric (governance checkpoint)'),
   /**
    * Derived measure — computed from OTHER measures in this dataset by name
    * only. e.g. `{ op: 'ratio', of: ['won_amount', 'total_amount'] }`.
@@ -208,7 +206,7 @@ export const DatasetSchema = lazySchema(() => z.object({
  *   object: 'opportunity',
  *   include: ['account'],
  *   dimensions: [{ name: 'region', field: 'account.region' }],
- *   measures: [{ name: 'revenue', aggregate: 'sum', field: 'amount', certified: true }],
+ *   measures: [{ name: 'revenue', aggregate: 'sum', field: 'amount' }],
  * });
  * ```
  */

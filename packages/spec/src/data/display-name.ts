@@ -20,9 +20,9 @@
  * approval/notification display-enrichment path, objectql search field
  * resolution, and build-time lint.
  *
- * NOTE on the schema: `nameField` is the canonical pointer (pairs with
- * `recordName` — the Salesforce Name/Record-Name model). `displayNameField` is
- * accepted as a DEPRECATED ALIAS at the schema level (mapped onto `nameField`).
+ * NOTE on the schema: `nameField` is the canonical primary-title pointer
+ * (ADR-0079). `displayNameField` is accepted as a DEPRECATED ALIAS at the
+ * schema level (mapped onto `nameField`).
  * Both are still read here so this resolver works against metadata that has not
  * yet been normalized.
  */
@@ -64,9 +64,9 @@ export interface DisplayNameObjectMeta {
  * short label (dates, numbers, booleans, media, structured/relational values,
  * choice tokens, and system/auto values). `autonumber` is excluded from
  * *derivation* here: an autonumber is a valid primary only when an author
- * points at it explicitly (it pairs with `recordName.type='autonumber'`), not
- * something we silently pick. `formula` is conditionally eligible — see
- * `isTitleEligible`.
+ * points at it explicitly (an `autonumber` `Field` designated as the
+ * `nameField`), not something we silently pick. `formula` is conditionally
+ * eligible — see `isTitleEligible`.
  *
  * `phone` is deliberately excluded (a phone number is not a title); `email` IS
  * eligible (commonly the human handle on identity-ish objects).

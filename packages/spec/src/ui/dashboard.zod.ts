@@ -148,7 +148,7 @@ export const DashboardWidgetSchema = lazySchema(() => z.object({
   /**
    * ADR-0021 — the semantic-layer `dataset` this widget binds to. The widget
    * selects the dataset's dimensions/measures BY NAME; the dataset owns the base
-   * object, allowed joins, intrinsic filter, dimensions, and certified measures,
+   * object, allowed joins, intrinsic filter, dimensions, and measures,
    * so numbers stay consistent across every surface. This is the single
    * author-facing analytics shape (the legacy inline `object` + `categoryField`
    * + `valueField` + `aggregate` query was removed in the single-form cutover).

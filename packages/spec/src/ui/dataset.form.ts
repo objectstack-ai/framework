@@ -56,7 +56,7 @@ export const datasetForm = defineForm({
       label: 'Measures',
       description: 'Aggregatable values defined once and referenced by name. A measure is sum/avg/count/… of a field; a derived measure combines other measures (ratio/sum/difference/product). Measure-scoped filters and derived ops are edited per-row in the dataset designer.',
       fields: [
-        { field: 'measures', type: 'repeater', required: true, helpText: 'Each: name, aggregate, field (optional for count), display format/currency, and a “certified” governance flag' },
+        { field: 'measures', type: 'repeater', required: true, helpText: 'Each: name, aggregate, field (optional for count), and display format/currency' },
       ],
     },
   ],

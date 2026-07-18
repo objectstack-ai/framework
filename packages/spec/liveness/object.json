@@ -187,36 +187,6 @@
         }
       }
     },
-    "versioning": {
-      "status": "dead",
-      "evidence": "aspirational; no runtime",
-      "authorWarn": true,
-      "authorHint": "No record-versioning engine reads this block — setting it stores nothing and snapshots no history. Remove it (use Field.trackHistory for field-level history)."
-    },
-    "softDelete": {
-      "status": "dead",
-      "evidence": "no runtime; duplicates the (also dead) enable.trash",
-      "authorWarn": true,
-      "authorHint": "There is no soft-delete/recycle-bin runtime. Deletes are hard deletes; remove this to avoid implying restore semantics that don't exist."
-    },
-    "search": {
-      "status": "dead",
-      "evidence": "SearchConfigSchema — no runtime; duplicates enable.searchable",
-      "authorWarn": true,
-      "authorHint": "No search-engine config is consumed. Remove it — records remain queryable via the normal data API regardless."
-    },
-    "recordName": {
-      "status": "dead",
-      "evidence": "superseded by a field of type:'autonumber' + autonumberFormat (engine.ts:757)",
-      "authorWarn": true,
-      "authorHint": "Auto-naming is done by a `Field` of type 'autonumber' (with autonumberFormat). This block is not read — model the name field instead."
-    },
-    "keyPrefix": {
-      "status": "dead",
-      "evidence": "no runtime",
-      "authorWarn": true,
-      "authorHint": "Record ids are not prefixed from this value (no Salesforce-style key prefix runtime). Remove it — it has no effect."
-    },
     "tags": {
       "status": "dead",
       "evidence": "no runtime reader"

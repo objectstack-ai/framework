@@ -162,142 +162,6 @@ export const AddressSchema = lazySchema(() => z.object({
 }));
 
 /**
- * Vector Configuration Schema
- * Configuration for vector field type supporting AI/ML embeddings
- * 
- * Vector fields store numerical embeddings for semantic search, similarity matching,
- * and Retrieval-Augmented Generation (RAG) workflows.
- * 
- * @example
- * // Text embeddings for semantic search
- * {
- *   dimensions: 1536,  // OpenAI text-embedding-ada-002
- *   distanceMetric: 'cosine',
- *   indexed: true
- * }
- * 
- * @example
- * // Image embeddings with normalization
- * {
- *   dimensions: 512,   // ResNet-50
- *   distanceMetric: 'euclidean',
- *   normalized: true,
- *   indexed: true
- * }
- */
-export const VectorConfigSchema = lazySchema(() => z.object({
-  dimensions: z.number().int().min(1).max(10000).describe('Vector dimensionality (e.g., 1536 for OpenAI embeddings)'),
-  distanceMetric: z.enum(['cosine', 'euclidean', 'dotProduct', 'manhattan']).default('cosine').describe('Distance/similarity metric for vector search'),
-  normalized: z.boolean().default(false).describe('Whether vectors are normalized (unit length)'),
-  indexed: z.boolean().default(true).describe('Whether to create a vector index for fast similarity search'),
-  indexType: z.enum(['hnsw', 'ivfflat', 'flat']).optional().describe('Vector index algorithm (HNSW for high accuracy, IVFFlat for large datasets)'),
-}));
-
-/**
- * File Attachment Configuration Schema
- * Configuration for file and attachment field types
- * 
- * Provides comprehensive file upload capabilities with:
- * - File type restrictions (allowed/blocked)
- * - File size limits (min/max)
- * - Virus scanning integration
- * - Storage provider integration
- * - Image-specific features (dimensions, thumbnails)
- * 
- * @example Basic file upload with size limit
- * {
- *   maxSize: 10485760,  // 10MB
- *   allowedTypes: ['.pdf', '.docx', '.xlsx'],
- *   virusScan: true
- * }
- * 
- * @example Image upload with validation
- * {
- *   maxSize: 5242880,  // 5MB
- *   allowedTypes: ['.jpg', '.jpeg', '.png', '.webp'],
- *   imageValidation: {
- *     maxWidth: 4096,
- *     maxHeight: 4096,
- *     generateThumbnails: true
- *   }
- * }
- */
-export const FileAttachmentConfigSchema = lazySchema(() => z.object({
-  /** File Size Limits */
-  minSize: z.number().min(0).optional().describe('Minimum file size in bytes'),
-  maxSize: z.number().min(1).optional().describe('Maximum file size in bytes (e.g., 10485760 = 10MB)'),
-  
-  /** File Type Restrictions */
-  allowedTypes: z.array(z.string()).optional().describe('Allowed file extensions (e.g., [".pdf", ".docx", ".jpg"])'),
-  blockedTypes: z.array(z.string()).optional().describe('Blocked file extensions (e.g., [".exe", ".bat", ".sh"])'),
-  allowedMimeTypes: z.array(z.string()).optional().describe('Allowed MIME types (e.g., ["image/jpeg", "application/pdf"])'),
-  blockedMimeTypes: z.array(z.string()).optional().describe('Blocked MIME types'),
-  
-  /** Virus Scanning */
-  virusScan: z.boolean().default(false).describe('Enable virus scanning for uploaded files'),
-  virusScanProvider: z.enum(['clamav', 'virustotal', 'metadefender', 'custom']).optional().describe('Virus scanning service provider'),
-  virusScanOnUpload: z.boolean().default(true).describe('Scan files immediately on upload'),
-  quarantineOnThreat: z.boolean().default(true).describe('Quarantine files if threat detected'),
-  
-  /** Storage Configuration */
-  storageProvider: z.string().optional().describe('Object storage provider name (references ObjectStorageConfig)'),
-  storageBucket: z.string().optional().describe('Target bucket name'),
-  storagePrefix: z.string().optional().describe('Storage path prefix (e.g., "uploads/documents/")'),
-  
-  /** Image-Specific Validation */
-  imageValidation: z.object({
-    minWidth: z.number().min(1).optional().describe('Minimum image width in pixels'),
-    maxWidth: z.number().min(1).optional().describe('Maximum image width in pixels'),
-    minHeight: z.number().min(1).optional().describe('Minimum image height in pixels'),
-    maxHeight: z.number().min(1).optional().describe('Maximum image height in pixels'),
-    aspectRatio: z.string().optional().describe('Required aspect ratio (e.g., "16:9", "1:1")'),
-    generateThumbnails: z.boolean().default(false).describe('Auto-generate thumbnails'),
-    thumbnailSizes: z.array(z.object({
-      name: z.string().describe('Thumbnail variant name (e.g., "small", "medium", "large")'),
-      width: z.number().min(1).describe('Thumbnail width in pixels'),
-      height: z.number().min(1).describe('Thumbnail height in pixels'),
-      crop: z.boolean().default(false).describe('Crop to exact dimensions'),
-    })).optional().describe('Thumbnail size configurations'),
-    preserveMetadata: z.boolean().default(false).describe('Preserve EXIF metadata'),
-    autoRotate: z.boolean().default(true).describe('Auto-rotate based on EXIF orientation'),
-  }).optional().describe('Image-specific validation rules'),
-  
-  /** Upload Behavior */
-  allowMultiple: z.boolean().default(false).describe('Allow multiple file uploads (overrides field.multiple)'),
-  allowReplace: z.boolean().default(true).describe('Allow replacing existing files'),
-  allowDelete: z.boolean().default(true).describe('Allow deleting uploaded files'),
-  requireUpload: z.boolean().default(false).describe('Require at least one file when field is required'),
-  
-  /** Metadata Extraction */
-  extractMetadata: z.boolean().default(true).describe('Extract file metadata (name, size, type, etc.)'),
-  extractText: z.boolean().default(false).describe('Extract text content from documents (OCR/parsing)'),
-  
-  /** Versioning */
-  versioningEnabled: z.boolean().default(false).describe('Keep previous versions of replaced files'),
-  maxVersions: z.number().min(1).optional().describe('Maximum number of versions to retain'),
-  
-  /** Access Control */
-  publicRead: z.boolean().default(false).describe('Allow public read access to uploaded files'),
-  presignedUrlExpiry: z.number().min(60).max(604800).default(3600).describe('Presigned URL expiration in seconds (default: 1 hour)'),
-}).refine((data) => {
-  // Validate minSize is less than or equal to maxSize
-  if (data.minSize !== undefined && data.maxSize !== undefined && data.minSize > data.maxSize) {
-    return false;
-  }
-  return true;
-}, {
-  message: 'minSize must be less than or equal to maxSize',
-}).refine((data) => {
-  // Validate virusScanProvider requires virusScan to be enabled
-  if (data.virusScanProvider !== undefined && data.virusScan !== true) {
-    return false;
-  }
-  return true;
-}, {
-  message: 'virusScanProvider requires virusScan to be enabled',
-}));
-
-/**
  * Data Quality Rules Schema
  * Defines data quality validation and monitoring for fields
  * 
@@ -545,16 +409,8 @@ export const FieldSchema = lazySchema(() => z.object({
   currencyConfig: CurrencyConfigSchema.optional().describe('Configuration for currency field type'),
 
   // Vector field — flat dimensionality (the live authoring path).
-  // The renderer reads this flat sibling (objectui VectorField.tsx:11); the
-  // nested `vectorConfig` below is retained for back-compat but is a runtime
-  // no-op (no vector-index DDL consumes it).
+  // The renderer reads this flat sibling (objectui VectorField.tsx:11).
   dimensions: z.number().int().min(1).max(10000).optional().describe('Vector dimensionality (e.g., 1536 for OpenAI embeddings)'),
-
-  // Vector field config (DEAD — kept for back-compat; set the flat `dimensions` sibling instead)
-  vectorConfig: VectorConfigSchema.optional().describe('Configuration for vector field type (AI/ML embeddings)'),
-
-  // File attachment field config
-  fileAttachmentConfig: FileAttachmentConfigSchema.optional().describe('Configuration for file and attachment field types'),
 
   /**
    * Track this field's value changes on the record **activity timeline**. When
@@ -575,9 +431,6 @@ export const FieldSchema = lazySchema(() => z.object({
   // the real channel is type:'secret'). See
   // docs/audits/2026-06-dead-surface-disposition-plan.md (P0/P2 field prune):
   // encryptionConfig, maskingRule, auditTrail, cached, dataQuality.
-
-  /** Field Dependencies & Relationships */
-  dependencies: z.array(z.string()).optional().describe('Array of field names that this field depends on (for formulas, visibility rules, etc.)'),
 
   /** Layout & Grouping */
   group: z.string().optional().describe('Field group name for organizing fields in forms and layouts (e.g., "contact_info", "billing", "system")'),
@@ -663,10 +516,6 @@ export type Address = z.infer<typeof AddressSchema>;
 export type CurrencyConfig = z.infer<typeof CurrencyConfigSchema>;
 export type CurrencyConfigInput = z.input<typeof CurrencyConfigSchema>;
 export type CurrencyValue = z.infer<typeof CurrencyValueSchema>;
-export type VectorConfig = z.infer<typeof VectorConfigSchema>;
-export type VectorConfigInput = z.input<typeof VectorConfigSchema>;
-export type FileAttachmentConfig = z.infer<typeof FileAttachmentConfigSchema>;
-export type FileAttachmentConfigInput = z.input<typeof FileAttachmentConfigSchema>;
 export type DataQualityRules = z.infer<typeof DataQualityRulesSchema>;
 export type DataQualityRulesInput = z.input<typeof DataQualityRulesSchema>;
 export type ComputedFieldCache = z.infer<typeof ComputedFieldCacheSchema>;

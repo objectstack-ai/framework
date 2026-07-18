@@ -58,9 +58,9 @@ describe('POST /analytics/dataset/query', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.body).toEqual({ rows: [{ region: 'NA', revenue: 100 }], fields: [] });
-    // dataset was schema-validated before reaching the service (certified default applied)
+    // dataset was schema-validated before reaching the service
     const passedDataset = queryDataset.mock.calls[0][0];
-    expect(passedDataset.measures[0].certified).toBe(false);
+    expect(passedDataset.measures[0].name).toBe('revenue');
     expect(queryDataset.mock.calls[0][1]).toEqual(selection);
   });
 

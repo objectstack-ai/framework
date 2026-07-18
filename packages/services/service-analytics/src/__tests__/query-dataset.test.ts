@@ -11,7 +11,7 @@ const dataset = DatasetSchema.parse({
   object: 'opportunity',
   include: ['account'],
   dimensions: [{ name: 'region', field: 'account.region', type: 'string' }],
-  measures: [{ name: 'revenue', aggregate: 'sum', field: 'amount', certified: true }],
+  measures: [{ name: 'revenue', aggregate: 'sum', field: 'amount' }],
 });
 
 function service(captured: { sql: string; params: unknown[] }[]) {
@@ -103,7 +103,7 @@ describe('AnalyticsService.queryDataset', () => {
     const priced = DatasetSchema.parse({
       name: 'sales_priced', label: 'Sales', object: 'opportunity', include: [],
       dimensions: [{ name: 'stage', field: 'stage', type: 'string' }],
-      measures: [{ name: 'revenue', aggregate: 'sum', field: 'amount', label: 'Revenue', format: '0,0', currency: 'USD', certified: true }],
+      measures: [{ name: 'revenue', aggregate: 'sum', field: 'amount', label: 'Revenue', format: '0,0', currency: 'USD' }],
     });
     const svc = new AnalyticsService({
       queryCapabilities: () => ({ nativeSql: true, objectqlAggregate: false, inMemory: false }),
@@ -165,7 +165,7 @@ describe('AnalyticsService.queryDataset', () => {
     const labeled = DatasetSchema.parse({
       name: 'sales2', label: 'Sales', object: 'opportunity', include: ['account'],
       dimensions: [{ name: 'region', field: 'account.region', type: 'string', label: 'Region' }],
-      measures: [{ name: 'revenue', aggregate: 'sum', field: 'amount', label: 'Revenue', certified: true }],
+      measures: [{ name: 'revenue', aggregate: 'sum', field: 'amount', label: 'Revenue' }],
     });
     const result = await service([]).queryDataset(
       labeled,
@@ -180,7 +180,7 @@ describe('AnalyticsService.queryDataset', () => {
     const dated = DatasetSchema.parse({
       name: 'sales3', label: 'Sales', object: 'opportunity', include: [],
       dimensions: [{ name: 'closed', field: 'close_date', type: 'date' }],
-      measures: [{ name: 'revenue', aggregate: 'sum', field: 'amount', certified: true }],
+      measures: [{ name: 'revenue', aggregate: 'sum', field: 'amount' }],
     });
     const svc = new AnalyticsService({
       queryCapabilities: () => ({ nativeSql: true, objectqlAggregate: false, inMemory: false }),
@@ -198,7 +198,7 @@ describe('AnalyticsService.queryDataset', () => {
     const byAccount = DatasetSchema.parse({
       name: 'sales_acct', label: 'Sales', object: 'opportunity', include: [],
       dimensions: [{ name: 'account', field: 'account', type: 'lookup', label: 'Account' }],
-      measures: [{ name: 'revenue', aggregate: 'sum', field: 'amount', certified: true }],
+      measures: [{ name: 'revenue', aggregate: 'sum', field: 'amount' }],
     });
     const svc = new AnalyticsService({
       queryCapabilities: () => ({ nativeSql: true, objectqlAggregate: false, inMemory: false }),

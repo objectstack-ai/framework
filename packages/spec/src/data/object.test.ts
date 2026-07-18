@@ -712,7 +712,7 @@ describe('ObjectSchema', () => {
 });
 
 // ============================================================================
-// Protocol Improvement Tests: displayNameField and recordName
+// Protocol Improvement Tests: displayNameField / nameField
 // ============================================================================
 
 describe('ObjectSchema - displayNameField', () => {
@@ -775,49 +775,6 @@ describe('ObjectSchema - displayNameField', () => {
       displayNameField: 'b',
     });
     expect(result.nameField).toBe('a');
-  });
-});
-
-describe('ObjectSchema - recordName', () => {
-  it('should accept recordName with autonumber config', () => {
-    const result = ObjectSchema.parse({
-      name: 'invoice',
-      fields: {
-        total: { type: 'number' },
-      },
-      recordName: {
-        type: 'autonumber',
-        displayFormat: 'INV-{YYYY}-{0000}',
-        startNumber: 1,
-      },
-    });
-    expect(result.recordName?.type).toBe('autonumber');
-    expect(result.recordName?.displayFormat).toBe('INV-{YYYY}-{0000}');
-    expect(result.recordName?.startNumber).toBe(1);
-  });
-
-  it('should accept recordName with text type', () => {
-    const result = ObjectSchema.parse({
-      name: 'account',
-      fields: {
-        name: { type: 'text' },
-      },
-      recordName: {
-        type: 'text',
-      },
-    });
-    expect(result.recordName?.type).toBe('text');
-    expect(result.recordName?.displayFormat).toBeUndefined();
-  });
-
-  it('should accept object without recordName (optional)', () => {
-    const result = ObjectSchema.parse({
-      name: 'task',
-      fields: {
-        title: { type: 'text' },
-      },
-    });
-    expect(result.recordName).toBeUndefined();
   });
 });
 
@@ -927,6 +884,31 @@ describe('ObjectSchema.create()', () => {
       expect(message).toContain('highlightFields');
       expect(message).toContain('11.7.0');
       expect(message).toContain('#2536');
+    });
+
+    it('tombstone: dead metadata keys removed in 16.0 (#2377) carry upgrade guidance', () => {
+      const cases: Array<[string, unknown, string]> = [
+        ['versioning', { enabled: true }, 'trackHistory'],
+        ['softDelete', { enabled: true }, 'hard deletes'],
+        ['search', { fields: ['name'] }, 'searchableFields'],
+        ['recordName', { type: 'autonumber' }, 'autonumber'],
+        ['keyPrefix', 'ACC', 'no effect'],
+      ];
+      for (const [key, value, needle] of cases) {
+        let message = '';
+        try {
+          ObjectSchema.create({
+            name: 'demo',
+            fields: { status: { type: 'text' } },
+            [key]: value,
+          } as Record<string, unknown> as Parameters<typeof ObjectSchema.create>[0]);
+        } catch (e) {
+          message = (e as Error).message;
+        }
+        expect(message, `${key} should be rejected`).toContain(key);
+        expect(message, `${key} should cite #2377`).toContain('#2377');
+        expect(message, `${key} should hint at the replacement`).toContain(needle);
+      }
     });
 
     it('tombstone: removed detail block routes each job to its semantic role', () => {

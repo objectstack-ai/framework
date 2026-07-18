@@ -137,23 +137,6 @@ export const IndexSchema = lazySchema(() => z.object({
 }));
 
 /**
- * Search Configuration
- * Defines how this object behaves in search results.
- * 
- * @example
- * {
- *   fields: ["name", "email", "phone"],
- *   displayFields: ["name", "title"],
- *   filters: ["status = 'active'"]
- * }
- */
-export const SearchConfigSchema = lazySchema(() => z.object({
-  fields: z.array(z.string()).describe('Fields to index for full-text search weighting'),
-  displayFields: z.array(z.string()).optional().describe('Fields to display in search result cards'),
-  filters: z.array(z.string()).optional().describe('Default filters for search results'),
-}));
-
-/**
  * Tombstones for RETIRED tenancy keys — same doctrine as the top-level
  * `UNKNOWN_KEY_GUIDANCE` map below: a retired key's rejection must carry the
  * upgrade prescription, because the parse error is the one channel every
@@ -273,42 +256,6 @@ export const ObjectRequiredPermissionsSchema = z.union([
 ]);
 export type PerOperationRequiredPermissions = z.infer<typeof PerOperationRequiredPermissionsSchema>;
 export type ObjectRequiredPermissions = z.infer<typeof ObjectRequiredPermissionsSchema>;
-
-/**
- * Soft Delete Configuration Schema
- * Implements recycle bin / trash functionality
- * 
- * @example Standard soft delete with cascade
- * {
- *   enabled: true,
- *   field: 'deleted_at',
- *   cascadeDelete: true
- * }
- */
-export const SoftDeleteConfigSchema = lazySchema(() => z.object({
-  enabled: z.boolean().describe('Enable soft delete (trash/recycle bin)'),
-  field: z.string().default('deleted_at').describe('Field name for soft delete timestamp'),
-  cascadeDelete: z.boolean().default(false).describe('Cascade soft delete to related records'),
-}));
-
-/**
- * Versioning Configuration Schema
- * Implements record versioning and history tracking
- * 
- * @example Snapshot versioning with 90-day retention
- * {
- *   enabled: true,
- *   strategy: 'snapshot',
- *   retentionDays: 90,
- *   versionField: 'version'
- * }
- */
-export const VersioningConfigSchema = lazySchema(() => z.object({
-  enabled: z.boolean().describe('Enable record versioning'),
-  strategy: z.enum(['snapshot', 'delta', 'event-sourcing']).describe('Versioning strategy: snapshot (full copy), delta (changes only), event-sourcing (event log)'),
-  retentionDays: z.number().min(1).optional().describe('Number of days to retain old versions (undefined = infinite)'),
-  versionField: z.string().default('version').describe('Field name for version number/timestamp'),
-}));
 
 /**
  * Data Lifecycle (ADR-0057)
@@ -793,19 +740,11 @@ const ObjectSchemaBase = z.object({
    * Absent/empty ⇒ no capability gate.
    */
   requiredPermissions: ObjectRequiredPermissionsSchema.optional().describe('[ADR-0066 D3/⑤] Capabilities required to access this object (AND-gate) — `string[]` gates all CRUD, or a `{read,create,update,delete}` map gates per operation.'),
-  
-  // Soft delete configuration
-  softDelete: SoftDeleteConfigSchema.optional().describe('Soft delete (trash/recycle bin) configuration'),
-  
-  // Versioning configuration
-  versioning: VersioningConfigSchema.optional().describe('Record versioning and history tracking configuration'),
 
   // Data lifecycle (ADR-0057) — retention / rotation / archival contract,
   // enforced by the LifecycleService. Absent = `record` (today's behavior).
   lifecycle: LifecycleSchema.optional().describe('Data lifecycle contract (ADR-0057): class + retention/ttl/rotation/archive policies enforced by the platform LifecycleService.'),
 
-  // Partitioning strategy
-  
   /**
    * Logic & Validation (Co-located)
    * Best Practice: Define rules close to data.
@@ -841,13 +780,14 @@ const ObjectSchemaBase = z.object({
   /**
    * [ADR-0079] Canonical pointer to the object's PRIMARY title field — the one
    * real stored field (text / autonumber / formula→text) that is a record's
-   * human name. Pairs with `recordName` (the Salesforce Name / Record-Name
-   * model). Optional at the schema level for now (a hard required-refine is
+   * human name. Optional at the schema level for now (a hard required-refine is
    * staged so existing title-less metadata still parses). Resolve / derive via
    * `resolveDisplayField` from `@objectstack/spec/data` (display-name.ts), which
    * falls back to the deprecated `displayNameField` alias and then a derivation.
+   * Auto-naming (system-generated record names) is modelled as a `Field` of
+   * type 'autonumber' with `autonumberFormat`, designated as the `nameField`.
    */
-  nameField: z.string().optional().describe('[ADR-0079] Canonical primary title field — the stored field used as the record display name (e.g. "name", "title"). Pairs with recordName.'),
+  nameField: z.string().optional().describe('[ADR-0079] Canonical primary title field — the stored field used as the record display name (e.g. "name", "title").'),
   /**
    * @deprecated [ADR-0079] Renamed to `nameField`. Still ACCEPTED as an alias:
    * the schema copies `displayNameField` onto `nameField` on parse when
@@ -855,11 +795,6 @@ const ObjectSchemaBase = z.object({
    * cross-repo back-compat). New metadata should set `nameField`.
    */
   displayNameField: z.string().optional().describe('[DEPRECATED → nameField] Field to use as the record display name (e.g., "name", "title"). Accepted as an alias for nameField.'),
-  recordName: z.object({
-    type: z.enum(['text', 'autonumber']).describe('Record name type: text (user-entered) or autonumber (system-generated)'),
-    displayFormat: z.string().optional().describe('Auto-number format pattern (e.g., "CASE-{0000}", "INV-{YYYY}-{0000}")'),
-    startNumber: z.number().int().min(0).optional().describe('Starting number for autonumber (default: 1)'),
-  }).optional().describe('Record name generation configuration (Salesforce pattern)'),
   titleFormat: TemplateExpressionInputSchema.optional().describe('[DEPRECATED → nameField (ADR-0079)] Render-only title template; the server cannot return or query it, and an explicit nameField now takes precedence. Migrate a single-field title to nameField, a composite to a formula field designated as nameField.'),
   /**
    * [ADR-0085] Semantic role: the object's most important fields, in priority
@@ -919,10 +854,9 @@ const ObjectSchemaBase = z.object({
    * Search Engine Config 
    */
   searchableFields: z.array(z.string()).optional().describe('Fields the `$search` query matches against (ADR-0061). Canonical default for the record picker, list quick-search and global search; views may narrow it. When unset, search auto-defaults to the name/title field plus short-text fields.'),
-  search: SearchConfigSchema.optional().describe('Search engine configuration'),
-  
-  /** 
-   * System Capabilities 
+
+  /**
+   * System Capabilities
    */
   enable: ObjectCapabilities.optional().describe('Enabled system features modules'),
 
@@ -1000,9 +934,6 @@ const ObjectSchemaBase = z.object({
      */
     eligibility: z.string().optional().describe('CEL expression that must evaluate to true on the target record'),
   }).optional().describe('Public share-link policy (Notion/Figma-style link sharing)'),
-
-  /** Key Prefix */
-  keyPrefix: z.string().max(5).optional().describe('Short prefix for record IDs (e.g., "001" for Account)'),
 
   // [ADR-0085] The former `detail: { … }.passthrough()` UI-hints block is
   // REMOVED. Presentation intent lives in the cross-surface semantic roles
@@ -1109,6 +1040,29 @@ const UNKNOWN_KEY_GUIDANCE: Record<string, string> = {
     '`defaultDetailForm` was never implemented and was removed from the spec ' +
     '(#2402). Curate the record page by assigning a custom Page schema; form ' +
     'layout derives from `fieldGroups` + `Field.group`.',
+  softDelete:
+    '`softDelete` was removed from the spec in 16.0 (#2377, ADR-0049 ' +
+    'enforce-or-remove) — there is no soft-delete/recycle-bin runtime, so it ' +
+    'stored nothing and implied restore semantics that do not exist. Deletes ' +
+    'are hard deletes; remove the key.',
+  versioning:
+    '`versioning` was removed from the spec in 16.0 (#2377, ADR-0049) — no ' +
+    'record-versioning engine ever read it (it snapshotted no history). Use ' +
+    'per-field `Field.trackHistory` for field-level history, or a data ' +
+    'lifecycle policy (`lifecycle`) for retention.',
+  search:
+    '`search` (the SearchConfig block) was removed from the spec in 16.0 ' +
+    '(#2377, ADR-0049) — no search-engine config was consumed. Declare the ' +
+    'indexed fields with `searchableFields` (ADR-0061); records stay queryable ' +
+    'via the normal data API regardless.',
+  recordName:
+    '`recordName` was removed from the spec in 16.0 (#2377, ADR-0049) — it was ' +
+    'never read. Auto-naming is modelled as a `Field` of type \'autonumber\' ' +
+    '(with `autonumberFormat`) designated as the object\'s `nameField`.',
+  keyPrefix:
+    '`keyPrefix` was removed from the spec in 16.0 (#2377, ADR-0049) — record ' +
+    'ids are not prefixed from it (no Salesforce-style key-prefix runtime). ' +
+    'Remove the key; it had no effect.',
 };
 
 /** Levenshtein edit distance — backs the "did you mean" hint for typo'd keys. */
@@ -1308,8 +1262,6 @@ export type ObjectCapabilities = z.infer<typeof ObjectCapabilities>;
 export type ObjectIndex = z.infer<typeof IndexSchema>;
 export type TenancyConfig = z.infer<typeof TenancyConfigSchema>;
 export type ObjectAccessConfig = z.infer<typeof ObjectAccessConfigSchema>;
-export type SoftDeleteConfig = z.infer<typeof SoftDeleteConfigSchema>;
-export type VersioningConfig = z.infer<typeof VersioningConfigSchema>;
 export type LifecycleClass = z.infer<typeof LifecycleClassSchema>;
 export type Lifecycle = z.infer<typeof LifecycleSchema>;
 
