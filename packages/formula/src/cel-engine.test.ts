@@ -88,6 +88,104 @@ describe('celEngine', () => {
     expect(utc.ok && (utc.value as Date).toISOString()).toBe('2026-01-15T00:00:00.000Z');
   });
 
+  // ADR-0053 Phase 2 · Slice 3 acceptance criteria (#1980). The three
+  // calendar-day functions resolve the reference-tz calendar day expressed as a
+  // UTC-midnight Date (decision D1), DST-safe via `Intl.formatToParts` — never
+  // hand-rolled offset math. These lock the issue's criteria verbatim plus the
+  // DST-boundary and equality behavior the ADR promises.
+  describe('ADR-0053 Phase 2 · Slice 3 acceptance criteria (#1980)', () => {
+    const isoOf = (r: ReturnType<typeof celEngine.evaluate>): string | false =>
+      r.ok ? (r.value as Date).toISOString() : false;
+
+    it('AC1: today() at 2026-06-16T02:00Z in America/Los_Angeles is the UTC-midnight of 2026-06-15', () => {
+      // 02:00Z is 2026-06-15 19:00 PDT (UTC-7) — still June 15 in LA.
+      const now = new Date('2026-06-16T02:00:00Z');
+      const tz = 'America/Los_Angeles';
+      expect(isoOf(celEngine.evaluate(cel('today()'), { now, timezone: tz })))
+        .toBe('2026-06-15T00:00:00.000Z');
+      expect(isoOf(celEngine.evaluate(cel('daysFromNow(1)'), { now, timezone: tz })))
+        .toBe('2026-06-16T00:00:00.000Z');
+      expect(isoOf(celEngine.evaluate(cel('daysAgo(1)'), { now, timezone: tz })))
+        .toBe('2026-06-14T00:00:00.000Z');
+    });
+
+    it('AC3: reference tz unset vs "UTC" is byte-for-byte the pre-Phase-2 behavior', () => {
+      const now = new Date('2026-06-16T02:00:00Z');
+      const unsetToday = celEngine.evaluate(cel('today()'), { now });
+      expect(isoOf(unsetToday)).toBe('2026-06-16T00:00:00.000Z');
+      // Explicit 'UTC' is identical to unset for all three functions.
+      for (const src of ['today()', 'daysFromNow(5)', 'daysAgo(5)']) {
+        expect(celEngine.evaluate(cel(src), { now, timezone: 'UTC' }))
+          .toEqual(celEngine.evaluate(cel(src), { now }));
+      }
+    });
+
+    it('AC2: calendar days are correct across the spring-forward boundary (US DST 2026-03-08)', () => {
+      // now = 2026-03-07T04:30Z = 2026-03-06 23:30 EST. daysFromNow(3) crosses
+      // the Mar 8 spring-forward — a naive offset add would land on the wrong
+      // instant; the Intl-based calendar math does not.
+      const now = new Date('2026-03-07T04:30:00Z');
+      const tz = 'America/New_York';
+      expect(isoOf(celEngine.evaluate(cel('today()'), { now, timezone: tz })))
+        .toBe('2026-03-06T00:00:00.000Z');
+      expect(isoOf(celEngine.evaluate(cel('daysFromNow(3)'), { now, timezone: tz })))
+        .toBe('2026-03-09T00:00:00.000Z');
+    });
+
+    it('AC2: calendar days are correct across the fall-back boundary (US DST 2026-11-01)', () => {
+      // now = 2026-11-02T04:30Z = 2026-11-01 23:30 EST, just after the fall-back.
+      const now = new Date('2026-11-02T04:30:00Z');
+      const tz = 'America/New_York';
+      expect(isoOf(celEngine.evaluate(cel('today()'), { now, timezone: tz })))
+        .toBe('2026-11-01T00:00:00.000Z');
+      expect(isoOf(celEngine.evaluate(cel('daysAgo(2)'), { now, timezone: tz })))
+        .toBe('2026-10-30T00:00:00.000Z');
+    });
+
+    it('AC2: a datetime record field == daysFromNow(n) matches the right day across DST', () => {
+      // A `Field.datetime` arrives as a Date instant, so equality is
+      // Timestamp==Timestamp — the representation D1 makes today()/daysFromNow()
+      // produce (UTC-midnight). This is the case D1's rationale targets.
+      const now = new Date('2026-03-07T04:30:00Z'); // Mar 6 in NY
+      const tz = 'America/New_York';
+      const r = celEngine.evaluate(cel('record.due_at == daysFromNow(3)'), {
+        now, timezone: tz, record: { due_at: new Date('2026-03-09T00:00:00Z') },
+      });
+      expect(r).toEqual({ ok: true, value: true });
+    });
+
+    it('AC2: a date-string field matches today()/daysAgo() via the hydration-safe idioms', () => {
+      // ADR-0053 Phase 1 (#1968) reads a `Field.date` back as a "YYYY-MM-DD"
+      // string. The ordering operators fault → hydrate (the string becomes a
+      // Date) and compare cleanly; `date(...)` and `daysBetween(...)` coerce
+      // explicitly. All resolve on the reference-tz calendar day.
+      const now = new Date('2026-11-02T04:30:00Z'); // Nov 1 in NY
+      const ctx = { now, timezone: 'America/New_York', record: { due_date: '2026-11-01' } };
+      expect(celEngine.evaluate(cel('record.due_date >= today() && record.due_date <= today()'), ctx))
+        .toEqual({ ok: true, value: true });
+      expect(celEngine.evaluate(cel('date(record.due_date) == today()'), ctx))
+        .toEqual({ ok: true, value: true });
+      expect(celEngine.evaluate(cel('daysBetween(today(), record.due_date) == 0'), ctx))
+        .toEqual({ ok: true, value: true });
+    });
+
+    it('KNOWN GAP: bare `date-string == today()` silently returns false (cel-js equality)', () => {
+      // Characterization guard, NOT an endorsement. cel-js's `isEqual`
+      // (overloads.js) hard-codes `string == X` to false and never consults a
+      // registered overload, so a bare `Field.date` string compared with `==`
+      // silently misses — independent of timezone (fails identically at UTC).
+      // The fix must hydrate date fields to Date in the data layer (where field
+      // types are known); tracked as a separate follow-up. Authors should use
+      // the idioms in the test above until then. If this starts returning true,
+      // the follow-up landed — update/remove this guard.
+      const now = new Date('2026-11-02T04:30:00Z');
+      const r = celEngine.evaluate(cel('record.due_date == today()'), {
+        now, timezone: 'America/New_York', record: { due_date: '2026-11-01' },
+      });
+      expect(r).toEqual({ ok: true, value: false });
+    });
+  });
+
   it('classifies parse errors with kind=parse', () => {
     const r = celEngine.evaluate(cel('1 +'), {});
     expect(r.ok).toBe(false);
