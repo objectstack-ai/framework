@@ -9,6 +9,7 @@ import {
   CHART_CONFIG_MISSING,
   MEASURE_AGGREGATE_INCOHERENT,
   WIDGET_LEGACY_ANALYTICS_SHAPE,
+  WIDGET_LEGACY_ANALYTICS_UNRENDERABLE,
 } from './validate-widget-bindings.js';
 
 /** The downstream repro from issue #1719 — dataset with a count AND a sum
@@ -430,5 +431,55 @@ describe('validateWidgetBindings — legacy analytics shape (#1878/#1894)', () =
       suppressWarnings: [WIDGET_LEGACY_ANALYTICS_SHAPE],
     })));
     expect(findings).toHaveLength(0);
+  });
+
+  // ── error escalation (②): legacy keys as the ONLY data wiring ──
+
+  const legacyOnly = (findings: ReturnType<typeof validateWidgetBindings>) =>
+    findings.filter((f) => f.rule === WIDGET_LEGACY_ANALYTICS_UNRENDERABLE);
+
+  it('ERRORS on a legacy chart with no dataset/object/data — it renders nothing', () => {
+    const stack = {
+      dashboards: [{
+        name: 'broken_dash',
+        label: 'Broken',
+        widgets: [{
+          id: 'orphan_chart',
+          type: 'bar',
+          categoryField: 'status',
+          valueField: 'amount',
+          aggregate: 'sum',
+          layout: { x: 0, y: 0, w: 6, h: 4 },
+        }],
+      }],
+    };
+    const findings = legacyOnly(validateWidgetBindings(stack));
+    expect(findings).toHaveLength(1);
+    expect(findings[0].severity).toBe('error');
+    expect(findings[0].message).toMatch(/renders nothing/i);
+  });
+
+  it('does NOT error when an object binding is present (legacy path still renders) — warns instead', () => {
+    const stack = {
+      dashboards: [{
+        name: 'legacy_dash', label: 'Legacy',
+        widgets: [{ id: 'obj_pivot', type: 'pivot', object: 'task', rowField: 'status', columnField: 'priority', valueField: 'id', aggregation: 'count', layout: { x: 0, y: 0, w: 6, h: 4 } }],
+      }],
+    };
+    const findings = validateWidgetBindings(stack);
+    expect(findings.filter((f) => f.rule === WIDGET_LEGACY_ANALYTICS_UNRENDERABLE)).toHaveLength(0);
+    expect(findings.filter((f) => f.rule === WIDGET_LEGACY_ANALYTICS_SHAPE)).toHaveLength(1);
+    expect(findings.find((f) => f.rule === WIDGET_LEGACY_ANALYTICS_SHAPE)!.severity).toBe('warning');
+  });
+
+  it('the unrenderable error is NOT suppressible', () => {
+    const stack = {
+      dashboards: [{
+        name: 'broken_dash', label: 'Broken',
+        widgets: [{ id: 'orphan', type: 'pie', categoryField: 'status', suppressWarnings: [WIDGET_LEGACY_ANALYTICS_UNRENDERABLE], layout: { x: 0, y: 0, w: 6, h: 4 } }],
+      }],
+    };
+    // errors ignore suppressWarnings — a blank widget must not be silenceable
+    expect(legacyOnly(validateWidgetBindings(stack))).toHaveLength(1);
   });
 });
