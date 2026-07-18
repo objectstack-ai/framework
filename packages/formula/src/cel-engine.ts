@@ -188,13 +188,40 @@ export type FieldCelType = 'string' | 'bool' | 'dyn';
 const UNSOUND_OVERLOAD_RE = /no such overload:\s*([\w.]+)\s*(<=|>=|<|>|\+|-|\*|\/|%)\s*([\w.]+)/;
 
 /**
- * A `record`-typed environment where each field carries a concrete CEL type
- * (`string`/`bool`) or `dyn`. Member access (`record.<field>`) then resolves to
- * the field's type, so cel-js's checker faults an arithmetic/ordering operator
- * applied across incompatible types. Built per call — cheap, and only used at
- * build time.
+ * A typed environment for the soundness check. Each field carries a concrete
+ * CEL type (`string`/`bool`) or `dyn`, so cel-js's checker faults an
+ * arithmetic/ordering operator applied across incompatible types. The `scope`
+ * mirrors how the authoring site binds fields:
+ *  - `'record'`    → `record.<field>` member access, via a typed struct on the
+ *                    `record`/`previous`/`input` namespaces (formula fields,
+ *                    validations, action/hook/sharing predicates).
+ *  - `'flattened'` → bare `<field>` top-level variables (flow / automation
+ *                    conditions). Unlisted identifiers stay `dyn`
+ *                    (`unlistedVariablesAreDyn: true`) so a flow variable never
+ *                    faults — only a typed field misused does.
+ * Built per call — cheap, and only used at build time.
  */
-function buildTypedRecordEnv(fieldCelTypes: Readonly<Record<string, FieldCelType>>): Environment {
+function buildTypedEnv(
+  fieldCelTypes: Readonly<Record<string, FieldCelType>>,
+  scope: 'record' | 'flattened',
+): Environment {
+  if (scope === 'flattened') {
+    const env = new Environment({
+      unlistedVariablesAreDyn: true,
+      enableOptionalTypes: true,
+      limits: DEFAULT_LIMITS,
+    });
+    registerStdLib(env, () => new Date(0));
+    for (const root of SCOPE_ROOTS) {
+      try { env.registerVariable(root, 'map'); } catch { /* duplicate — ignore */ }
+    }
+    // Fields are bound bare at top level; a name that collides with a root
+    // (unlikely) is skipped by the duplicate guard.
+    for (const [name, t] of Object.entries(fieldCelTypes)) {
+      try { env.registerVariable(name, t); } catch { /* duplicate / reserved — ignore */ }
+    }
+    return env;
+  }
   const env = new Environment({
     unlistedVariablesAreDyn: false,
     enableOptionalTypes: true,
@@ -216,19 +243,26 @@ function buildTypedRecordEnv(fieldCelTypes: Readonly<Record<string, FieldCelType
 }
 
 /**
- * The first `record.<field>` (or `previous.`/`input.`) reference in `source`
- * whose declared CEL type matches `celType` — best-effort attribution of an
- * overload fault to the offending field. Returns `null` if none is found.
+ * The first field reference in `source` whose declared CEL type matches
+ * `celType` — best-effort attribution of an overload fault to the offending
+ * field. In `'record'` scope it looks for `record.<field>` (or `previous.`/
+ * `input.`); in `'flattened'` scope for a bare `<field>` not preceded by a dot.
+ * Returns `null` if none is found.
  */
 function offendingField(
   source: string,
   fieldCelTypes: Readonly<Record<string, FieldCelType>>,
   celType: FieldCelType,
+  scope: 'record' | 'flattened',
 ): string | null {
   for (const [name, t] of Object.entries(fieldCelTypes)) {
     if (t !== celType) continue;
-    // Word-bounded so `amount` does not match `amount_total`.
-    if (new RegExp(`(?:record|previous|input)\\.${name}(?![\\w$])`).test(source)) return name;
+    // Word-bounded so `amount` does not match `amount_total`; in flattened
+    // scope the leading lookbehind excludes a member ref like `previous.amount`.
+    const re = scope === 'flattened'
+      ? new RegExp(`(?<![\\w$.])${name}(?![\\w$])`)
+      : new RegExp(`(?:record|previous|input)\\.${name}(?![\\w$])`);
+    if (re.test(source)) return name;
   }
   return null;
 }
@@ -251,16 +285,21 @@ function offendingField(
  *
  * Returns the operand types, the faulting operator, the concrete operand CEL
  * type, and (best-effort) the offending field — or `null` when type-sound.
+ *
+ * `scope` selects how fields are bound: `'record'` (default) for
+ * `record.<field>` sites; `'flattened'` for bare-field flow/automation
+ * conditions.
  */
 export function firstTypeMismatch(
   source: string,
   fieldCelTypes: Readonly<Record<string, FieldCelType>>,
+  scope: 'record' | 'flattened' = 'record',
 ): { operator: string; operands: string; celType: FieldCelType; field: string | null } | null {
   if (typeof source !== 'string' || !source.trim()) return null;
   // An all-`dyn` record can never fault an overload — skip the parse entirely.
   if (!Object.values(fieldCelTypes).some((t) => t === 'string' || t === 'bool')) return null;
   try {
-    const env = buildTypedRecordEnv(fieldCelTypes);
+    const env = buildTypedEnv(fieldCelTypes, scope);
     const result = env.parse(source).check?.() as
       | { valid?: boolean; error?: { message?: string } }
       | undefined;
@@ -277,7 +316,7 @@ export function firstTypeMismatch(
       operator,
       operands: `${m[1]} ${operator} ${m[3]}`,
       celType,
-      field: offendingField(source, fieldCelTypes, celType),
+      field: offendingField(source, fieldCelTypes, celType, scope),
     };
   } catch {
     // A parse/other fault is the syntax checker's job (celEngine.compile); this

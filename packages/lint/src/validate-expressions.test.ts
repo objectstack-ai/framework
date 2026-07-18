@@ -283,6 +283,33 @@ describe('validateStackExpressions (ADR-0032 build-time)', () => {
       expect(w).toHaveLength(1);
       expect(w[0].message).toMatch(/record\.title/);
     });
+
+    it('warns on a flattened flow condition doing arithmetic on a bare text field', () => {
+      const issues = validateStackExpressions({
+        objects: [{ name: 'crm_opportunity', fields: { title: { type: 'text' }, amount: { type: 'currency' } } }],
+        flows: [{
+          name: 'opp_flow',
+          nodes: [{ id: 'start', type: 'start', config: { objectName: 'crm_opportunity', condition: 'title * 2 > 10' } }],
+          edges: [],
+        }],
+      });
+      const w = issues.filter(i => i.severity === 'warning');
+      expect(w).toHaveLength(1);
+      expect(w[0].message).toMatch(/type mismatch/i);
+      expect(w[0].message).toMatch(/`title`/);
+    });
+
+    it('does not flag a numeric flow condition or a flow variable', () => {
+      const issues = validateStackExpressions({
+        objects: [{ name: 'crm_opportunity', fields: { amount: { type: 'currency' } } }],
+        flows: [{
+          name: 'opp_flow',
+          nodes: [{ id: 'start', type: 'start', config: { objectName: 'crm_opportunity' } }],
+          edges: [{ id: 'e1', source: 'start', target: 'end', condition: 'amount / 100 > 5 && expiring_count * 2 > 3' }],
+        }],
+      });
+      expect(issues).toHaveLength(0);
+    });
   });
 
   describe('action visible/disabled predicates (record-scoped) — #2183 class', () => {

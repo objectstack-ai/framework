@@ -22,9 +22,15 @@ would also fail:
 - Equality (`==` / `!=`) is excluded: a heterogeneous equality is runtime-safe
   (evaluates to `false`), never a fault.
 
-New `firstTypeMismatch` export in `@objectstack/formula` (and an optional
-`fieldTypes` hint on `validateExpression`); `@objectstack/lint`'s
-`validateStackExpressions` threads each object's field types into every
-record-scoped site (formula fields, validation rules, action / hook / sharing
-predicates). Warnings are advisory in `objectstack build` / `validate`
-(fatal only under `--strict`), matching the tier-3 channel.
+New `firstTypeMismatch(source, fieldCelTypes, scope)` export in
+`@objectstack/formula` (and an optional `fieldTypes` hint on
+`validateExpression`); `@objectstack/lint`'s `validateStackExpressions` threads
+each object's field types into every checked site:
+
+- **record-scoped** sites (`record.<field>`) — formula fields, validation rules,
+  action / hook / sharing predicates;
+- **flattened** flow / automation conditions (bare `field`) — where flow
+  variables stay `dyn` and are never flagged, and equality stays runtime-safe.
+
+Warnings are advisory in `objectstack build` / `validate` (fatal only under
+`--strict`), matching the tier-3 channel.

@@ -117,6 +117,33 @@ function toCelFieldTypes(fieldTypes: Readonly<Record<string, string>>): Record<s
   return out;
 }
 
+/**
+ * #1928 tier 4 — a NON-blocking warning for a text/boolean field used with an
+ * arithmetic/ordering operator against a number (a silent-null bug), or `null`
+ * when the expression is type-sound. `scope` selects `record.<field>` vs bare
+ * field binding, and shapes the referenced form in the message.
+ */
+function typeSoundnessWarning(
+  source: string,
+  fieldTypes: Readonly<Record<string, string>>,
+  scope: 'record' | 'flattened',
+): ExprValidationError | null {
+  const mismatch = firstTypeMismatch(source, toCelFieldTypes(fieldTypes), scope);
+  if (!mismatch) return null;
+  const held = mismatch.celType === 'bool' ? 'a boolean' : 'text';
+  const ref = mismatch.field
+    ? (scope === 'record' ? `\`record.${mismatch.field}\`` : `\`${mismatch.field}\``)
+    : null;
+  const subject = ref ? `${ref} holds ${held}` : `${held === 'a boolean' ? 'a boolean' : 'a text'} field`;
+  return {
+    source,
+    message:
+      `type mismatch \`${mismatch.operands}\` — ${subject} but is used with \`${mismatch.operator}\` ` +
+      `against a number. This faults at runtime, so the expression silently evaluates to null ` +
+      `(unless the value happens to be numeric). Use a number field, or drop the arithmetic/comparison.`,
+  };
+}
+
 /** A bare `{x}` that is NOT part of a `{{x}}` mustache hole. */
 const SINGLE_BRACE_RE = /(?:^|[^{])\{\s*([A-Za-z_$][\w.$]*)\s*\}(?!\})/;
 /** `record.<field>` / `previous.<field>` head references for field-existence. */
@@ -303,20 +330,8 @@ export function validateExpression(
         // value happens to be numeric, so this is a warning, not an error. Only
         // runs when there is no bare-ref error (the typed check needs the
         // canonical `record.<field>` form).
-        const mismatch = firstTypeMismatch(source, toCelFieldTypes(schema.fieldTypes));
-        if (mismatch) {
-          const held = mismatch.celType === 'bool' ? 'a boolean' : 'text';
-          const subject = mismatch.field
-            ? `\`record.${mismatch.field}\` holds ${held}`
-            : `${held === 'a boolean' ? 'a boolean' : 'a text'} field`;
-          warnings.push({
-            source,
-            message:
-              `type mismatch \`${mismatch.operands}\` — ${subject} but is used with \`${mismatch.operator}\` ` +
-              `against a number. This faults at runtime, so the expression silently evaluates to null ` +
-              `(unless the value happens to be numeric). Use a number field, or drop the arithmetic/comparison.`,
-          });
-        }
+        const w = typeSoundnessWarning(source, schema.fieldTypes, 'record');
+        if (w) warnings.push(w);
       }
     } else if (schema?.fields && schema.fields.length > 0) {
       // Flattened flow/automation condition: the record's fields ARE bound at
@@ -336,6 +351,14 @@ export function validateExpression(
               `If \`${unknown}\` is a flow variable this is safe to ignore.`,
           });
         }
+      }
+      // #1928 tier 4 — the same type-soundness check, for bare-field conditions:
+      // a text/boolean field compared/arithmetic'd against a number faults at
+      // runtime. Flow variables stay `dyn` (never flagged); equality is
+      // runtime-safe (never flagged). Advisory only.
+      if (schema.fieldTypes) {
+        const w = typeSoundnessWarning(source, schema.fieldTypes, 'flattened');
+        if (w) warnings.push(w);
       }
     }
   }

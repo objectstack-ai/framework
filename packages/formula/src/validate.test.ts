@@ -220,12 +220,49 @@ describe('validateExpression (ADR-0032)', () => {
       expect(validateExpression('predicate', 'record.amount != null && record.amount > 0', schema).warnings).toHaveLength(0);
     });
 
-    it('does not run without field types, or in a flattened (flow) scope', () => {
+    it('does not run without field types', () => {
       // No fieldTypes → nothing to check.
       expect(validateExpression('value', 'record.name * 2', { objectName: 'crm_opportunity', fields: schema.fields, scope: 'record' }).warnings).toHaveLength(0);
-      // Flattened flow conditions reference fields bare and carry flow variables;
-      // the typed check is intentionally record-scope only.
-      expect(validateExpression('predicate', 'name * 2', { ...schema, scope: 'flattened' }).warnings).toHaveLength(0);
+    });
+  });
+
+  // #1928 tier 4 (flattened) — the same soundness check for bare-field flow /
+  // automation conditions. Fields are bound bare (`status - 1`); flow variables
+  // stay `dyn` and are never flagged.
+  describe('type-soundness warnings — flattened flow conditions (#1928 tier 4)', () => {
+    const schema = {
+      objectName: 'crm_opportunity',
+      fields: ['stage', 'amount', 'is_active', 'title'] as const,
+      fieldTypes: { stage: 'select', amount: 'currency', is_active: 'boolean', title: 'text' },
+      scope: 'flattened',
+    } as const;
+
+    it('warns on a bare text field used in arithmetic against a number', () => {
+      const r = validateExpression('predicate', 'title - 1 > 0', schema);
+      expect(r.ok).toBe(true);
+      expect(r.warnings).toHaveLength(1);
+      expect(r.warnings[0].message).toMatch(/type mismatch/i);
+      // Bare form — not `record.title`.
+      expect(r.warnings[0].message).toMatch(/`title`/);
+      expect(r.warnings[0].message).not.toMatch(/record\.title/);
+    });
+
+    it('warns on a bare boolean field used in arithmetic', () => {
+      const r = validateExpression('predicate', 'is_active + 1 > 0', schema);
+      expect(r.ok).toBe(true);
+      expect(r.warnings).toHaveLength(1);
+      expect(r.warnings[0].message).toMatch(/boolean/i);
+    });
+
+    it('does NOT flag a flow variable (unlisted → dyn) or number/date fields', () => {
+      // `expiring_count` is not a schema field → dyn → no fault.
+      expect(validateExpression('predicate', 'expiring_count * 2 > 10', schema).warnings).toHaveLength(0);
+      expect(validateExpression('predicate', 'amount / 100 > 5', schema).warnings).toHaveLength(0);
+    });
+
+    it('does NOT flag a correct bare condition, equality, or a select comparison', () => {
+      expect(validateExpression('predicate', 'stage == "closed_won" && amount > 1000', schema).warnings).toHaveLength(0);
+      expect(validateExpression('predicate', 'title == "VIP"', schema).warnings).toHaveLength(0);
     });
   });
 
