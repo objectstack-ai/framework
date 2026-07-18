@@ -97,7 +97,10 @@ Ten data and action tools, generated from your metadata:
 | `create_record` / `update_record` / `delete_record` | Write data |
 | `list_actions` / `run_action` | Discover and invoke your business actions by name |
 
-Two exposure rules to know:
+The tools are a fixed ~10-tool **spine** with the object name as a *parameter*
+(`query_records(objectName, …)`), not one tool per object — so the list stays
+usable on an app with hundreds of objects. Which objects and actions that spine
+can reach is the **default exposure policy (v1)**:
 
 - **Objects are exposed automatically** — except `sys_*` system objects, which
   are blocked fail-closed.
@@ -108,6 +111,14 @@ Two exposure rules to know:
   service registered). `url`, `modal`, `form`, and `api` have no headless
   dispatch here. See [Actions as Tools](/docs/ai/actions-as-tools) and
   [Actions](/docs/ui/actions).
+
+<Callout type="info">
+This is the default policy, not a ceiling. A finer, **metadata-declared** exposure
+config (opt objects out, curate the exposed set, promote a few high-value actions
+to typed per-action tools) is the planned next step, consistent with ADR-0097's
+"what is exposed should itself be authorable" — tracked in
+[#3167](https://github.com/objectstack-ai/framework/issues/3167).
+</Callout>
 
 ## The security model
 

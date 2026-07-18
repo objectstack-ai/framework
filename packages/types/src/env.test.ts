@@ -6,6 +6,8 @@ import {
   readEnvWithDeprecation,
   resolveAllowDegradedTenancy,
   resolveSearchPinyinEnabled,
+  isMcpServerEnabled,
+  resolveMcpStdioAutoStart,
 } from './env.js';
 
 describe('readEnvWithDeprecation', () => {
@@ -170,5 +172,68 @@ describe('resolveSearchPinyinEnabled (#2486)', () => {
       process.env.OS_SEARCH_PINYIN_ENABLED = v;
       expect(resolveSearchPinyinEnabled()).toBe(false);
     }
+  });
+});
+
+describe('MCP switches — HTTP surface vs stdio auto-start are decoupled (#3167)', () => {
+  const origServer = process.env.OS_MCP_SERVER_ENABLED;
+  const origServerLegacy = process.env.MCP_SERVER_ENABLED;
+  const origStdio = process.env.OS_MCP_STDIO_ENABLED;
+  const restore = (key: string, val: string | undefined) => {
+    if (val === undefined) delete process.env[key];
+    else process.env[key] = val;
+  };
+  afterEach(() => {
+    restore('OS_MCP_SERVER_ENABLED', origServer);
+    restore('MCP_SERVER_ENABLED', origServerLegacy);
+    restore('OS_MCP_STDIO_ENABLED', origStdio);
+  });
+
+  it('isMcpServerEnabled (HTTP surface): default-on, only explicit falsy opts out', () => {
+    delete process.env.OS_MCP_SERVER_ENABLED;
+    expect(isMcpServerEnabled()).toBe(true);
+    for (const v of ['false', '0', 'off', 'no', 'FALSE']) {
+      process.env.OS_MCP_SERVER_ENABLED = v;
+      expect(isMcpServerEnabled(), `${v} should opt out`).toBe(false);
+    }
+    for (const v of ['true', '1', 'anything']) {
+      process.env.OS_MCP_SERVER_ENABLED = v;
+      expect(isMcpServerEnabled(), `${v} keeps HTTP on`).toBe(true);
+    }
+  });
+
+  it('stdio auto-start: default OFF when nothing is set', () => {
+    delete process.env.OS_MCP_SERVER_ENABLED;
+    delete process.env.OS_MCP_STDIO_ENABLED;
+    expect(resolveMcpStdioAutoStart()).toEqual({ enabled: false, viaDeprecatedAlias: false });
+  });
+
+  it('stdio auto-start: canonical OS_MCP_STDIO_ENABLED (truthy, no deprecation)', () => {
+    delete process.env.OS_MCP_SERVER_ENABLED;
+    for (const v of ['1', 'true', 'on', 'yes', 'TRUE']) {
+      process.env.OS_MCP_STDIO_ENABLED = v;
+      expect(resolveMcpStdioAutoStart(), v).toEqual({ enabled: true, viaDeprecatedAlias: false });
+    }
+  });
+
+  it('stdio auto-start: legacy OS_MCP_SERVER_ENABLED=true still starts it, flagged deprecated', () => {
+    delete process.env.OS_MCP_STDIO_ENABLED;
+    process.env.OS_MCP_SERVER_ENABLED = 'true';
+    expect(resolveMcpStdioAutoStart()).toEqual({ enabled: true, viaDeprecatedAlias: true });
+  });
+
+  it('stdio auto-start: OS_MCP_SERVER_ENABLED=false (or other) never starts stdio — no footgun', () => {
+    delete process.env.OS_MCP_STDIO_ENABLED;
+    for (const v of ['false', '0', 'off', '1', 'on', 'yes']) {
+      process.env.OS_MCP_SERVER_ENABLED = v;
+      // Only the literal `true` was ever the legacy stdio trigger.
+      expect(resolveMcpStdioAutoStart().enabled, `server=${v}`).toBe(false);
+    }
+  });
+
+  it('canonical switch wins over the legacy alias (no deprecation flag)', () => {
+    process.env.OS_MCP_STDIO_ENABLED = 'true';
+    process.env.OS_MCP_SERVER_ENABLED = 'true';
+    expect(resolveMcpStdioAutoStart()).toEqual({ enabled: true, viaDeprecatedAlias: false });
   });
 });

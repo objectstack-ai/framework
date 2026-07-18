@@ -1,7 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import type { Plugin, PluginContext } from '@objectstack/core';
-import { readEnvWithDeprecation, isMcpServerEnabled } from '@objectstack/types';
+import { readEnvWithDeprecation, isMcpServerEnabled, resolveMcpStdioAutoStart } from '@objectstack/types';
 import type { IAIService, IDataEngine, IMetadataService } from '@objectstack/spec/contracts';
 import { MCPServerRuntime } from './mcp-server-runtime.js';
 import type { MCPServerRuntimeConfig } from './mcp-server-runtime.js';
@@ -125,16 +125,25 @@ export class MCPServerPlugin implements Plugin {
     // ── Auto-start if configured ──
     // Deliberately stricter than the HTTP-surface default (`isMcpServerEnabled`,
     // default-on): start() attaches a long-lived transport — for stdio that
-    // means claiming the process's stdin/stdout — so it stays opt-in via
-    // explicit `true` or the `autoStart` option. The HTTP surface does not
-    // depend on this: the runtime dispatcher serves `/api/v1/mcp` per-request.
-    const shouldStart = this.options.autoStart || readEnvWithDeprecation('OS_MCP_SERVER_ENABLED', 'MCP_SERVER_ENABLED', { silent: true }) === 'true';
+    // means claiming the process's stdin/stdout AND bridging the RAW services
+    // with no per-request principal (unscoped — see the mcp-stdio-authority
+    // conformance row) — so it stays opt-in via a SEPARATE switch
+    // (`OS_MCP_STDIO_ENABLED` / the `autoStart` option), never the HTTP var.
+    // The HTTP surface does not depend on this: the runtime dispatcher serves
+    // `/api/v1/mcp` per-request regardless.
+    const stdio = resolveMcpStdioAutoStart();
+    const shouldStart = this.options.autoStart || stdio.enabled;
+    if (stdio.viaDeprecatedAlias && !this.options.autoStart) {
+      ctx.logger.warn(
+        '[MCP] Starting the stdio transport via OS_MCP_SERVER_ENABLED=true is DEPRECATED — that var now only gates the default-on HTTP surface. Use OS_MCP_STDIO_ENABLED=true (or the plugin `autoStart` option) for the long-lived stdio transport.',
+      );
+    }
     if (shouldStart) {
       await this.runtime.start();
       ctx.logger.info('[MCP] Server started automatically');
     } else {
       ctx.logger.info(
-        '[MCP] Transport not auto-started (HTTP is served per-request at /api/v1/mcp regardless). Set OS_MCP_SERVER_ENABLED=true or autoStart for a long-lived (stdio) transport.',
+        '[MCP] Transport not auto-started (HTTP is served per-request at /api/v1/mcp regardless). Set OS_MCP_STDIO_ENABLED=true or autoStart for a long-lived (stdio) transport.',
       );
     }
 
