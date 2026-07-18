@@ -44,6 +44,12 @@ import { isIncoherentAggregate } from '@objectstack/spec/data';
  *   `count_distinct`) of a `percent`/rate field, whose total routinely
  *   exceeds 100%. Rates must AVG. Checked once per dataset (independent of
  *   any widget) when the bound object's field types are known.
+ * - `widget-legacy-analytics-shape` (#1878/#1894) — a widget sets a
+ *   pre-ADR-0021 inline key (`categoryField`/`valueField`/`xAxisField`/
+ *   `yAxisFields`/`aggregate`/`aggregation`/`rowField`/`columnField`) that the
+ *   single-form cutover removed. The dashboard renderer routes dataset-bound
+ *   widgets through `DatasetWidget` and never reads these, so they are a
+ *   silent no-op. Steers the author onto `dataset`+`dimensions`+`values`.
  *
  * Warnings can be deliberately suppressed per widget via
  * `suppressWarnings: ['<rule-id>']`; errors cannot — they describe a
@@ -57,6 +63,21 @@ export const CHART_FIELD_UNKNOWN = 'chart-field-unknown';
 export const CHART_CONFIG_MISSING = 'chart-config-missing';
 export const TABLE_COUNT_ONLY = 'table-count-only';
 export const MEASURE_AGGREGATE_INCOHERENT = 'measure-aggregate-incoherent';
+export const WIDGET_LEGACY_ANALYTICS_SHAPE = 'widget-legacy-analytics-shape';
+
+/**
+ * Pre-ADR-0021 inline-analytics keys. The single-form cutover replaced them
+ * with the semantic-layer shape (`dataset` + `dimensions` + `values`); the
+ * dashboard renderer routes dataset-bound widgets through `DatasetWidget` and
+ * never reads these, so authoring one today is a silent no-op. Warned (not
+ * errored) because they still parse and a legacy object-bound widget keeps
+ * rendering — the author is just being steered to the governed shape.
+ * (liveness audit #1878 / #1894).
+ */
+const LEGACY_ANALYTICS_KEYS = [
+  'categoryField', 'valueField', 'xAxisField', 'yAxisFields',
+  'aggregate', 'aggregation', 'rowField', 'columnField',
+] as const;
 
 export type WidgetBindingSeverity = 'error' | 'warning';
 
@@ -228,6 +249,30 @@ export function validateWidgetBindings(stack: AnyRec): WidgetBindingFinding[] {
         if (f.severity === 'warning' && suppressed(f.rule)) return;
         findings.push({ ...f, where, path });
       };
+
+      // ── (a0) legacy pre-ADR-0021 analytics shape → advisory ──
+      // Steer authors (very often an AI) off the removed inline shape and onto
+      // the semantic-layer `dataset`+`dimensions`+`values`. Fires whether or
+      // not a dataset is also present, because the renderer ignores these keys
+      // either way — a dataset-bound widget carrying `categoryField` silently
+      // drops it. Suppressible per widget; never fails the build.
+      const legacyUsed = LEGACY_ANALYTICS_KEYS.filter((k) => w[k] !== undefined);
+      if (legacyUsed.length > 0) {
+        push({
+          severity: 'warning',
+          rule: WIDGET_LEGACY_ANALYTICS_SHAPE,
+          message:
+            `sets legacy analytics key${legacyUsed.length > 1 ? 's' : ''} ` +
+            `${legacyUsed.map((k) => `\`${k}\``).join(', ')} that the ADR-0021 ` +
+            `single-form cutover removed — the dashboard renderer ignores ${legacyUsed.length > 1 ? 'them' : 'it'}.`,
+          hint:
+            `Bind a semantic dataset and select fields BY NAME instead: ` +
+            `\`dataset: '<name>', dimensions: [...], values: [...]\`. ` +
+            `Dataset-bound widgets render through DatasetWidget (pivot rows/cols come from ` +
+            `\`dimensions\`, cell values from \`values\`); these inline keys are a no-op. ` +
+            `Suppress with suppressWarnings: ['${WIDGET_LEGACY_ANALYTICS_SHAPE}'] if intentional.`,
+        });
+      }
 
       // ── (a) dataset reference resolves ──
       const dsName = typeof w.dataset === 'string' ? w.dataset : undefined;

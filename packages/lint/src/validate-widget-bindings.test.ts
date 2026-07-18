@@ -8,6 +8,7 @@ import {
   CHART_FIELD_UNKNOWN,
   CHART_CONFIG_MISSING,
   MEASURE_AGGREGATE_INCOHERENT,
+  WIDGET_LEGACY_ANALYTICS_SHAPE,
 } from './validate-widget-bindings.js';
 
 /** The downstream repro from issue #1719 — dataset with a count AND a sum
@@ -378,5 +379,56 @@ describe('validateWidgetBindings (measure-aggregate-incoherent — rate aggregat
     const stack = crmStack('sum');
     delete (stack as { objects?: unknown }).objects;
     expect(validateWidgetBindings(stack)).toHaveLength(0);
+  });
+});
+
+describe('validateWidgetBindings — legacy analytics shape (#1878/#1894)', () => {
+  const only = (findings: ReturnType<typeof validateWidgetBindings>) =>
+    findings.filter((f) => f.rule === WIDGET_LEGACY_ANALYTICS_SHAPE);
+
+  it('warns (not errors) when a dataset-bound widget also carries a legacy key', () => {
+    // valueField is dead once the widget is dataset-bound; steer the author off it.
+    const findings = only(validateWidgetBindings(reproStack({ valueField: 'total_amount' })));
+    expect(findings).toHaveLength(1);
+    expect(findings[0].severity).toBe('warning');
+    expect(findings[0].message).toContain('`valueField`');
+    expect(findings[0].hint).toMatch(/dataset.*dimensions.*values/is);
+  });
+
+  it('warns on a legacy pivot widget that has NO dataset (previously skipped silently)', () => {
+    const stack = {
+      dashboards: [{
+        name: 'legacy_dash',
+        label: 'Legacy',
+        widgets: [{
+          id: 'legacy_pivot',
+          type: 'pivot',
+          object: 'task',
+          rowField: 'status',
+          columnField: 'priority',
+          valueField: 'id',
+          aggregation: 'count',
+          layout: { x: 0, y: 0, w: 6, h: 4 },
+        }],
+      }],
+    };
+    const findings = only(validateWidgetBindings(stack));
+    expect(findings).toHaveLength(1);
+    // all legacy keys reported in one finding
+    expect(findings[0].message).toContain('`rowField`');
+    expect(findings[0].message).toContain('`columnField`');
+    expect(findings[0].message).toContain('`aggregation`');
+  });
+
+  it('does NOT warn on a clean dataset-shaped widget', () => {
+    expect(only(validateWidgetBindings(reproStack()))).toHaveLength(0);
+  });
+
+  it('is suppressible per widget via suppressWarnings', () => {
+    const findings = only(validateWidgetBindings(reproStack({
+      categoryField: 'cost_center',
+      suppressWarnings: [WIDGET_LEGACY_ANALYTICS_SHAPE],
+    })));
+    expect(findings).toHaveLength(0);
   });
 });
