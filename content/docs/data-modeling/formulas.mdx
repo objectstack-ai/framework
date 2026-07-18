@@ -196,6 +196,37 @@ Keep them pure, dependency-free, and AI-readable.
 
 ---
 
+## Build-time validation
+
+`objectstack build` type-checks every expression against the object schema, so
+a mistake that would silently evaluate to `null` at runtime is caught before it
+ships. The same shared validator also runs when a flow is registered
+(`registerFlow`), so a flow authored dynamically gets the same verdict. Findings
+come at two severities: **errors** fail the build; **warnings** are advisory
+(surfaced, not fatal — promote them with `--strict`).
+
+| Check | Example | Severity |
+|:---|:---|:---|
+| **Qualify field references** — a formula / validation / predicate binds only the `record` namespace, so a bare `amount` resolves to nothing and evaluates to `null`. Write `record.amount`. | `amount > 100` → `record.amount > 100` | error |
+| **Field must exist** — a typo'd `record.<field>` is flagged with a did-you-mean. | `record.amont` → `record.amount` | error |
+| **Unknown function** — a misspelled or nonexistent stdlib call. | `isBlnk(record.x)` | error |
+| **Type soundness** — a text or boolean field used with an arithmetic (`+ - * / %`) or ordering (`< > <= >=`) operator against a number faults at runtime and evaluates to `null`. Store it as a number field, or drop the arithmetic. | `record.title * 2` | warning |
+
+> **Integer literals in arithmetic are fine.** `record.amount / 100`,
+> `record.price * 2`, `record.total - fee` all work — the engine handles mixed
+> `double × int` arithmetic, so you never need the `100.0` / `2.0` float-literal
+> workaround. Equality against any type is also safe (`record.stage == 5` simply
+> returns `false`), so only arithmetic/ordering on a genuinely text/boolean
+> field is flagged.
+
+In **flow and automation conditions** the record's fields are bound *bare*
+(`stage == "won"`, not `record.stage`), so a bare reference is correct there.
+Instead, a bare identifier that is a near-miss of a real field gets a
+did-you-mean **warning** (a genuine flow variable is left alone), and the same
+type-soundness check applies.
+
+---
+
 ## Cookbook
 
 ### Computed full name (handle nullable parts)
