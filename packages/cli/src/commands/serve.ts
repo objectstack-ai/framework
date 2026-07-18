@@ -2464,6 +2464,11 @@ export default class Serve extends Command {
         multiTenant: resolveMultiOrgEnabled(),
         seededAdmin,
         automation: automationSummary,
+        // #3167 — surface the default-on MCP endpoint in the dev loop, where an
+        // AI client can connect to operate the running app. Same decision point
+        // that auto-loads the plugin + gates the route, so the banner never
+        // advertises an endpoint that isn't served.
+        mcpEnabled: isMcpServerEnabled(),
       });
 
       // ── Publish the actually-bound port ────────────────────────────
