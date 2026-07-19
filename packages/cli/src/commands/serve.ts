@@ -8,7 +8,8 @@ import chalk from 'chalk';
 import { bundleRequire } from 'bundle-require';
 import { loadConfig, BUNDLE_REQUIRE_EXTERNALS } from '../utils/config.js';
 import { isHostConfig, shouldBootWithLibrary } from '../utils/plugin-detection.js';
-import { readEnvWithDeprecation, resolveMultiOrgEnabled, resolveAllowDegradedTenancy, isMcpServerEnabled, resolveSearchPinyinEnabled } from '@objectstack/types';
+import { readEnvWithDeprecation, resolveMultiOrgEnabled, resolveAllowDegradedTenancy, isMcpServerEnabled, resolveSearchPinyinEnabled, isModuleNotFoundError } from '@objectstack/types';
+import { PLATFORM_CAPABILITY_TOKENS, canonicalizePlatformCapability } from '@objectstack/spec/kernel';
 import { resolveObjectStackHome } from '@objectstack/runtime';
 import { LOG_LEVELS, resolveLogLevel, readLogLevelEnv } from '../utils/log-level.js';
 import {
@@ -139,6 +140,14 @@ const getAvailablePort = async (startPort: number): Promise<number> => {
   return port;
 };
 
+type CapabilitySpec = {
+  pkg: string;
+  export: string;            // named export to import
+  nameMatch: string[];       // plugin.name / constructor.name fragments to detect dupes
+  configKey?: string;        // optional config field passed as constructor arg
+  extras?: Array<{ pkg: string; export: string; nameMatch: string[] }>;
+};
+
 export default class Serve extends Command {
   static override description = 'Start ObjectStack server. Reads `objectstack.config.ts` if present; otherwise falls back to `dist/objectstack.json` (or OS_ARTIFACT_PATH, including http(s):// URLs) as a portable artifact.';
 
@@ -214,16 +223,15 @@ export default class Serve extends Command {
    * module is simply NOT INSTALLED — as opposed to the module being present but
    * throwing while it loads (a real crash). Checking `err.code` FIRST is the
    * #1595 fix: ESM reports a missing package as `err.code ===
-   * 'ERR_MODULE_NOT_FOUND'` with the human message `Cannot find package '...'`;
-   * matching only the older `Cannot find module` string mis-classified that as a
-   * crash. One owner for this test so the optional-plugin guards and the
-   * capability resolver can't drift apart and re-introduce that bug (#1597).
+   * 'ERR_MODULE_NOT_FOUND'` with the human message `Cannot find package '...'`.
+   *
+   * Thin delegate to the shared classifier in `@objectstack/types` — one owner
+   * across the CLI's optional-plugin guards, the capability resolver, and
+   * (at its next framework pin bump) cloud's objectos-runtime loader, so the
+   * parallel loaders can't drift apart and re-introduce that bug (#1597, #3265).
    */
   static isModuleNotFoundError(err: unknown): boolean {
-    const code = (err as { code?: string } | null | undefined)?.code;
-    if (code === 'ERR_MODULE_NOT_FOUND' || code === 'MODULE_NOT_FOUND') return true;
-    const msg = err instanceof Error ? err.message : String(err);
-    return msg.includes('Cannot find module') || msg.includes('Cannot find package');
+    return isModuleNotFoundError(err);
   }
 
   /**
@@ -255,6 +263,177 @@ export default class Serve extends Command {
     if (opts.declared) return 'auto';
     return 'off';
   }
+
+  /**
+   * Tier-gated capability tokens → the tier each one opens when listed in
+   * `requires`. These have no CAPABILITY_PROVIDERS entry — their loading is
+   * resolved by dedicated blocks in run() (`ai`/`ai-studio` by the intent-driven
+   * AI block (#1597), `i18n`/`ui`/`auth` by their tier blocks).
+   */
+  static readonly CAPABILITY_TO_TIER: Record<string, string> = {
+    ai: 'ai',
+    // `ai-studio` (AI-driven authoring) rides on the base AI service, so
+    // requiring it opens the same `ai` tier (#1597).
+    'ai-studio': 'ai',
+    i18n: 'i18n',
+    ui: 'ui',
+    auth: 'auth',
+  };
+
+  /**
+   * Registry of `requires` token → built-in service-plugin provider for the
+   * standalone serve path. Keys are canonical kebab-case platform capability
+   * tokens — a drift test asserts every key is in the spec-owned
+   * PLATFORM_CAPABILITY_TOKENS vocabulary (framework#3265). Adding a built-in
+   * capability = one entry here + its token in the spec vocabulary.
+   */
+  static readonly CAPABILITY_PROVIDERS: Record<string, CapabilitySpec> = {
+    automation: {
+      // Self-contained: AutomationServicePlugin seeds all built-in node
+      // executors itself (ADR-0018), so flows have executors with no
+      // companion node-pack plugins.
+      pkg: '@objectstack/service-automation',
+      export: 'AutomationServicePlugin',
+      nameMatch: ['service-automation', 'AutomationServicePlugin'],
+    },
+    analytics: {
+      pkg: '@objectstack/service-analytics',
+      export: 'AnalyticsServicePlugin',
+      nameMatch: ['service-analytics', 'AnalyticsServicePlugin'],
+      configKey: 'analyticsCubes',
+    },
+    audit: {
+      pkg: '@objectstack/plugin-audit',
+      export: 'AuditPlugin',
+      nameMatch: ['audit', 'AuditPlugin'],
+    },
+    cache: {
+      pkg: '@objectstack/service-cache',
+      export: 'CacheServicePlugin',
+      nameMatch: ['service-cache', 'CacheServicePlugin'],
+    },
+    storage: {
+      pkg: '@objectstack/service-storage',
+      export: 'StorageServicePlugin',
+      nameMatch: ['service-storage', 'StorageServicePlugin'],
+    },
+    queue: {
+      pkg: '@objectstack/service-queue',
+      export: 'QueueServicePlugin',
+      nameMatch: ['service-queue', 'QueueServicePlugin'],
+    },
+    job: {
+      pkg: '@objectstack/service-job',
+      export: 'JobServicePlugin',
+      nameMatch: ['service-job', 'JobServicePlugin'],
+    },
+    messaging: {
+      // Backs the `notify` flow node (ADR-0012): delivers to a user's
+      // channels (inbox by default → `sys_inbox_message` rows). Without
+      // this the notify node degrades to a logged no-op.
+      pkg: '@objectstack/service-messaging',
+      export: 'MessagingServicePlugin',
+      nameMatch: ['service-messaging', 'MessagingServicePlugin'],
+    },
+    triggers: {
+      // Makes autolaunched flows actually fire. The automation engine ships
+      // the `FlowTrigger` wiring; these plugins are the concrete triggers:
+      // record-change (ObjectQL lifecycle hooks) + schedule (cron/interval
+      // via the job service — so pair `triggers` with `job`).
+      pkg: '@objectstack/trigger-record-change',
+      export: 'RecordChangeTriggerPlugin',
+      nameMatch: ['trigger-record-change', 'RecordChangeTriggerPlugin'],
+      extras: [
+        {
+          pkg: '@objectstack/trigger-schedule',
+          export: 'ScheduleTriggerPlugin',
+          nameMatch: ['trigger-schedule', 'ScheduleTriggerPlugin'],
+        },
+        {
+          // Declarative time-relative sweep (#1874) — arms flows whose start
+          // node declares `config.timeRelative` (fire daily for records whose
+          // date field is within N days / at T-minus offsets). Ships in
+          // @objectstack/trigger-schedule; needs the job service + ObjectQL.
+          pkg: '@objectstack/trigger-schedule',
+          export: 'TimeRelativeTriggerPlugin',
+          nameMatch: ['trigger-schedule', 'TimeRelativeTriggerPlugin'],
+        },
+        {
+          // Inbound webhook/HTTP trigger (ADR-0041 Tier 1) — arms
+          // `type: 'api'` flows with HMAC-verified, queue-backed hooks.
+          pkg: '@objectstack/trigger-api',
+          export: 'ApiTriggerPlugin',
+          nameMatch: ['trigger-api', 'ApiTriggerPlugin'],
+        },
+      ],
+    },
+    realtime: {
+      pkg: '@objectstack/service-realtime',
+      export: 'RealtimeServicePlugin',
+      nameMatch: ['service-realtime', 'RealtimeServicePlugin'],
+    },
+    // `feed` removed (ADR-0052 §5): `sys_comment`/`sys_activity` (durable,
+    // default-loaded, UI-wired) is the canonical record collaboration +
+    // timeline backend. `@objectstack/service-feed` was an in-memory,
+    // non-durable, UI-unconsumed parallel implementation — retired to end
+    // the split-brain. The unified typed timeline lives on `sys_activity`.
+    mcp: {
+      pkg: '@objectstack/mcp',
+      export: 'MCPServerPlugin',
+      nameMatch: ['mcp-server', 'MCPServerPlugin', 'mcp'],
+    },
+    marketplace: {
+      pkg: '@objectstack/service-package',
+      export: 'PackageServicePlugin',
+      nameMatch: ['service-package', 'PackageServicePlugin'],
+    },
+    email: {
+      pkg: '@objectstack/plugin-email',
+      export: 'EmailServicePlugin',
+      nameMatch: ['plugin-email', 'EmailServicePlugin'],
+    },
+    sms: {
+      // #2780 — backs phone-number OTP sign-in/reset (plugin-auth) and
+      // the messaging `sms` channel. Provider config lives in the `sms`
+      // settings namespace (OS_SMS_* env keys win at the resolver);
+      // unconfigured ⇒ dev LogSmsTransport (no real send).
+      pkg: '@objectstack/service-sms',
+      export: 'SmsServicePlugin',
+      nameMatch: ['service-sms', 'SmsServicePlugin'],
+    },
+    sharing: {
+      pkg: '@objectstack/plugin-sharing',
+      export: 'SharingServicePlugin',
+      nameMatch: ['plugin-sharing', 'SharingServicePlugin', 'SharingPlugin'],
+    },
+    // #2486 — auto-required above when resolveSearchPinyinEnabled()
+    // (explicit env, else any configured zh-* locale) says on.
+    'pinyin-search': {
+      pkg: '@objectstack/plugin-pinyin-search',
+      export: 'PinyinSearchPlugin',
+      nameMatch: ['plugin-pinyin-search', 'PinyinSearchPlugin'],
+    },
+    reports: {
+      pkg: '@objectstack/plugin-reports',
+      export: 'ReportsServicePlugin',
+      nameMatch: ['plugin-reports', 'ReportsServicePlugin'],
+    },
+    approvals: {
+      pkg: '@objectstack/plugin-approvals',
+      export: 'ApprovalsServicePlugin',
+      nameMatch: ['plugin-approvals', 'ApprovalsServicePlugin'],
+    },
+    settings: {
+      pkg: '@objectstack/service-settings',
+      export: 'SettingsServicePlugin',
+      nameMatch: ['service-settings', 'SettingsServicePlugin'],
+    },
+    webhooks: {
+      pkg: '@objectstack/plugin-webhooks',
+      export: 'WebhookOutboxPlugin',
+      nameMatch: ['plugin-webhook-outbox', 'WebhookOutboxPlugin'],
+    },
+  };
 
   async run(): Promise<void> {
     const { args, flags } = await this.parse(Serve);
@@ -515,9 +694,22 @@ export default class Serve extends Command {
       // instance wins over the auto-loader).
       const presetName = flags.preset ?? (isDev ? 'default' : 'default');
       const presetTiers = Serve.TIER_PRESETS[presetName] ?? Serve.TIER_PRESETS.default;
-      const requires: string[] = Array.isArray((config as any).requires)
+      const rawRequires: string[] = Array.isArray((config as any).requires)
         ? (config as any).requires.filter((c: unknown) => typeof c === 'string')
         : [];
+      // Canonicalize deprecated capability spellings (aiStudio → ai-studio, …)
+      // so artifacts compiled by an older spec keep booting; `defineStack`
+      // already rewrites + warns on the source path, this covers raw artifact
+      // JSON (framework#3265). Dedupe after mapping (Set keeps first-seen order).
+      const requires: string[] = [...new Set(rawRequires.map((c: string) => {
+        const canonical = canonicalizePlatformCapability(c);
+        if (canonical !== c) {
+          console.warn(chalk.yellow(
+            `  ⚠ requires: '${c}' is a deprecated spelling — use '${canonical}' (framework#3265)`,
+          ));
+        }
+        return canonical;
+      }))];
       // Snapshot the app's EXPLICIT capability declarations BEFORE the platform
       // appends its own convenience defaults (auth→email, mcp, pinyin-search,
       // ALWAYS_ON_CAPABILITIES, queue/job). Only these explicit declarations carry
@@ -583,20 +775,11 @@ export default class Serve extends Command {
         if (!requires.includes('job')) requires.unshift('job');
       }
       // Capability → tier: any capability that is gated by a tier
-      // here automatically opens that tier when listed in `requires`.
-      // Capabilities NOT in this map (e.g. `automation`, `analytics`,
-      // `audit`) bypass tier gating and are loaded directly by the
-      // capability-resolver block further down.
-      const CAPABILITY_TO_TIER: Record<string, string> = {
-        ai: 'ai',
-        // `ai-studio` (AI-driven authoring) rides on the base AI service, so
-        // requiring it opens the same `ai` tier (#1597). The dedicated AI block
-        // below resolves its load; it has no CAPABILITY_PROVIDERS entry.
-        'ai-studio': 'ai',
-        i18n: 'i18n',
-        ui: 'ui',
-        auth: 'auth',
-      };
+      // (Serve.CAPABILITY_TO_TIER) automatically opens that tier when listed
+      // in `requires`. Capabilities NOT in that map (e.g. `automation`,
+      // `analytics`, `audit`) bypass tier gating and are loaded directly by
+      // the capability-resolver block further down.
+      const CAPABILITY_TO_TIER = Serve.CAPABILITY_TO_TIER;
       const requiredTiers = requires
         .map((c) => CAPABILITY_TO_TIER[c])
         .filter((t): t is string => typeof t === 'string');
@@ -1827,165 +2010,12 @@ export default class Serve extends Command {
       }
 
       // 5. Capability resolver — auto-load service plugins declared in
-      // `requires: [...]` that are NOT tier-gated. Each entry maps to a
-      // package + factory; if the user already provided an explicit
-      // instance via `plugins: [...]` we skip (explicit wins).
-      //
-      // Adding a new built-in capability is a one-line change here.
-      type CapabilitySpec = {
-        pkg: string;
-        export: string;            // named export to import
-        nameMatch: string[];       // plugin.name / constructor.name fragments to detect dupes
-        configKey?: string;        // optional config field passed as constructor arg
-        extras?: Array<{ pkg: string; export: string; nameMatch: string[] }>;
-      };
-      const CAPABILITY_PROVIDERS: Record<string, CapabilitySpec> = {
-        automation: {
-          // Self-contained: AutomationServicePlugin seeds all built-in node
-          // executors itself (ADR-0018), so flows have executors with no
-          // companion node-pack plugins.
-          pkg: '@objectstack/service-automation',
-          export: 'AutomationServicePlugin',
-          nameMatch: ['service-automation', 'AutomationServicePlugin'],
-        },
-        analytics: {
-          pkg: '@objectstack/service-analytics',
-          export: 'AnalyticsServicePlugin',
-          nameMatch: ['service-analytics', 'AnalyticsServicePlugin'],
-          configKey: 'analyticsCubes',
-        },
-        audit: {
-          pkg: '@objectstack/plugin-audit',
-          export: 'AuditPlugin',
-          nameMatch: ['audit', 'AuditPlugin'],
-        },
-        cache: {
-          pkg: '@objectstack/service-cache',
-          export: 'CacheServicePlugin',
-          nameMatch: ['service-cache', 'CacheServicePlugin'],
-        },
-        storage: {
-          pkg: '@objectstack/service-storage',
-          export: 'StorageServicePlugin',
-          nameMatch: ['service-storage', 'StorageServicePlugin'],
-        },
-        queue: {
-          pkg: '@objectstack/service-queue',
-          export: 'QueueServicePlugin',
-          nameMatch: ['service-queue', 'QueueServicePlugin'],
-        },
-        job: {
-          pkg: '@objectstack/service-job',
-          export: 'JobServicePlugin',
-          nameMatch: ['service-job', 'JobServicePlugin'],
-        },
-        messaging: {
-          // Backs the `notify` flow node (ADR-0012): delivers to a user's
-          // channels (inbox by default → `sys_inbox_message` rows). Without
-          // this the notify node degrades to a logged no-op.
-          pkg: '@objectstack/service-messaging',
-          export: 'MessagingServicePlugin',
-          nameMatch: ['service-messaging', 'MessagingServicePlugin'],
-        },
-        triggers: {
-          // Makes autolaunched flows actually fire. The automation engine ships
-          // the `FlowTrigger` wiring; these plugins are the concrete triggers:
-          // record-change (ObjectQL lifecycle hooks) + schedule (cron/interval
-          // via the job service — so pair `triggers` with `job`).
-          pkg: '@objectstack/trigger-record-change',
-          export: 'RecordChangeTriggerPlugin',
-          nameMatch: ['trigger-record-change', 'RecordChangeTriggerPlugin'],
-          extras: [
-            {
-              pkg: '@objectstack/trigger-schedule',
-              export: 'ScheduleTriggerPlugin',
-              nameMatch: ['trigger-schedule', 'ScheduleTriggerPlugin'],
-            },
-            {
-              // Declarative time-relative sweep (#1874) — arms flows whose start
-              // node declares `config.timeRelative` (fire daily for records whose
-              // date field is within N days / at T-minus offsets). Ships in
-              // @objectstack/trigger-schedule; needs the job service + ObjectQL.
-              pkg: '@objectstack/trigger-schedule',
-              export: 'TimeRelativeTriggerPlugin',
-              nameMatch: ['trigger-schedule', 'TimeRelativeTriggerPlugin'],
-            },
-            {
-              // Inbound webhook/HTTP trigger (ADR-0041 Tier 1) — arms
-              // `type: 'api'` flows with HMAC-verified, queue-backed hooks.
-              pkg: '@objectstack/trigger-api',
-              export: 'ApiTriggerPlugin',
-              nameMatch: ['trigger-api', 'ApiTriggerPlugin'],
-            },
-          ],
-        },
-        realtime: {
-          pkg: '@objectstack/service-realtime',
-          export: 'RealtimeServicePlugin',
-          nameMatch: ['service-realtime', 'RealtimeServicePlugin'],
-        },
-        // `feed` removed (ADR-0052 §5): `sys_comment`/`sys_activity` (durable,
-        // default-loaded, UI-wired) is the canonical record collaboration +
-        // timeline backend. `@objectstack/service-feed` was an in-memory,
-        // non-durable, UI-unconsumed parallel implementation — retired to end
-        // the split-brain. The unified typed timeline lives on `sys_activity`.
-        mcp: {
-          pkg: '@objectstack/mcp',
-          export: 'MCPServerPlugin',
-          nameMatch: ['mcp-server', 'MCPServerPlugin', 'mcp'],
-        },
-        marketplace: {
-          pkg: '@objectstack/service-package',
-          export: 'PackageServicePlugin',
-          nameMatch: ['service-package', 'PackageServicePlugin'],
-        },
-        email: {
-          pkg: '@objectstack/plugin-email',
-          export: 'EmailServicePlugin',
-          nameMatch: ['plugin-email', 'EmailServicePlugin'],
-        },
-        sms: {
-          // #2780 — backs phone-number OTP sign-in/reset (plugin-auth) and
-          // the messaging `sms` channel. Provider config lives in the `sms`
-          // settings namespace (OS_SMS_* env keys win at the resolver);
-          // unconfigured ⇒ dev LogSmsTransport (no real send).
-          pkg: '@objectstack/service-sms',
-          export: 'SmsServicePlugin',
-          nameMatch: ['service-sms', 'SmsServicePlugin'],
-        },
-        sharing: {
-          pkg: '@objectstack/plugin-sharing',
-          export: 'SharingServicePlugin',
-          nameMatch: ['plugin-sharing', 'SharingServicePlugin', 'SharingPlugin'],
-        },
-        // #2486 — auto-required above when resolveSearchPinyinEnabled()
-        // (explicit env, else any configured zh-* locale) says on.
-        'pinyin-search': {
-          pkg: '@objectstack/plugin-pinyin-search',
-          export: 'PinyinSearchPlugin',
-          nameMatch: ['plugin-pinyin-search', 'PinyinSearchPlugin'],
-        },
-        reports: {
-          pkg: '@objectstack/plugin-reports',
-          export: 'ReportsServicePlugin',
-          nameMatch: ['plugin-reports', 'ReportsServicePlugin'],
-        },
-        approvals: {
-          pkg: '@objectstack/plugin-approvals',
-          export: 'ApprovalsServicePlugin',
-          nameMatch: ['plugin-approvals', 'ApprovalsServicePlugin'],
-        },
-        settings: {
-          pkg: '@objectstack/service-settings',
-          export: 'SettingsServicePlugin',
-          nameMatch: ['service-settings', 'SettingsServicePlugin'],
-        },
-        webhooks: {
-          pkg: '@objectstack/plugin-webhooks',
-          export: 'WebhookOutboxPlugin',
-          nameMatch: ['plugin-webhook-outbox', 'WebhookOutboxPlugin'],
-        },
-      };
+      // `requires: [...]` that are NOT tier-gated. Each entry of
+      // Serve.CAPABILITY_PROVIDERS maps a token to a package + factory; if the
+      // user already provided an explicit instance via `plugins: [...]` we
+      // skip (explicit wins). Adding a new built-in capability = one entry on
+      // the static registry + its token in the spec vocabulary (#3265).
+      const CAPABILITY_PROVIDERS = Serve.CAPABILITY_PROVIDERS;
 
       const hasPluginMatching = (fragments: string[]) =>
         plugins.some((p: any) => {
@@ -1996,7 +2026,22 @@ export default class Serve extends Command {
 
       for (const cap of requires) {
         const spec = CAPABILITY_PROVIDERS[cap];
-        if (!spec) continue; // tier-gated capabilities (ai/i18n/ui/auth) handled above
+        if (!spec) {
+          // No provider in this runtime. Tier-gated tokens (ai/ai-studio/i18n/
+          // ui/auth) are handled by their dedicated blocks above; other KNOWN
+          // vocabulary tokens are provided elsewhere (`hierarchy-security` via
+          // an explicit enterprise plugin in `plugins[]`, `ai-seat`/`governance`
+          // by cloud's objectos-runtime) — stay quiet for those. An UNKNOWN
+          // declared token is a typo that was previously ignored SILENTLY
+          // (#3265) — warn loudly. Warn-first: intended to become a hard error
+          // once the vocabulary proves complete (Prime Directive #12).
+          if (declaredRequires.has(cap) && !PLATFORM_CAPABILITY_TOKENS.includes(cap)) {
+            console.warn(chalk.yellow(
+              `  ⚠ requires: "${cap}" is not a known platform capability — check for a typo. It was ignored.`,
+            ));
+          }
+          continue;
+        }
         if (hasPluginMatching(spec.nameMatch)) continue;
 
         try {

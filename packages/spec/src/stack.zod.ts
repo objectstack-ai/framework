@@ -4,6 +4,10 @@ import { z } from 'zod';
 
 import { ManifestSchema } from './kernel/manifest.zod';
 import { validateObjectNamespacePrefix } from './kernel/namespace-prefix';
+import {
+  PLATFORM_CAPABILITY_TOKENS,
+  DEPRECATED_PLATFORM_CAPABILITY_ALIASES,
+} from './kernel/platform-capabilities';
 import { ClusterCapabilityConfigSchema } from './kernel/cluster.zod';
 import { DatasourceSchema } from './data/datasource.zod';
 import { TranslationBundleSchema, TranslationConfigSchema } from './system/translation.zod';
@@ -435,7 +439,7 @@ export const ObjectStackDefinitionSchema = lazySchema(() => z.object({
    * });
    * ```
    */
-  requires: z.array(z.string()).optional().describe('Capability names this stack requires from the platform (declared-but-missing ⇒ fail-fast at startup)'),
+  requires: z.array(z.string()).optional().describe('Capability names this stack requires from the platform (canonical kebab-case tokens from PLATFORM_CAPABILITY_TOKENS; declared-but-missing ⇒ fail-fast at startup)'),
 
   /**
    * Plugin tier presets to auto-register (e.g. `core`, `ai`, `ui`, `auth`).
@@ -988,6 +992,56 @@ function validateHierarchyScopeCapability(data: unknown): string[] {
   return errors;
 }
 
+/**
+ * Canonicalize `requires` tokens and warn-validate them against the platform
+ * capability vocabulary (framework#3265).
+ *
+ * - Deprecated alias spellings (`aiStudio` → `ai-studio`, `aiSeat` →
+ *   `ai-seat`) are REWRITTEN to canonical at authoring time — the producer is
+ *   fixed, so every consumer (serve resolver, cloud loader, discovery) sees
+ *   one spelling (Prime Directive #12).
+ * - Tokens outside the vocabulary get a console warning. Warn-only for now —
+ *   both runtimes previously ignored unknown tokens silently, so a hard reject
+ *   could brick working stacks; once the vocabulary proves complete this is
+ *   intended to become a defineStack error.
+ *
+ * Returns the (possibly rewritten) definition; emits warnings via
+ * `console.warn`. Strict mode only — non-strict mode skips all validation by
+ * contract.
+ */
+function canonicalizeStackRequires(config: ObjectStackDefinition): ObjectStackDefinition {
+  const raw = config.requires;
+  if (!raw || raw.length === 0) return config;
+
+  const warned = new Set<string>();
+  let changed = false;
+  const canonical = raw.map((token) => {
+    const mapped = DEPRECATED_PLATFORM_CAPABILITY_ALIASES[token];
+    if (mapped) {
+      if (!warned.has(token)) {
+        warned.add(token);
+        console.warn(
+          `[defineStack] requires: '${token}' is a deprecated spelling — use '${mapped}'. ` +
+            `The alias is honored for one release, then removed (framework#3265).`,
+        );
+      }
+      changed = true;
+      return mapped;
+    }
+    if (!PLATFORM_CAPABILITY_TOKENS.includes(token) && !warned.has(token)) {
+      warned.add(token);
+      console.warn(
+        `[defineStack] requires: '${token}' is not a known platform capability — ` +
+          `check for a typo (known tokens are kebab-case, e.g. 'ai-studio', 'pinyin-search'). ` +
+          `Unknown tokens are ignored by the runtime today; this will become a validation error (framework#3265).`,
+      );
+    }
+    return token;
+  });
+
+  return changed ? { ...config, requires: canonical } : config;
+}
+
 export function defineStack(
   config: ObjectStackDefinitionInput,
   options?: DefineStackOptions,
@@ -1012,14 +1066,18 @@ export function defineStack(
     throw new Error(formatZodError(result.error, 'defineStack validation failed'));
   }
 
-  const crossRefErrors = validateCrossReferences(result.data);
+  // Canonicalize `requires` (deprecated aliases → kebab canon) and warn on
+  // unknown capability tokens BEFORE the validators below read the definition.
+  const data = canonicalizeStackRequires(result.data);
+
+  const crossRefErrors = validateCrossReferences(data);
   if (crossRefErrors.length > 0) {
     const header = `defineStack cross-reference validation failed (${crossRefErrors.length} issue${crossRefErrors.length === 1 ? '' : 's'}):`;
     const lines = crossRefErrors.map((e) => `  ✗ ${e}`);
     throw new Error(`${header}\n\n${lines.join('\n')}`);
   }
 
-  const nsErrors = validateNamespacePrefix(result.data);
+  const nsErrors = validateNamespacePrefix(data);
   if (nsErrors.length > 0) {
     const header = `defineStack namespace-prefix validation failed (${nsErrors.length} issue${nsErrors.length === 1 ? '' : 's'}):`;
     const lines = nsErrors.map((e) => `  ✗ ${e}`);
@@ -1027,21 +1085,21 @@ export function defineStack(
     throw new Error(`${header}\n\n${lines.join('\n')}${hint}`);
   }
 
-  const appErrors = validateSingleApp(result.data);
+  const appErrors = validateSingleApp(data);
   if (appErrors.length > 0) {
     const header = `defineStack single-app validation failed (${appErrors.length} issue${appErrors.length === 1 ? '' : 's'}):`;
     const lines = appErrors.map((e) => `  ✗ ${e}`);
     throw new Error(`${header}\n\n${lines.join('\n')}`);
   }
 
-  const hierErrors = validateHierarchyScopeCapability(result.data);
+  const hierErrors = validateHierarchyScopeCapability(data);
   if (hierErrors.length > 0) {
     const header = `defineStack hierarchy-scope capability validation failed (${hierErrors.length} issue${hierErrors.length === 1 ? '' : 's'}):`;
     const lines = hierErrors.map((e) => `  ✗ ${e}`);
     throw new Error(`${header}\n\n${lines.join('\n')}`);
   }
 
-  return mergeActionsIntoObjects(result.data);
+  return mergeActionsIntoObjects(data);
 }
 
 
