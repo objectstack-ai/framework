@@ -6,6 +6,7 @@ import {
   inferDriverTypeFromUrl,
   resolveDriverType,
   createStorageDriver,
+  UnsupportedDriverError,
 } from './storage-driver.js';
 
 describe('inferDriverTypeFromUrl', () => {
@@ -129,5 +130,44 @@ describe('createStorageDriver', () => {
   it('returns null for an unknown/absent driver in PROD', async () => {
     expect(await createStorageDriver('', { isDev: false })).toBeNull();
     expect(await createStorageDriver('nonsense', { isDev: false })).toBeNull();
+  });
+});
+
+describe('createStorageDriver: turso / libSQL is recognized but fails loud', () => {
+  // turso is a cloud/EE driver (@objectstack/driver-turso) the open-core CLI
+  // cannot construct. Selecting it must THROW a typed error — NOT fall through
+  // to the SQLite default. Remove the `turso` branch in storage-driver.ts and
+  // these go red: in dev it resolves to a SqlDriver, in prod it returns null —
+  // both silently ignoring the requested turso engine (the reported bug).
+  it('throws UnsupportedDriverError for `turso` in DEV and PROD', async () => {
+    await expect(createStorageDriver('turso', { isDev: true })).rejects.toBeInstanceOf(UnsupportedDriverError);
+    await expect(createStorageDriver('turso', { isDev: false })).rejects.toBeInstanceOf(UnsupportedDriverError);
+  });
+
+  it('throws for the `libsql` alias too', async () => {
+    await expect(createStorageDriver('libsql', { isDev: true })).rejects.toBeInstanceOf(UnsupportedDriverError);
+  });
+
+  // The message must be actionable: name the cloud/EE package and the open-core
+  // alternatives, so an operator knows exactly how to proceed.
+  it('carries an actionable message (cloud/EE package + open-core alternatives)', async () => {
+    await expect(createStorageDriver('turso', { isDev: false })).rejects.toThrow(/@objectstack\/driver-turso/);
+    await expect(createStorageDriver('turso', { isDev: false })).rejects.toThrow(/cloud|enterprise/i);
+    const err = await createStorageDriver('turso', { isDev: false }).catch((e) => e);
+    expect(err).toBeInstanceOf(UnsupportedDriverError);
+    expect((err as UnsupportedDriverError).driverType).toBe('turso');
+  });
+
+  // A `libsql://` / Turso URL routes to the same loud failure — it is NOT left
+  // unrecognized (which would silently fall through to SQLite).
+  it('routes libsql:// and *.turso.* URLs to the turso failure, never SQLite', async () => {
+    expect(resolveDriverType(undefined, 'libsql://my-db.turso.io')).toBe('turso');
+    expect(resolveDriverType(undefined, 'https://my-db.turso.io')).toBe('turso');
+    await expect(
+      createStorageDriver(resolveDriverType(undefined, 'libsql://my-db.turso.io'), {
+        databaseUrl: 'libsql://my-db.turso.io',
+        isDev: true,
+      }),
+    ).rejects.toBeInstanceOf(UnsupportedDriverError);
   });
 });

@@ -8,7 +8,7 @@ import chalk from 'chalk';
 import { bundleRequire } from 'bundle-require';
 import { loadConfig, BUNDLE_REQUIRE_EXTERNALS } from '../utils/config.js';
 import { isHostConfig, shouldBootWithLibrary } from '../utils/plugin-detection.js';
-import { resolveDriverType, createStorageDriver } from '../utils/storage-driver.js';
+import { resolveDriverType, createStorageDriver, UnsupportedDriverError } from '../utils/storage-driver.js';
 import { readEnvWithDeprecation, resolveMultiOrgEnabled, resolveAllowDegradedTenancy, isMcpServerEnabled, resolveSearchPinyinEnabled, isModuleNotFoundError } from '@objectstack/types';
 import { PLATFORM_CAPABILITY_TOKENS, canonicalizePlatformCapability } from '@objectstack/spec/kernel';
 import { resolveObjectStackHome } from '@objectstack/runtime';
@@ -937,6 +937,14 @@ export default class Serve extends Command {
              }
            }
          } catch (e: any) {
+           // "declared ≠ enforced" guard (#3276-class): a driver that is
+           // RECOGNIZED but the open-core CLI cannot construct — currently
+           // `turso`/libSQL, a cloud/EE driver — must fail LOUDLY, never silently
+           // fall through to the SQLite default and ignore the selected engine.
+           // Re-throw so run()'s fatal handler restores output, prints the
+           // actionable message, and exits 1 (in dev AND prod). All OTHER driver
+           // construction errors keep the prior best-effort silent behavior.
+           if (e instanceof UnsupportedDriverError) throw e;
            // silent
          }
       }
