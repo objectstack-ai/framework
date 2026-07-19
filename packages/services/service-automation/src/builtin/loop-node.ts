@@ -40,7 +40,12 @@ export function registerLoopNode(engine: AutomationEngine, ctx: PluginContext): 
       configSchema: {
         type: 'object',
         properties: {
-          collection: { type: 'string', description: 'Template/variable resolving to the array to iterate' },
+          // `xExpression: 'template'` tells the designer this string is an
+          // `interpolate()` single-brace `{var}` template (e.g. `{tasks}`), not
+          // bare CEL — so the flow-designer renders the mono expression editor
+          // with a `{var}` data-picker and does NOT run the CEL brace-trap on it
+          // (objectui #2670 Phase 3; the contract mirrors `xRef`/`xEnumDeprecated`).
+          collection: { type: 'string', description: 'Template/variable resolving to the array to iterate', xExpression: 'template' },
           iteratorVariable: { type: 'string', description: 'Loop variable holding the current item' },
           indexVariable: { type: 'string', description: 'Optional loop variable holding the current index' },
           maxIterations: { type: 'integer', minimum: 1, maximum: LOOP_MAX_ITERATIONS_CEILING },

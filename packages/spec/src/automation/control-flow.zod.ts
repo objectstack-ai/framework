@@ -103,7 +103,16 @@ export const LoopConfigSchema = lazySchema(() => z.object({
    * The collection to iterate. A `{token}` template or bare variable name that
    * resolves (at run time) to an array in the flow's variable scope.
    */
-  collection: z.string().min(1).describe('Template/variable resolving to the array to iterate'),
+  // `xExpression: 'template'` marks this as an `interpolate()` `{var}` template
+  // (not bare CEL), so the flow designer renders a `{var}` picker + mono editor
+  // and skips the CEL brace-trap (objectui #2670 Phase 3). Flows through
+  // `z.toJSONSchema` verbatim, same channel as `xRef` / `xEnumDeprecated`. The
+  // shipped `loop` descriptor carries the same marker on its hand-written
+  // configSchema literal (service-automation/builtin/loop-node.ts).
+  collection: z.string().min(1).meta({
+    description: 'Template/variable resolving to the array to iterate',
+    xExpression: 'template',
+  }),
   /** Variable name the current item is bound to inside the body. */
   iteratorVariable: z.string().min(1).default('item').describe('Loop variable holding the current item'),
   /** Optional variable name the zero-based index is bound to inside the body. */

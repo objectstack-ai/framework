@@ -1,6 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { describe, it, expect } from 'vitest';
+import { z } from 'zod';
 import {
   LoopConfigSchema,
   ParallelConfigSchema,
@@ -55,6 +56,20 @@ describe('LoopConfigSchema', () => {
     expect(() =>
       LoopConfigSchema.parse({ collection: '{x}', maxIterations: LOOP_MAX_ITERATIONS_CEILING + 1 }),
     ).toThrow();
+  });
+
+  it('emits the xExpression:"template" marker on `collection` through z.toJSONSchema (objectui #2670)', () => {
+    // The marker rides the same `.meta()` → JSON-Schema channel as
+    // `xRef` / `xEnumDeprecated`, telling the flow designer `collection` is an
+    // `interpolate()` `{var}` template (not bare CEL).
+    const schema = z.toJSONSchema(LoopConfigSchema, {
+      target: 'draft-2020-12',
+      io: 'input',
+      unrepresentable: 'any',
+    }) as { properties?: { collection?: { xExpression?: unknown; description?: unknown } } };
+    expect(schema.properties?.collection?.xExpression).toBe('template');
+    // description survives alongside the marker (they share one .meta()).
+    expect(schema.properties?.collection?.description).toBe('Template/variable resolving to the array to iterate');
   });
 });
 
