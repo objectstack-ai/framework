@@ -169,7 +169,7 @@ interface IKnowledgeService {
 
 `KnowledgeSearchOptions` includes `sourceIds`, `topK`, `filter`, and
 the all-important `executionContext` (from the permission-aware tool
-execution work — see `ai-capabilities.mdx`). `KnowledgeReindexOptions`
+execution work — see `actions-as-tools.mdx`). `KnowledgeReindexOptions`
 accepts `dryRun` and `limit`; `reindexSource` returns a
 `KnowledgeReindexResult` (`indexed`, `discovered`, `ok`, …).
 
@@ -255,7 +255,7 @@ IKnowledgeService.search(q, { executionContext, sourceIds })
 ```
 
 This is the same pattern as the existing permission-aware data tools
-(see `ai-capabilities.mdx#permission-aware-execution-rls-for-agents`).
+(see `actions-as-tools.mdx`).
 No matter how aggressive an adapter's retrieval is, the user never
 sees a chunk extracted from a record they can't read.
 
@@ -347,7 +347,7 @@ internally (RAGFlow, Dify, Vectara).
 
 ## 10. Related documents
 
-- `ai-capabilities.mdx#permission-aware-execution-rls-for-agents` —
+- `actions-as-tools.mdx` —
   the `ExecutionContext` threading the Knowledge Protocol reuses.
 - `architecture.mdx` — overall service / plugin layering.
 - `packages/spec/src/ai/embedding.zod.ts` — pre-existing embedding /
