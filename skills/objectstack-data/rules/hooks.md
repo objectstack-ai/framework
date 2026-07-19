@@ -42,6 +42,52 @@ const hook: Hook = {
 };
 ```
 
+### Logic: `body` (preferred) or `handler` (deprecated)
+
+A hook's logic comes from **either** an inline `handler` function **or** a
+metadata-native `body`. Prefer **`body`** for new code — it is what a
+metadata-only runtime executes, and it ships as plain JSON inside the build
+artifact. `handler` (inline function) is deprecated; when both are present the
+runtime uses `body`.
+
+```typescript
+// Sandboxed body: `source` is the function body, run in an isolated QuickJS VM.
+{
+  name: 'fill_position_on_hire',
+  object: 'candidate',
+  events: ['afterUpdate'],
+  body: {
+    language: 'js',                          // 'js' (sandboxed) | 'expression' (pure CEL)
+    source: `
+      if (!ctx.result || ctx.result.stage !== 'hired') return;
+      // afterUpdate ctx.result is PARTIAL — re-query for the lookup FK.
+      const rec = await ctx.api.object('candidate').findOne({ where: { id: ctx.result.id } });
+      if (rec && rec.position_id)
+        await ctx.api.object('position').update({ id: rec.position_id, status: 'filled' });
+    `,
+    capabilities: ['api.read', 'api.write'], // declare every ctx API the body touches
+  },
+}
+```
+
+Sandbox essentials (full contract in
+[references/data-hooks.md → Sandboxed Hook Bodies](../references/data-hooks.md#sandboxed-hook-bodies-body--what-the-sandbox-ctx-can-call)):
+
+- **`ctx`** exposes `input`, `previous` (`undefined` on insert → `!ctx.previous`
+  detects *create*), `result` (⚠️ **partial** on afterUpdate — re-query for
+  unwritten fields), `user`, `session`, `event`, `object`, `api`,
+  `log` (`ctx.log.info(msg)`), `crypto` (`randomUUID`).
+- **`ctx.api.object(n)`** repo: `find` / `findOne` / `count` / `insert` /
+  `update({ id, ...fields })` / `upsert` / `delete`. Query key is **`where`**
+  (object + `$`-operators) — **not** `filter: [[…]]`.
+- **`capabilities`** (declare what the body uses, else it throws) — the six legal
+  tokens: `api.read`, `api.write`, `api.transaction`, `crypto.uuid`,
+  `crypto.hash`, `log`.
+- Cross-object writes obey the **target's** sharing model — a `public_read`
+  target rejects the write with `FORBIDDEN`, and **admin is not exempt**.
+- No `console` (use `ctx.log`), no `fetch` (use Connectors), no `import` /
+  `require` / module-scope helpers — a `body` must be self-contained.
+
 ### 8 Lifecycle Events
 
 | Event | When Fires | Use Case |

@@ -209,7 +209,7 @@ For comprehensive documentation with incorrect/correct examples:
 - **[Validation Rules](./rules/validation.md)** — All validation types, script inversion, severity levels
 - **[Index Strategy](./rules/indexing.md)** — btree/gin/gist/fulltext, composite indexes, partial indexes
 - **[Data Lifecycle & Retention](./rules/lifecycle.md)** — `lifecycle` classes (record/audit/telemetry/transient/event), retention/TTL/rotation/archive policies; ❗ append-only objects must declare one (distinct from lifecycle *hooks* below)
-- **[Lifecycle Hooks](./rules/hooks.md)** — Hook quick reference (→ see [references/data-hooks.md](./references/data-hooks.md) for the full 14-event guide)
+- **[Lifecycle Hooks](./rules/hooks.md)** — Hook quick reference (→ see [references/data-hooks.md](./references/data-hooks.md) for the full 8-event guide + the sandboxed `body` ctx/capability contract)
 - **[Datasources & Federation](./rules/datasources.md)** — `defineDatasource`, external/federated objects (`remoteName`/`columnMap`), auto-connect gating, credentials; ❌ no `field.columnName` on external objects
 
 ---
@@ -402,9 +402,13 @@ const accountHook: Hook = {
 export default accountHook;
 ```
 
-See [rules/hooks.md](./rules/hooks.md) for the quick reference, or
-[references/data-hooks.md](./references/data-hooks.md) for complete
-documentation of all 14 lifecycle events, registration modes, and patterns.
+The `handler` above is the inline (in-process) form. The **preferred**,
+metadata-native form is a sandboxed `body` — `{ language: 'js', source, capabilities }`
+run in an isolated VM, the shape that AI/Studio-authored hooks and every build
+artifact carry. See [rules/hooks.md](./rules/hooks.md) for the quick reference, or
+[references/data-hooks.md](./references/data-hooks.md) for complete documentation
+of all 8 lifecycle events, both registration forms, the **sandboxed `body` ctx +
+capability contract**, and patterns.
 
 ---
 

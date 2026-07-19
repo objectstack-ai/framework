@@ -1,8 +1,9 @@
 # Data Lifecycle Hooks — Reference
 
 Reference companion to `objectstack-data/SKILL.md`. Comprehensive guide to
-the 14 data lifecycle events, registration modes, the `HookContext` API,
-and common patterns (validation, defaults, audit logging, workflows).
+the 8 data lifecycle events, registration modes (inline `handler` **and**
+sandboxed `body`), the `HookContext` API, and common patterns (validation,
+defaults, audit logging, workflows).
 
 
 # Writing Hooks — ObjectStack Data Lifecycle
@@ -234,7 +235,240 @@ onError: 'log'
 
 ---
 
+## Sandboxed Hook Bodies (`body`) — What the Sandbox `ctx` Can Call
+
+A hook can carry its logic in one of two shapes. Everything above this point
+showed the inline **`handler`** function; the section below documents the
+**`body`** form — the one a metadata-only runtime actually executes, and the one
+that was previously undocumented (you had to reverse-engineer
+`@objectstack/runtime` to use it).
+
+### `body` (sandboxed) vs `handler` (inline) — pick one
+
+| | **`body`** — sandboxed script | **`handler`** — inline function |
+|:--|:--|:--|
+| Shape | `body: { language, source, capabilities }` (pure metadata) | `handler: async (ctx) => { … }` |
+| Runs in | An isolated **QuickJS VM** (edge-safe, capability-gated) | The host process (**full Node**) |
+| Ships as | Plain JSON inside the build artifact — travels everywhere | Lowered at build to a string ref + a sibling `.mjs` runtime module |
+| Status | **Preferred for new code** | **Deprecated** (`HookSchema`: *"prefer `body`"*) |
+| Both present? | Runtime uses **`body`** and ignores `handler` | — |
+
+Because a `body` is pure metadata, it is what AI-authored hooks, Studio-authored
+hooks, and any `objectstack build` artifact carry. The rest of this section is
+the contract for that sandbox.
+
+### The `body` shape
+
+```jsonc
+body: {
+  language: 'js',                 // 'js' = L2 sandboxed script | 'expression' = L1 pure formula
+  source: "/* function body */",  // the FUNCTION BODY only — not a module
+  capabilities: ['api.read', 'api.write', 'log'],  // default: []
+  timeoutMs: 250,                 // optional, ≤ 30000 (hook default 250ms, action 5000ms)
+  memoryMb: 32,                   // optional, ≤ 256 (best-effort under QuickJS)
+}
+```
+
+- `source` is the **function body**, which the runtime wraps as
+  `(async (ctx) => { <source> })(ctx)`. Write **statements** against `ctx`;
+  `await` is allowed.
+- In a `before*` hook, change the write by assigning `ctx.input.x = …` **or**
+  `return { x: … }` (a returned object is shallow-merged onto `ctx.input`). In an
+  `after*` hook the body is for side effects (cross-object writes, logging).
+- `language: 'expression'` is a pure CEL formula for a computed value or
+  predicate — no IO, no `ctx.api`.
+
+### What lives on the sandbox `ctx`
+
+The sandbox is handed a **JSON snapshot** of these (built by
+`buildSandboxContext`), not live engine objects:
+
+| `ctx.*` | Shape | Notes |
+|:--|:--|:--|
+| `ctx.input` | object | The write payload (mutable). On update, only the **changed** fields plus `id`. |
+| `ctx.previous` | object \| `undefined` | Pre-write record on update/delete. **`undefined` on insert** → use `!ctx.previous` to detect *create*. |
+| `ctx.result` | object \| `undefined` | `after*` only. ⚠️ **partial** on afterUpdate — see gotcha 1. |
+| `ctx.user` | object \| `undefined` | `{ id, name, email, organizationId }`. `undefined` for system / unauthenticated writes. |
+| `ctx.session` | object \| `undefined` | `{ userId, organizationId, roles, … }`. |
+| `ctx.event` | string | e.g. `'afterUpdate'` — dispatch on it when one hook subscribes to several events. |
+| `ctx.object` | string | The target object name. |
+| `ctx.api` | object | Cross-object CRUD. Gated by `api.read` / `api.write` — see below. |
+| `ctx.log` | `{ info, warn, error }` | Gated by `log`. Call **`ctx.log.info(msg, data?)`** — `ctx.log` is an **object, not** callable as `ctx.log(msg)`. Emission is **best-effort** (see Troubleshooting). |
+| `ctx.crypto` | `{ randomUUID }` | Gated by `crypto.uuid`. |
+
+(Action bodies additionally receive `ctx.recordId` and `ctx.record`, and their
+wrap is `(async (input, ctx) => { … })(input, ctx)` — the action params arrive as
+the first arg.)
+
+Because the VM only holds a snapshot, mutating `ctx.previous` / `ctx.result` is
+local and thrown away; the only way to change the persisted write is
+`ctx.input.x = …` or `return { … }`.
+
+### `ctx.api.object(name)` — the cross-object repo
+
+`ctx.api.object('<object>')` returns a repository bound to the current
+org / user / transaction. Methods:
+
+| Method | Capability | Call |
+|:--|:--|:--|
+| `find(opts)` | `api.read` | `find({ where: { … }, fields, sort, limit })` → array |
+| `findOne(opts)` | `api.read` | `findOne({ where: { id } })` → record \| `null` |
+| `count(opts)` | `api.read` | `count({ where: { … } })` → number |
+| `insert(data)` | `api.write` | `insert({ … })` |
+| `update(data, opts?)` | `api.write` | **`update({ id, ...fields })`** — put the id **inside** `data` |
+| `upsert(data, opts?)` | `api.write` | `upsert({ … })` |
+| `delete(opts)` | `api.write` | `delete({ where: { id } })` |
+
+**Query shape — the key is `where`.** It takes an object with `$`-operators, the
+same DSL as the [objectstack-query](../../objectstack-query/SKILL.md) skill:
+
+```js
+await ctx.api.object('candidate').findOne({ where: { id: ctx.result.id } });
+await ctx.api.object('candidate').find({ where: { stage: 'hired' } });
+await ctx.api.object('invoice').count({ where: { amount: { $gte: 1000 } } });
+await ctx.api.object('task').find({ where: { $and: [{ done: false }, { owner: uid }] } });
+```
+
+> `filter:` is tolerated as an **object-valued** alias (normalised to `where`),
+> but prefer `where`. Do **not** pass an array-of-triples such as
+> `[['id', '=', x]]` — that is not a supported value shape and silently matches
+> nothing.
+
+**Update by id.** `update` reads the primary key out of `data`, so the
+single-record form is `update({ id, ...fieldsToChange })` — e.g.
+`update({ id: pos, status: 'filled' })`.
+
+### Capabilities — the complete list
+
+A body may only touch a `ctx` API it declared in `capabilities`. Calling an
+undeclared one **throws inside the VM** — `capability '<token>' not granted to
+hook '<name>' …` — which surfaces as a hook error (see Troubleshooting). The full
+set of legal tokens (`HookBodyCapability`) is exactly six:
+
+| Token | Unlocks |
+|:--|:--|
+| `api.read` | `ctx.api.object(n).find` / `findOne` / `count` / `aggregate` |
+| `api.write` | `ctx.api.object(n).insert` / `update` / `delete` / `upsert` |
+| `api.transaction` | `ctx.api.transaction(async () => { … })` — runs the callback's `ctx.api` ops in **one driver transaction** (commit on return, rollback on throw). Pair it with `api.write`. |
+| `crypto.uuid` | `ctx.crypto.randomUUID()` |
+| `crypto.hash` | *declared token* for `ctx.crypto.hash(algo, data)` — the current WASM runner wires only `randomUUID`, so don't rely on `hash` yet |
+| `log` | `ctx.log.info` / `warn` / `error(msg, data?)` |
+
+There is **no `http.fetch` capability** by design — outbound calls go through
+Connector recipes so they stay auditable and replayable.
+
+### Sandbox restrictions
+
+The body runs in an isolated QuickJS VM, **not** Node:
+
+- **Available:** standard JS built-ins — `Date`, `Math`, `JSON`, `Object`,
+  `Array`, `String`, `Number`, `RegExp`, `Map`, `Set`, `Promise`, `parseInt`,
+  `encodeURIComponent`, … — plus `ctx.*` and `await`.
+- **Not available** (verified absent from the QuickJS heap): `console` (use
+  `ctx.log`), `fetch` (use Connectors), `setTimeout` / `setInterval`, `URL`,
+  `TextEncoder` / `TextDecoder`, `structuredClone`, `atob` / `btoa`, `require`,
+  Node modules, the filesystem.
+- **Rejected by `objectstack build`:** `import` / `require` / dynamic `import()`,
+  `process`, `globalThis`, `eval`, `new Function`, and any **free identifier** —
+  a name bound at module scope, e.g. a `const slugify = …` helper sitting next to
+  the hook. A `body` must be **self-contained**: inline the helper, or keep that
+  hook as a bundled `handler`.
+
+### ⚠️ Gotcha 1 — `ctx.result` is a *partial* record on afterUpdate
+
+On `afterUpdate`, both `ctx.result` and `ctx.input` carry only the fields this
+PATCH touched, plus `id`. A field you did **not** write — a lookup FK, a status
+you want to branch on — is **absent**, not stale. To read the whole record,
+re-query it:
+
+```js
+// afterUpdate on `candidate`
+const full = await ctx.api.object('candidate').findOne({ where: { id: ctx.result.id } });
+// full.position_id is present even though this PATCH only set `stage`.
+```
+
+(A declarative `condition` on an un-written field hits the same wall — guard it
+with the missing-key-safe `has(record.x)` macro.)
+
+### ⚠️ Gotcha 2 — cross-object writes obey the *target's* sharing model
+
+A hook's `ctx.api.object('other').update(…)` goes through the engine's normal
+write path, so it is gated by **`other`'s** permission / sharing rules — not by
+whoever is elevated. If the acting user cannot edit the target (e.g. it is
+`public_read`), the write throws:
+
+```
+FORBIDDEN: insufficient privileges to update <object> <id>
+```
+
+**An admin is not automatically exempt** — the gate is `canEdit`, driven by the
+sharing model, not a global admin bypass. If a hook must write a target, give the
+acting principal edit access to it (sharing rule / permission set), or drive the
+write from a system-context automation.
+
+### Copy-paste example — afterUpdate + cross-object update + re-query + capabilities
+
+When a `candidate` is marked `hired`, look up its `position` (a lookup FK that
+is **not** in the partial patch) and flip that position to `filled`:
+
+<!-- os:check -->
+```typescript
+import type { Hook } from '@objectstack/spec/data';
+
+const fillPositionOnHire: Hook = {
+  name: 'fill_position_on_hire',
+  object: 'candidate',
+  events: ['afterUpdate'],
+  body: {
+    language: 'js',
+    source: `
+      // afterUpdate → ctx.result is the PARTIAL patch. Gate on the field this
+      // write actually set, then re-query for the lookup FK it does NOT carry.
+      if (!ctx.result || ctx.result.stage !== 'hired') return;
+      const rec = await ctx.api.object('candidate').findOne({ where: { id: ctx.result.id } });
+      if (!rec || !rec.position_id) return;
+      // Cross-object write — needs the acting user to be able to edit 'position'.
+      await ctx.api.object('position').update({ id: rec.position_id, status: 'filled' });
+      ctx.log.info('position filled', { position: rec.position_id });
+    `,
+    capabilities: ['api.read', 'api.write', 'log'],
+  },
+  onError: 'log',
+};
+
+export default fillPositionOnHire;
+```
+
+Register it like any hook — add it to `defineStack({ hooks: [fillPositionOnHire] })`
+(the `AppPlugin` binds `body` hooks onto the engine automatically).
+
+### Troubleshooting (`[BodyRunner]` log lines)
+
+- **`[BodyRunner] invalid hook.body shape`** *(warn)* — `body` failed
+  `HookBodySchema`; the hook is skipped. Check `language` / `source` /
+  `capabilities`.
+- **`[BodyRunner] sandboxed hook threw`** *(error)* — the body raised. The
+  wrapped message names the hook; the usual causes are a missing capability, a
+  `FORBIDDEN` cross-object write (gotcha 2), or a `ReferenceError` from a free
+  identifier or an unavailable global (e.g. `console`).
+- **`ctx.log.*` produced no output** — two independent causes: (1) without the
+  `log` capability the call **throws** (surfaces as a hook error); (2) **with** the
+  capability it emits only when the runtime wired a logger into the hook context —
+  otherwise it is a **silent no-op**. Treat `ctx.log` as best-effort diagnostics,
+  not a reliable side-channel or proof a hook ran; to observe an effect, assert on
+  the data it writes. (And call `ctx.log.info(msg)` — `ctx.log` is an object, not
+  a function, so `ctx.log(msg)` is not callable.)
+
+---
+
 ## Hook Context API
+
+> **Sandbox vs in-process.** The `ctx` documented below is the **in-process
+> `handler`** context (full Node). A metadata-native **`body`** sees a
+> capability-gated *subset* of it inside an isolated VM — see
+> [Sandboxed Hook Bodies](#sandboxed-hook-bodies-body--what-the-sandbox-ctx-can-call)
+> for exactly what is and isn't available there, including the `where` query
+> shape and the `update({ id, … })` pattern.
 
 The `HookContext` passed to your handler provides:
 
@@ -401,16 +635,20 @@ ctx.previous: {
 
 ### Cross-Object API
 
-Access other objects within the same transaction:
+Access other objects within the same transaction. `ctx.api.object(name)` is the
+same repository in both forms; the canonical query key is **`where`** (see
+[Sandboxed Hook Bodies](#sandboxed-hook-bodies-body--what-the-sandbox-ctx-can-call)
+for the full method + capability contract). In a sandboxed `body` these calls
+additionally require the `api.read` / `api.write` capabilities.
 
 ```typescript
 handler: async (ctx: HookContext) => {
   // Get API for another object
   const users = ctx.api?.object('user');
 
-  // Query users
+  // Query users — `where` is canonical (`filter` is a tolerated object alias)
   const admin = await users.findOne({
-    filter: { role: 'admin' }
+    where: { role: 'admin' }
   });
 
   // Create related record
