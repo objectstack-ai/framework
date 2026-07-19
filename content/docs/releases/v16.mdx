@@ -241,7 +241,7 @@ the divergence.
 ### Approver type `role` → `org_membership_level` (#3133)
 
 `ApproverType.role` was the last authoring surface projecting the reserved
-word "role" (ADR-0090 D3) — and it manufactured a real silent failure: since
+word that ADR-0090 D3 retired — and it manufactured a real silent failure: since
 every other surface renamed to `position`, `{ type: 'role', value:
 'sales_manager' }` reads like the legacy spelling of a position, resolves
 against the membership tier, finds nothing, and waits forever on an approver
@@ -639,7 +639,7 @@ and curated capability labels + picker group headers localize (B5).
   handlerReady/available services (ADR-0076 D12, #2637); internal html-page
   links route through the SPA navigation handler (#2642); writable system
   objects are distinguished from engine-owned in badges + empty states
-  (ADR-0103, #2705); the approver Type dropdown drops the deprecated `role`
+  (ADR-0103, #2705); the approver Type dropdown drops the deprecated
   spelling for a membership-tier picker (#2643); metadata-admin stops
   surfacing the spec's removed dead fields and the inert object "Enabled"
   toggle (#2658, #2659); dashboard label fallbacks and skill activation
