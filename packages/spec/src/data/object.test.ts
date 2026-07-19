@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { ObjectSchema, ObjectCapabilities, IndexSchema, ObjectFieldGroupSchema, ObjectExternalBindingSchema, ObjectAccessConfigSchema, LifecycleSchema, TenancyConfigSchema, resolveCrudAffordances, type ServiceObject } from './object.zod';
+import { ObjectSchema, ObjectCapabilities, IndexSchema, ObjectFieldGroupSchema, ObjectExternalBindingSchema, ObjectAccessConfigSchema, LifecycleSchema, TenancyConfigSchema, isTenancyDisabled, resolveCrudAffordances, type ServiceObject } from './object.zod';
 
 describe('ObjectCapabilities', () => {
   it('should apply default values correctly', () => {
@@ -1327,6 +1327,24 @@ describe('TenancyConfigSchema — #2763 strategy/crossTenantAccess removal', () 
         fields: { name: { type: 'text' } },
       }),
     ).toThrow(/removed from @objectstack\/spec after v15\.0/);
+  });
+});
+
+describe('isTenancyDisabled — platform-global posture predicate (#3249, ADR-0066)', () => {
+  it('is true only for an explicit tenancy.enabled === false', () => {
+    expect(isTenancyDisabled({ name: 'sys_license', tenancy: { enabled: false } })).toBe(true);
+    expect(isTenancyDisabled({ name: 'task', tenancy: { enabled: true } })).toBe(false);
+  });
+
+  it('is false when tenancy is absent (tenant-scoped by default)', () => {
+    expect(isTenancyDisabled({ name: 'task', fields: { organization_id: { type: 'text' } } })).toBe(false);
+    expect(isTenancyDisabled({ name: 'task', tenancy: {} })).toBe(false);
+  });
+
+  it('tolerates null/undefined/non-object schemas', () => {
+    expect(isTenancyDisabled(undefined)).toBe(false);
+    expect(isTenancyDisabled(null)).toBe(false);
+    expect(isTenancyDisabled('sys_license')).toBe(false);
   });
 });
 

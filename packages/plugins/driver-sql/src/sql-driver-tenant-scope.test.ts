@@ -298,6 +298,34 @@ describe('SqlDriver tenant scope (organization_id)', () => {
       const created = await driver.create('sys_license', { id: 'lic_new', customer: 'Gamma', status: 'active' }, { tenantId: 'org_admin_active' });
       expect(created.organization_id ?? null).toBeNull();
     });
+
+    // #3249: the opt-out must be STICKY. Re-registration paths that pass a
+    // partial schema without the `tenancy` block (lifecycle archive
+    // `cold.syncSchema(object, obj)`, schema-drift re-sync) previously fell
+    // through to the implicit organization_id heuristic and re-scoped the
+    // platform-global table — the admin's org-context read then dropped to
+    // 0 rows while the anonymous read still saw them.
+    it('a later tenancy-less re-registration (syncSchema / drift re-sync) preserves the opt-out (#3249)', async () => {
+      await driver.syncSchema('sys_license', {
+        name: 'sys_license',
+        fields: platformGlobal[0].fields,
+      });
+      expect((driver as any).tenantFieldByTable['sys_license']).toBeNull();
+      const adminRead = await driver.find('sys_license', { object: 'sys_license' }, { tenantId: 'org_admin_active' });
+      expect(adminRead.map(r => r.id).sort()).toEqual(['lic_global', 'lic_org_b']);
+    });
+
+    it('a tenancy-less registerExternalObject after an explicit opt-out preserves it (#3249)', () => {
+      driver.registerExternalObject({ name: 'sys_license', fields: platformGlobal[0].fields });
+      expect((driver as any).tenantFieldByTable['sys_license']).toBeNull();
+    });
+
+    it('a re-registration WITH an explicit tenancy declaration is authoritative and re-enables scoping', async () => {
+      await driver.initObjects([
+        { ...platformGlobal[0], tenancy: { enabled: true, tenantField: 'organization_id' } },
+      ]);
+      expect((driver as any).tenantFieldByTable['sys_license']).toBe('organization_id');
+    });
   });
 
   describe('audit warn on missing tenantId', () => {

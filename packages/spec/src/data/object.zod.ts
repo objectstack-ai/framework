@@ -203,6 +203,19 @@ export const TenancyConfigSchema = lazySchema(() => z.object({
 }, { error: strictTenancyError }).strict());
 
 /**
+ * [ADR-0066] Platform-global posture: `tenancy.enabled === false` explicitly
+ * opts the object out of row-level org scoping, even when it carries an
+ * `organization_id` column (e.g. `sys_license` keeps an optional owner FK).
+ * Single source of truth for the registry (tenant-column injection), the
+ * ObjectQL engine (tenantId propagation into driver options), and drivers
+ * (native scoping) — previously each re-derived `tenancy?.enabled === false`
+ * independently and could drift (#3249).
+ */
+export function isTenancyDisabled(schema: unknown): boolean {
+  return (schema as { tenancy?: { enabled?: boolean } } | null | undefined)?.tenancy?.enabled === false;
+}
+
+/**
  * [ADR-0066 D2] Secure-by-default object posture.
  *
  * Declares whether the object participates in blanket wildcard permission

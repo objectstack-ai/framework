@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import { ServiceObject, ObjectSchema, ObjectOwnership, provisionPrimary, resolveCrudAffordances } from '@objectstack/spec/data';
+import { ServiceObject, ObjectSchema, ObjectOwnership, provisionPrimary, resolveCrudAffordances, isTenancyDisabled } from '@objectstack/spec/data';
 import { resolveMultiOrgEnabled, resolveSearchPinyinEnabled } from '@objectstack/types';
 import { provisionSearchCompanion } from './search-companion.js';
 import { ObjectStackManifest, ManifestSchema, InstalledPackage, InstalledPackageSchema } from '@objectstack/spec/kernel';
@@ -247,7 +247,7 @@ export function applySystemFields(
   // registry would still inject `organization_id`, and the
   // SecurityPlugin's RLS layer would filter every cross-org read down
   // to 0 rows even though the schema explicitly disabled multi-tenancy.
-  const tenancyDisabled = (schema as any).tenancy?.enabled === false;
+  const tenancyDisabled = isTenancyDisabled(schema);
   // The `organization_id` COLUMN is provisioned unconditionally (subject only
   // to the explicit opt-outs above) — its existence no longer depends on the
   // global multi-tenant flag. Decoupling "does the column exist" from "is

@@ -530,6 +530,76 @@ describe('ObjectQL Engine', () => {
         });
     });
 
+    describe('tenancy.enabled:false objects are platform-global (#3249, ADR-0066)', () => {
+        // Regression: buildDriverOptions stamped execCtx.tenantId into driver
+        // options unconditionally, so a platform-global object (sys_license)
+        // got org-scoped at the driver and its NULL-org rows vanished for an
+        // authenticated org-context read while anonymous reads saw them.
+        beforeEach(async () => {
+            engine.registerDriver(mockDriver, true);
+            await engine.init();
+        });
+
+        const lastFindOpts = () => (mockDriver.find as any).mock.calls.at(-1)?.[2];
+
+        it('does not stamp execCtx.tenantId into driver options for a tenancy-disabled object', async () => {
+            vi.mocked(SchemaRegistry.getObject).mockReturnValue({
+                name: 'sys_license', tenancy: { enabled: false }, fields: {},
+            } as any);
+            await engine.find('sys_license', { filters: [] }, { context: { tenantId: 'org_admin' } as any });
+            expect(lastFindOpts()?.tenantId).toBeUndefined();
+        });
+
+        it('still stamps tenantId for objects without a tenancy declaration', async () => {
+            vi.mocked(SchemaRegistry.getObject).mockReturnValue({ name: 'task', fields: {} } as any);
+            await engine.find('task', { filters: [] }, { context: { tenantId: 'org_a' } as any });
+            expect(lastFindOpts()).toMatchObject({ tenantId: 'org_a' });
+        });
+
+        it('still stamps tenantId for an explicit tenancy.enabled:true object', async () => {
+            vi.mocked(SchemaRegistry.getObject).mockReturnValue({
+                name: 'task', tenancy: { enabled: true }, fields: {},
+            } as any);
+            await engine.find('task', { filters: [] }, { context: { tenantId: 'org_a' } as any });
+            expect(lastFindOpts()).toMatchObject({ tenantId: 'org_a' });
+        });
+
+        it('still threads timezone (and the rest of the context) while withholding tenantId', async () => {
+            vi.mocked(SchemaRegistry.getObject).mockReturnValue({
+                name: 'sys_license', tenancy: { enabled: false }, fields: {},
+            } as any);
+            await engine.find('sys_license', { filters: [] }, {
+                context: { tenantId: 'org_admin', timezone: 'Asia/Shanghai' } as any,
+            });
+            expect(lastFindOpts()).toMatchObject({ timezone: 'Asia/Shanghai' });
+            expect(lastFindOpts()?.tenantId).toBeUndefined();
+        });
+
+        it('an explicitly-passed base tenantId still reaches the driver (caller intent wins)', async () => {
+            vi.mocked(SchemaRegistry.getObject).mockReturnValue({
+                name: 'sys_license', tenancy: { enabled: false }, fields: {},
+            } as any);
+            // buildDriverOptions merges over the caller-supplied base options
+            // (for find: the query object) and never overwrites an explicit
+            // tenantId — deliberate cross-checks stay possible.
+            await engine.find(
+                'sys_license',
+                { filters: [], tenantId: 'org_explicit' } as any,
+                { context: { timezone: 'UTC' } as any },
+            );
+            expect(lastFindOpts()).toMatchObject({ tenantId: 'org_explicit' });
+        });
+
+        it('write path: insert on a tenancy-disabled object carries no tenantId to the driver', async () => {
+            vi.mocked(SchemaRegistry.getObject).mockReturnValue({
+                name: 'sys_license', tenancy: { enabled: false }, fields: {},
+            } as any);
+            await engine.insert('sys_license', { customer: 'ACME' }, { context: { tenantId: 'org_admin' } as any });
+            const createOpts = (mockDriver.create as any).mock.calls.at(-1)?.[2];
+            expect(createOpts?.tenantId).toBeUndefined();
+        });
+    });
+
     describe('Read hooks on findOne + registration guard (#3195)', () => {
         beforeEach(async () => {
             engine.registerDriver(mockDriver, true);

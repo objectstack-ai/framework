@@ -8,7 +8,7 @@
  */
 
 import type { QueryAST, DriverOptions, SchemaMode } from '@objectstack/spec/data';
-import { parseAutonumberFormat, renderAutonumber, missingFieldValues, type AutonumberToken } from '@objectstack/spec/data';
+import { parseAutonumberFormat, renderAutonumber, missingFieldValues, isTenancyDisabled, type AutonumberToken } from '@objectstack/spec/data';
 import type { IDataDriver } from '@objectstack/spec/contracts';
 import { StorageNameMapping } from '@objectstack/spec/system';
 import { ExternalSchemaModeViolationError } from '@objectstack/spec/shared';
@@ -396,8 +396,24 @@ export class SqlDriver implements IDataDriver {
    * applied — preserves backward compatibility for tools that legitimately
    * need cross-tenant access. Tenant enforcement is therefore opt-in by
    * the caller, not by the driver.
+   *
+   * Entries are overwritten on every (re-)registration; the sticky
+   * {@link tenantOptOutByTable} record keeps an explicit `tenancy.enabled:false`
+   * declaration from being lost to a later partial re-registration.
    */
   protected tenantFieldByTable: Record<string, string | null> = {};
+
+  /**
+   * Tables whose schema EXPLICITLY declared `tenancy.enabled === false`.
+   * Sticky across re-registrations: a later registration that omits the
+   * `tenancy` block (lifecycle archive `syncSchema`, schema-drift re-sync,
+   * partial-schema callers) must NOT resurrect org-scoping via the implicit
+   * `organization_id` heuristic — that is how a platform-global object like
+   * `sys_license` ends up org-scoped and its NULL-org rows vanish for
+   * org-context reads (#3249). A registration that DOES carry a `tenancy`
+   * declaration is authoritative and updates/clears the entry.
+   */
+  protected tenantOptOutByTable: Set<string> = new Set();
 
   /** Throttle table for missing-tenantId warnings ({object}:{op}). */
   protected tenantAuditWarned: Set<string> = new Set();
@@ -1939,6 +1955,7 @@ export class SqlDriver implements IDataDriver {
     if (this.datetimeFields[base]) this.datetimeFields[shard] = this.datetimeFields[base];
     if (this.timeFields[base]) this.timeFields[shard] = this.timeFields[base];
     this.tenantFieldByTable[shard] = this.tenantFieldByTable[base] ?? null;
+    if (this.tenantOptOutByTable.has(base)) this.tenantOptOutByTable.add(shard);
     this.tablesWithTimestamps.add(shard);
   }
 
@@ -1965,7 +1982,7 @@ export class SqlDriver implements IDataDriver {
   protected computeTenantField(schema: { fields?: Record<string, any>; tenancy?: any }): string | null {
     const tenancyDecl = (schema as any)?.tenancy;
     // Explicit opt-out wins over any column-presence heuristic.
-    if (tenancyDecl?.enabled === false) return null;
+    if (isTenancyDisabled(schema)) return null;
     const fields = schema?.fields;
     if (tenancyDecl?.tenantField) {
       const declared = String(tenancyDecl.tenantField);
@@ -1973,6 +1990,32 @@ export class SqlDriver implements IDataDriver {
     }
     if (fields && Object.prototype.hasOwnProperty.call(fields, 'organization_id')) return 'organization_id';
     return null;
+  }
+
+  /**
+   * {@link computeTenantField} + maintenance of the sticky explicit-opt-out
+   * record (#3249). Key by the same key the caller uses for
+   * `tenantFieldByTable` (table name in `initObjects`, object name in
+   * `registerExternalObject` — {@link resolveTenantField} checks both).
+   *
+   * A schema that carries a `tenancy` declaration is authoritative: it sets or
+   * clears the opt-out and is computed normally. A schema WITHOUT one (partial
+   * re-registration — e.g. the lifecycle archive path passes only
+   * `{ name, fields }` to `syncSchema`) preserves a previously declared
+   * opt-out instead of letting the implicit `organization_id` heuristic
+   * re-scope a platform-global table.
+   */
+  protected computeAndRecordTenantField(
+    key: string,
+    schema: { fields?: Record<string, any>; tenancy?: any },
+  ): string | null {
+    if (schema?.tenancy != null) {
+      if (isTenancyDisabled(schema)) this.tenantOptOutByTable.add(key);
+      else this.tenantOptOutByTable.delete(key);
+      return this.computeTenantField(schema);
+    }
+    if (this.tenantOptOutByTable.has(key)) return null;
+    return this.computeTenantField(schema);
   }
 
   /**
@@ -2038,7 +2081,7 @@ export class SqlDriver implements IDataDriver {
     const timeCols: string[] = [];
     const autoNumberCols: Array<{ name: string; format: string; tokens: AutonumberToken[]; tenantField: string | null }> = [];
 
-    const tenantField = this.computeTenantField(schema);
+    const tenantField = this.computeAndRecordTenantField(key, schema);
     if (schema.fields) {
       for (const [name, field] of Object.entries<any>(schema.fields)) {
         const type = field.type || 'string';
@@ -2087,9 +2130,9 @@ export class SqlDriver implements IDataDriver {
       const numericCols: string[] = [];
       const autoNumberCols: Array<{ name: string; format: string; tokens: AutonumberToken[]; tenantField: string | null }> = [];
       // Tenant-isolation column: explicit tenancy opt-out → declared field →
-      // implicit `organization_id`. See {@link computeTenantField} (shared with
-      // registerExternalObject so the two paths can't drift).
-      const tenantField = this.computeTenantField(obj);
+      // implicit `organization_id`. See {@link computeAndRecordTenantField}
+      // (shared with registerExternalObject so the two paths can't drift).
+      const tenantField = this.computeAndRecordTenantField(tableName, obj);
       if (obj.fields) {
         for (const [name, field] of Object.entries<any>(obj.fields)) {
           const type = field.type || 'string';
