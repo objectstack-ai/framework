@@ -483,6 +483,50 @@ describe('ObjectQL Engine', () => {
         });
     });
 
+    describe('organizationId exposed to hooks as the blessed org name (#3280)', () => {
+        beforeEach(async () => {
+            engine.registerDriver(mockDriver, true);
+            await engine.init();
+            vi.mocked(SchemaRegistry.getObject).mockReturnValue({ name: 'task', fields: {} } as any);
+        });
+
+        it('populates session.organizationId + user.organizationId, both equal to the resolved org', async () => {
+            let session: any, user: any;
+            engine.registerHook('beforeInsert', async (ctx: any) => { session = ctx.session; user = ctx.user; }, { object: 'task' });
+
+            await engine.insert('task', { title: 'x' }, { context: { userId: 'u1', tenantId: 'org_1' } as any });
+
+            // Blessed name and the deprecated alias carry the identical value.
+            expect(session.organizationId).toBe('org_1');
+            expect(session.tenantId).toBe('org_1');
+            expect(session.organizationId).toBe(session.tenantId);
+            // `ctx.user` shortcut carries the same org for zero-relearning filtering.
+            expect(user).toMatchObject({ id: 'u1', organizationId: 'org_1' });
+        });
+
+        it('unscoped (no org) call: session present, org fields undefined, user has no organizationId', async () => {
+            let session: any, user: any;
+            engine.registerHook('beforeInsert', async (ctx: any) => { session = ctx.session; user = ctx.user; }, { object: 'task' });
+
+            await engine.insert('task', { title: 'y' }, { context: { userId: 'u1' } as any });
+
+            expect(session).toBeDefined();
+            expect(session.organizationId).toBeUndefined();
+            expect(session.tenantId).toBeUndefined();
+            expect(user).toMatchObject({ id: 'u1' });
+            expect(user.organizationId).toBeUndefined();
+        });
+
+        it('system / no acting user: user shortcut is undefined (org read via session)', async () => {
+            let userSeen: any = 'unset';
+            engine.registerHook('beforeInsert', async (ctx: any) => { userSeen = ctx.user; }, { object: 'task' });
+
+            await engine.insert('task', { title: 'z' }, { context: { isSystem: true, tenantId: 'org_1' } as any });
+
+            expect(userSeen).toBeUndefined();
+        });
+    });
+
     describe('execution context via the trailing options arg (read methods)', () => {
         // Regression: reads took context inside the query while writes took it in
         // a trailing options arg — so `find(obj, q, { context })` silently dropped

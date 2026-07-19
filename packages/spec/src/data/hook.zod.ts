@@ -208,11 +208,26 @@ export const HookContextSchema = lazySchema(() => z.object({
 
   /**
    * Execution Session
-   * Contains authentication and tenancy information.
+   * Contains authentication and organization/tenancy information.
    */
   session: z.object({
     userId: z.string().optional(),
-    tenantId: z.string().optional(),
+    /**
+     * Active organization ID — the blessed, developer-facing name for the
+     * caller's current org. Same value everywhere a developer reads the org:
+     * the `organization_id` column, `current_user.organizationId` (RLS/sharing),
+     * and seed rows. Prefer this in hooks; it always equals `tenantId`.
+     * `null`/`undefined` on unscoped (platform/community) calls.
+     */
+    organizationId: z.string().optional().describe('Active organization ID (blessed name; equals tenantId)'),
+    /**
+     * @deprecated Prefer `organizationId` — the two carry the identical value
+     * (the caller's active org). `tenantId` remains for back-compat; it names
+     * the generic driver-layer isolation column, whereas everything else on the
+     * developer surface (columns, RLS `current_user`, seed) says `organization`.
+     * New docs/examples teach only `organizationId`.
+     */
+    tenantId: z.string().optional().describe('Deprecated alias of organizationId'),
     roles: z.array(z.string()).optional(),
     accessToken: z.string().optional(),
     isSystem: z.boolean().optional().describe('True when the call was made with an elevated system context (engine self-writes)'),
@@ -253,6 +268,14 @@ export const HookContextSchema = lazySchema(() => z.object({
     id: z.string().optional(),
     name: z.string().optional(),
     email: z.string().optional(),
+    /**
+     * Active organization ID of the acting user — the blessed name for
+     * "the current org to filter/scope by" inside a hook. Same value as
+     * `session.organizationId`, `current_user.organizationId` (RLS), and the
+     * `organization_id` column, so a hook author needs zero relearning to move
+     * between surfaces. Undefined for unscoped (platform/community) calls.
+     */
+    organizationId: z.string().optional().describe('Active organization ID of the acting user (equals session.organizationId)'),
   }).optional().describe('Current user info shortcut'),
 }));
 
