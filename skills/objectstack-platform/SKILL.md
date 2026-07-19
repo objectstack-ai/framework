@@ -1033,31 +1033,49 @@ const metrics = kernel.getPluginMetrics();
 
 ## Feature Flags
 
-```typescript
-import { defineStack } from '@objectstack/spec';
+Feature flags are a **protocol shape, not a config key**. `FeatureFlagSchema` (from
+`@objectstack/spec/kernel`) defines the flag document; in the protocol it appears only on
+the runtime capabilities descriptor (`ObjectStackCapabilities.system.features`) that a
+platform serves for introspection. There is **no `featureFlags:` / `features:` key on
+`defineStack`** — strict parsing silently strips unknown keys, so such config would be a
+no-op.
 
-export default defineStack({
-  featureFlags: [
-    {
-      name: 'experimental_ai_copilot',
-      label: 'AI Copilot',
-      enabled: true,
-      strategy: 'percentage',
-      conditions: { percentage: 25 },   // 25% of users
-      environment: ['production'],
-    },
-    {
-      name: 'beta_kanban_view',
-      label: 'Kanban View',
-      enabled: true,
-      strategy: 'group',
-      conditions: { groups: ['beta_testers'] },
-    },
-  ],
+<!-- os:check -->
+```typescript
+import { FeatureFlag } from '@objectstack/spec/kernel';
+import type { ObjectStackCapabilities } from '@objectstack/spec';
+
+// FeatureFlag.create() gives you a compile-checked flag value:
+const aiCopilot = FeatureFlag.create({
+  name: 'experimental_ai_copilot',
+  label: 'AI Copilot',
+  enabled: true,
+  strategy: 'percentage',
+  conditions: { percentage: 25 },   // 25% of users
+  environment: 'prod',              // 'dev' | 'staging' | 'prod' | 'all' (default 'all')
 });
+
+// Where flags live in the protocol — the runtime capabilities descriptor:
+type SystemFeatures = NonNullable<ObjectStackCapabilities['system']['features']>;
+const features: SystemFeatures = [
+  aiCopilot,
+  {
+    name: 'beta_kanban_view',
+    label: 'Kanban View',
+    enabled: true,
+    strategy: 'group',
+    conditions: { groups: ['beta_testers'] },
+    environment: 'all',
+  },
+];
 ```
 
 Strategies: `boolean` | `percentage` | `user_list` | `group` | `custom`
+
+Looking for live, resolvable toggles today? Those are different surfaces, not
+`FeatureFlagSchema`: the `feature_flags` settings manifest
+(`@objectstack/service-settings`, env-overridable via `OS_FEATURE_FLAGS_*`) and auth
+capability gates (`requiresFeature` → `PUBLIC_AUTH_FEATURES`).
 
 ---
 ---
