@@ -1,5 +1,239 @@
 # @objectstack/metadata-protocol
 
+## 16.0.0-rc.0
+
+### Minor Changes
+
+- 668dd17: **Breaking (npm type surface): retire the vestigial feed contracts + protocol surface (ADR-0052 §5 follow-up, #1959).**
+
+  The `service-feed` runtime was deleted in #1955; `sys_comment` / `sys_activity`
+  are the canonical record-collaboration/timeline backend. This removes the dead
+  type surface that still pointed at the deleted runtime — every removed method was
+  already unreachable (the feed REST route was never mounted → 404; the protocol
+  implementation was never wired with a feed service, so `requireFeedService()`
+  could only throw). No behavior changes.
+
+  No authorable metadata key is removed (the `feeds:` object capability flag and
+  the `RecordActivity` UI component config are unchanged), so `PROTOCOL_MAJOR`
+  stays 15 and this ships as `minor` rather than a protocol major.
+
+  FROM → TO migration for every removed export:
+
+  - `@objectstack/spec/contracts` — `IFeedService`, `CreateFeedItemInput`,
+    `UpdateFeedItemInput`, `ListFeedOptions`, `FeedListResult` → **removed, no
+    replacement**. Comments/activity are plain records: write `sys_comment` / read
+    `sys_activity` via the data engine or the REST data API.
+  - `@objectstack/spec/api` — `FeedApiContracts`, `FeedApiErrorCode`,
+    `FeedProtocol`, and all feed request/response schemas + types (`GetFeed*`,
+    `CreateFeedItem*`, `UpdateFeedItem*`, `DeleteFeedItem*`, `AddReaction*`,
+    `RemoveReaction*`, `PinFeedItem*`, `UnpinFeedItem*`, `StarFeedItem*`,
+    `UnstarFeedItem*`, `SearchFeed*`, `GetChangelog*`, `ChangelogEntry`,
+    `SubscribeRequest/Response`, `FeedUnsubscribeRequest`, `UnsubscribeResponse`,
+    `FeedPathParams`, `FeedItemPathParams`, `FeedListFilterType`) → **removed**. Use
+    the data API against `sys_comment` / `sys_activity` (`/api/v1/data/sys_comment/…`);
+    reactions and threaded replies are fields on `sys_comment`.
+  - `@objectstack/spec/data` — `FeedItemSchema`/`FeedItem`, `FeedActorSchema`/`FeedActor`,
+    `MentionSchema`/`Mention`, `ReactionSchema`/`Reaction`,
+    `FieldChangeEntrySchema`/`FieldChangeEntry`, `FeedVisibility`,
+    `RecordSubscriptionSchema`/`RecordSubscription`, `SubscriptionEventType`, and the
+    `data`-namespace `NotificationChannel` → **removed**. `FeedItemType` and
+    `FeedFilterMode` are **kept** (live UI activity-timeline config). For notification
+    channels use `NotificationChannelSchema` from `@objectstack/spec/system`.
+  - `@objectstack/client` — `client.feed.*` (`list` / `create` / `update` / `delete` /
+    `addReaction` / `removeReaction` / `pin` / `unpin` / `star` / `unstar` / `search` /
+    `getChangelog` / `subscribe` / `unsubscribe`) and the re-exported feed response
+    types → **removed**. One-line fix: use `client.data.*` on `sys_comment` /
+    `sys_activity`, e.g. `client.data.create('sys_comment', { object, record_id, body })`
+    and `client.data.find('sys_activity', { filters: [['record_id', '=', id]] })`.
+  - `@objectstack/metadata-protocol` — `ObjectStackProtocolImplementation` no longer
+    implements the 14 feed methods; its constructor
+    `(engine, getServicesRegistry?, getFeedService?, environmentId?)` becomes
+    `(engine, getServicesRegistry?, environmentId?)`. One-line fix: delete the third
+    argument.
+
+### Patch Changes
+
+- e057f42: fix: harden the bulk-write path — retries, idempotency, contracts, and summary visibility (#3147–#3152)
+
+  Six reliability fixes to the batched seed/import + `engine.insert(array)` path
+  introduced by the #2678 bulk-write rework:
+
+  - **#3151** `bulkWrite` validates that `writeBatch` returns one record per input
+    row (a short/long/non-array return is degraded per-row, not backfilled as
+    phantom success); `engine.insert(array)` likewise rejects a short driver
+    `bulkCreate` return instead of padding afterInsert with `undefined`.
+  - **#3150** wraps the two remaining un-retried write points (seed
+    `writeRecord`/`resolveDeferredUpdates`, import's no-`createManyData`
+    fallback) in `withTransientRetry`; `defaultIsTransientError` short-circuits
+    definitive logical errors to non-transient.
+  - **#3148** import `resolveRef` flushes pending creates on a same-object miss so
+    a later row can reference an earlier same-file CREATE, and no longer
+    negatively caches a miss.
+  - **#3149** threads an `attempt` counter through `bulkWrite`; seed rechecks by
+    `externalId` and import by `matchFields` before re-writing, so a
+    commit-then-lost-response retry cannot duplicate a batch.
+  - **#3147** `recomputeSummaries` retries transient failures and, on exhaustion,
+    surfaces `SummaryRecomputeError` (`ERR_SUMMARY_RECOMPUTE`) instead of a
+    silent warn; seed/import recover it to a warning without re-writing.
+  - **#3152** autonumbers are assigned after validation, so a batch that dies in
+    validation consumes no sequence value (no number-range gaps).
+
+- 0e41302: fix(metadata-protocol): unscoped metadata list dedupes package-aware, not by bare name (ADR-0048 #1828)
+
+  `getMetaItems` merged registry items, `sys_metadata` overlay rows, draft-preview
+  rows, and MetadataService items into `Map`s keyed by bare `name`, so two installed
+  packages shipping the same `type/name` (e.g. `page/home`) collapsed to one row
+  (last-write-wins) on an unscoped `GET /meta/:type` whenever either package had an
+  overlay — and the frontend prefer-local resolution, which reads that list, could
+  no longer tell the two packages' rows apart.
+
+  The three merge sites (plus the env/org pre-merge) now key by `(package, name)`,
+  mirroring `getMetaItem`'s scoped-then-global-fallback resolution: colliding rows
+  stay distinct each with its own `_packageId`, a package-less (env-wide) overlay
+  still wins over the single artifact it customizes (ADR-0005 precedence and
+  single-package behaviour unchanged), and the registry-hydration artifact graft is
+  scoped to each row's own `package_id` so a collision no longer mislabels provenance.
+
+- b8a21ad: Publish/discard package drafts in the draft's own org scope, fixing `no_draft` after saving a draft via Studio.
+
+  Studio "Save Draft" (`PUT /meta/:type/:name?mode=draft`) never threads the session's `activeOrganizationId`, so the draft row is written env-wide (`organization_id = NULL`). "Publish" (`POST /packages/:id/publish-drafts`) resolves the active org and passed it to `promoteDraft`, which looked the draft up with a strict `organization_id = <org>` equality — so it 404'd (`[no_draft] No pending draft exists …`) on the env-wide row it could never match, even though `listDrafts` had already surfaced that draft to the publish CTA (PR #1852's `$or`). `discardPackageDrafts` had the same latent gap.
+
+  `listDrafts` now projects each draft's own `organizationId`, and `publishPackageDrafts` / `discardPackageDrafts` promote / delete each draft in that scope (env-wide stays env-wide, per-org stays per-org). Seed-body capture and the ADR-0067 revert-plan pre-state read are scoped the same way.
+
+  Fixes #3115.
+
+- beaf2de: fix(metadata-protocol): strip static `readonly` on INSERT at the data-write ingress (#3043)
+
+  #2948/#3003 made static `readonly: true` fields server-enforced on UPDATE (a
+  non-system PATCH forging `approval_status: 'approved'` is silently stripped in
+  the engine), but INSERT was exempt. For approval/status/verdict columns that
+  exemption was the _shorter_ attack: instead of the #3003 draft-then-PATCH move, a
+  non-system caller could `POST` a record already `approval_status: 'approved'` in
+  one step — and the UPDATE-only strip never reached it.
+
+  The strip now also runs on INSERT, but at the **external data-write ingress**
+  (`DataProtocol.createData` / `createManyData` / `batchData` / `cloneData`) rather
+  than in the engine. That seam is the single point every external programmatic
+  create funnels through — the REST CRUD route, the GraphQL/MCP dispatcher
+  (`bridge.create` → `callData` → `createData`), and bulk import — while **trusted
+  internal writers** (better-auth's adapter, the metadata repository, the seed
+  loader) call `engine.insert` directly and bypass it. Enforcing at the ingress
+  protects every caller/agent path at once without stripping the internal writers
+  that legitimately seed read-only columns on create (identity provisioning,
+  provenance stamps, event-log cursors) — the blast radius an engine-level insert
+  strip would have.
+
+  - **Caller-forged only, at the ingress.** The payload here is raw caller input
+    (the security middleware stamps `owner_id` / `organization_id` later, inside
+    `engine.insert`), so only keys the caller actually sent are dropped; server
+    stamps are added afterwards and are unaffected.
+  - **Re-derives the default.** A stripped field falls back to its declared
+    `defaultValue` in the engine (a forged `approval_status` becomes `draft`, not
+    NULL).
+  - **System-context exempt.** `isSystem` writes still seed read-only columns.
+  - **Silent** (HTTP 2xx), per-row on batch/import. `readonlyWhen` stays
+    INSERT-exempt (a conditional lock needs a prior record).
+  - **Author-defined business objects only.** Platform objects (`managedBy` set,
+    or the `sys_` namespace) carry their own field-write governance that a silent
+    strip must not pre-empt — e.g. ADR-0086 REJECTS (403) a forged
+    `managed_by:'package'` on `sys_permission_set`, and #3004 rejects a forged
+    `owner_id`; several of those columns are `readonly`, so stripping them here
+    would swallow the payload the guard is meant to reject. The #3043 threat is app
+    approval/status fields, never `sys_` — the same boundary `applySystemFields`
+    uses for ownership.
+
+  Behavior change: a non-system create through the data API (REST / GraphQL / MCP /
+  import) can no longer seed a `readonly` column from the payload. Flows that
+  legitimately write read-only columns at creation must run with a system context
+  (`isSystem`), the same requirement the UPDATE strip already imposes.
+
+- 8abf133: **Breaking (discovery response shape): retire the residual feed capability surface (#3180, follow-up to #1959 / ADR-0052 §5).**
+
+  The feed backend was retired long ago; #1959 removed the feed contracts + SDK. This
+  removes the last discovery/dispatcher references to it, and fixes a real bug where the
+  `comments` capability was permanently `false`.
+
+  - `@objectstack/spec` — `WellKnownCapabilitiesSchema.feed` and `ApiRoutesSchema.feed`
+    (`routes.feed`) are **removed**, and the `/api/v1/feed` entry is dropped from
+    `DEFAULT_DISPATCHER_ROUTES`. FROM → TO: clients reading `discovery.capabilities.feed`
+    or `discovery.routes.feed` → use `discovery.capabilities.comments`; comments/activity
+    are served by the generic data API on `sys_comment` / `sys_activity`
+    (`/api/v1/data/sys_comment/…`).
+  - `@objectstack/metadata-protocol` — `getDiscovery()` no longer emits the always-`false`
+    `feed` service/capability. **Bug fix:** the `comments` capability previously keyed off
+    the deleted `'feed'` service (so it was permanently `false` after #1955); it now tracks
+    the presence of the `sys_comment` object (provided by the always-on audit slate), so
+    `declared === enforced`.
+  - `@objectstack/client` — the internal `feed: '/api/v1/feed'` route constant is removed
+    (it only existed to satisfy the now-removed `ApiRoutes.feed` type; no client code used it).
+
+- 515f11a: fix(seed): replaying seeds no longer corrupts lookup natural keys on the upsert update path
+
+  Every dev-server restart replayed package seeds in upsert mode, and any record whose
+  lookup/master_detail was authored as a natural key could have that reference overwritten
+  with NULL on the update path (`NOT NULL constraint failed` on required columns; silent
+  link loss on nullable ones). Four fixes:
+
+  - An unresolved reference now leaves the column untouched (deferred to pass 2) or drops
+    the record loudly — it is never written as NULL over an existing row.
+  - DB-side reference resolution probes the target dataset's declared `externalId` (e.g.
+    `email`) before falling back to `name` and `id`, matching how in-memory resolution
+    already keyed records.
+  - A rejected update (e.g. a `state_machine` rule vetoing the replay) no longer severs
+    natural-key resolution for downstream child datasets.
+  - Replays are idempotent: an upsert/update whose declared fields already match the
+    existing row is skipped instead of rewritten (no more `updated_at` churn or lifecycle
+    re-validation on every boot).
+
+- Updated dependencies [f972574]
+- Updated dependencies [22013aa]
+- Updated dependencies [3ad3dd5]
+- Updated dependencies [3a18b60]
+- Updated dependencies [a8aa34c]
+- Updated dependencies [e057f42]
+- Updated dependencies [a3823b2]
+- Updated dependencies [43a3efb]
+- Updated dependencies [524696a]
+- Updated dependencies [6b51346]
+- Updated dependencies [80273c8]
+- Updated dependencies [5e3301d]
+- Updated dependencies [dd9f223]
+- Updated dependencies [46e876c]
+- Updated dependencies [5f05de2]
+- Updated dependencies [021ba4c]
+- Updated dependencies [158aa14]
+- Updated dependencies [83e8f7d]
+- Updated dependencies [d2723e2]
+- Updated dependencies [fefcd54]
+- Updated dependencies [beaf2de]
+- Updated dependencies [06cb319]
+- Updated dependencies [369eb6e]
+- Updated dependencies [b659111]
+- Updated dependencies [5754a23]
+- Updated dependencies [6c270a6]
+- Updated dependencies [290e2f0]
+- Updated dependencies [668dd17]
+- Updated dependencies [8abf133]
+- Updated dependencies [e0859b1]
+- Updated dependencies [92f5f19]
+- Updated dependencies [32899e6]
+- Updated dependencies [04ecd4e]
+- Updated dependencies [4d5a892]
+- Updated dependencies [16cebeb]
+- Updated dependencies [86d30af]
+- Updated dependencies [8923843]
+- Updated dependencies [ea32ec7]
+- Updated dependencies [a2795f6]
+- Updated dependencies [f16b492]
+- Updated dependencies [4b6fde8]
+- Updated dependencies [2018df9]
+- Updated dependencies [fc5a3a2]
+  - @objectstack/spec@16.0.0-rc.0
+  - @objectstack/core@16.0.0-rc.0
+  - @objectstack/formula@16.0.0-rc.0
+  - @objectstack/types@16.0.0-rc.0
+  - @objectstack/metadata-core@16.0.0-rc.0
+
 ## 15.1.1
 
 ### Patch Changes

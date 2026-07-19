@@ -1,5 +1,131 @@
 # @objectstack/types
 
+## 16.0.0-rc.0
+
+### Minor Changes
+
+- 83e8f7d: feat(mcp): decouple the stdio auto-start switch from the HTTP surface + surface the MCP endpoint on `os dev` boot (#3167)
+
+  The MCP HTTP surface (`/api/v1/mcp`) and the long-lived stdio transport used to
+  share one env var: `OS_MCP_SERVER_ENABLED=true` turned the HTTP surface on **and**
+  silently auto-started the stdio transport — which bridges the raw metadata service
+
+  - data engine with no per-request principal (unscoped). An operator setting it to
+    "make sure MCP is on" got an unscoped transport as a side effect.
+
+  * **`@objectstack/types`** — new `resolveMcpStdioAutoStart()`. Stdio auto-start is
+    now its own switch, `OS_MCP_STDIO_ENABLED` (default off); `OS_MCP_SERVER_ENABLED`
+    governs only the HTTP surface. The legacy `OS_MCP_SERVER_ENABLED=true` trigger
+    still starts stdio for one release, flagged as deprecated. `=false` is unchanged
+    (it only ever gated HTTP).
+  * **`@objectstack/mcp`** — `MCPServerPlugin.start()` gates stdio on the new switch
+    and logs a one-time deprecation warning when started via the legacy alias.
+  * **`@objectstack/cli`** — `os dev` now prints the MCP endpoint, the agent-skill
+    URL, and a ready-to-paste `claude mcp add` command on boot (gated on the HTTP
+    surface being on), so the "an agent operates the app it's building" loop is
+    discoverable at dev time.
+  * **`create-objectstack`** — the blank scaffold README documents that the app is
+    itself an MCP server (the serve side), distinct from the consume-side connector.
+
+- 92f5f19: feat(runtime): sandbox budget is script CPU-time, not wall clock (ADR-0102 D1, #3295)
+
+  The QuickJS sandbox now meters each hook/action invocation against how much
+  **VM-active (CPU) time** the body burns, not wall clock. Idle host-await time and
+  a nested hook's own execution (which runs host-side while the caller's VM is
+  parked) are no longer charged to the caller — so a slow/loaded host or a deep
+  nested-write chain can't trip the budget while a script is merely waiting (the
+  root cause of the #3259 CI flake). A separate, generous **wall-clock ceiling**
+  (default 30s, `max(ceiling, cpuBudget)`) remains as the backstop for a body stuck
+  on a host call that never settles.
+
+  What changes for consumers (behaviour, not API signatures):
+
+  - **Meaning of the timeout knobs.** `body.timeoutMs`, the `hookTimeoutMs` /
+    `actionTimeoutMs` runner options, and `OS_SANDBOX_HOOK_TIMEOUT_MS` /
+    `OS_SANDBOX_ACTION_TIMEOUT_MS` keep their **names, defaults (250ms / 5000ms),
+    and precedence** — but now bound CPU-time instead of wall-clock. In practice
+    this only _loosens_ legitimate slow/nested work; a runaway synchronous script
+    is still cut at the same budget.
+  - **Error messages.** `exceeded timeout of Nms` → either `exceeded CPU budget of
+Nms` (script burned its CPU budget) or `exceeded wall-clock ceiling of Nms
+while awaiting host calls` (stuck on a never-settling host call). Update any
+    code/tests matching the old string.
+
+  New knobs (additive):
+
+  - `QuickJSScriptRunner` option `wallCeilingMs` and env `OS_SANDBOX_WALL_CEILING_MS`
+    — tune the wall ceiling (explicit option › env › 30s).
+  - `resolveSandboxTimeoutMs` (`@objectstack/types`) gains a `'wallCeiling'` kind.
+
+  Also fixes a latent init bug in the new accounting where the interrupt handler
+  could fire during `installCtx` and corrupt ctx marshalling. The nested-write
+  integration suites now run at the stock 250ms budget (previously forced to 10s),
+  which is itself the regression guard for the nested-charging fix.
+
+- 32899e6: feat(runtime): env-overridable sandbox hook/action timeout default (#3259)
+
+  The QuickJS sandbox enforces a wall-clock deadline on every hook/action
+  invocation (250ms hooks / 5000ms actions). Each invocation compiles a fresh
+  WASM module, and a nested hook compiles ANOTHER one inside the parent's budget,
+  so on a heavily loaded or slow host — an oversubscribed CI runner, constrained
+  production hardware — that fixed VM-creation cost alone can trip the hook
+  default even while the VM is still making progress. On CI this surfaced as an
+  intermittent `hook '…' exceeded timeout of 250ms` flake on PRs that never
+  touched the sandbox path.
+
+  The per-invocation timeout DEFAULT is now resolvable from the environment via
+  `resolveSandboxTimeoutMs` (`@objectstack/types`), which `QuickJSScriptRunner`
+  consults, so an operator can raise the floor once, deployment-wide, instead of
+  re-tuning every call site:
+
+  - `OS_SANDBOX_HOOK_TIMEOUT_MS` — default hook budget (ms)
+  - `OS_SANDBOX_ACTION_TIMEOUT_MS` — default action budget (ms)
+
+  Precedence is unchanged: an explicit `hookTimeoutMs` / `actionTimeoutMs` passed
+  to the runner still wins over the env var, and a body's own declared `timeoutMs`
+  still wins over the resolved default (the smaller of the explicit values). Only
+  a positive integer is honored; unset / empty / non-numeric / non-positive keeps
+  the built-in 250ms / 5000ms defaults, so behaviour is byte-for-byte unchanged
+  when the vars are absent — production is unaffected unless it opts in.
+
+  CI's Test Core now sets `OS_SANDBOX_HOOK_TIMEOUT_MS=10000` so the shared-runner
+  load flake can't recur; genuine hangs stay bounded by each test's own timeout.
+
+### Patch Changes
+
+- Updated dependencies [f972574]
+- Updated dependencies [22013aa]
+- Updated dependencies [3ad3dd5]
+- Updated dependencies [3a18b60]
+- Updated dependencies [a8aa34c]
+- Updated dependencies [a3823b2]
+- Updated dependencies [43a3efb]
+- Updated dependencies [524696a]
+- Updated dependencies [5e3301d]
+- Updated dependencies [46e876c]
+- Updated dependencies [158aa14]
+- Updated dependencies [d2723e2]
+- Updated dependencies [fefcd54]
+- Updated dependencies [beaf2de]
+- Updated dependencies [369eb6e]
+- Updated dependencies [b659111]
+- Updated dependencies [5754a23]
+- Updated dependencies [6c270a6]
+- Updated dependencies [668dd17]
+- Updated dependencies [8abf133]
+- Updated dependencies [e0859b1]
+- Updated dependencies [04ecd4e]
+- Updated dependencies [4d5a892]
+- Updated dependencies [16cebeb]
+- Updated dependencies [86d30af]
+- Updated dependencies [8923843]
+- Updated dependencies [a2795f6]
+- Updated dependencies [f16b492]
+- Updated dependencies [4b6fde8]
+- Updated dependencies [2018df9]
+- Updated dependencies [fc5a3a2]
+  - @objectstack/spec@16.0.0-rc.0
+
 ## 15.1.1
 
 ### Patch Changes

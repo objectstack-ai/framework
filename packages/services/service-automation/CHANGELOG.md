@@ -1,5 +1,194 @@
 # @objectstack/service-automation
 
+## 16.0.0-rc.0
+
+### Minor Changes
+
+- 780b4b5: feat(automation): schema-aware flow-condition validation at registration (#1928)
+
+  `registerFlow` now runs the same schema-aware condition checks as
+  `objectstack build` — so a flow registered dynamically (via the API / Studio,
+  bypassing the build lint) still gets the guardrail. When the host wires an
+  object-schema resolver, a flow condition that references an unknown field,
+  likely-typos a field name, or does arithmetic/ordering on a text/boolean field
+  against a number is surfaced as an **advisory warning** (logged), pointing at
+  the object's real schema.
+
+  - New `AutomationEngine.setObjectSchemaResolver(resolver)` bridge (mirrors
+    `setFunctionResolver`); `AutomationServicePlugin` wires it to
+    `objectql.registry.getObject` in `start()`, before the flow pull, so
+    registry-sourced flows are covered too.
+  - **Strictly additive / zero regression**: the fatal set is unchanged (syntax,
+    brace-in-CEL, unknown-function still throw); everything the schema pass adds is
+    logged, never thrown, and the whole thing is a no-op when no resolver is wired.
+    Flow conditions bind fields flat, so the check runs in `flattened` scope
+    (flow variables stay `dyn` and are never flagged; equality is runtime-safe).
+
+  Builds on the tier-4 type-soundness check in `@objectstack/formula` /
+  `@objectstack/lint` (#1928).
+
+- 2ea08ee: Flow trigger observability — kill the four-layer silence around record-change flows that never fire (2026-07-17 third-party eval).
+
+  A misauthored auto-launched flow (wrong `objectName`, missing `requires: ['automation','triggers']`, failing start condition) produced ZERO output at every layer: the engine's own registration/binding logs land inside the CLI's boot-quiet stdout window (which swallows debug/info/warn — only error/fatal reach stderr), and each "didn't happen" path was itself silent. Fixes:
+
+  - **Startup banner `Flows:` section** (`os serve`/`os dev`/`os start`): flow count, bound-to-trigger count, registered trigger types, draft count — plus loud `⚠` lines for flows declared with no automation engine enabled (`requires` missing), flows whose trigger type has no registered trigger, and bound record-change flows targeting an unknown object (dead binding). Printed after stdout is restored, so it is immune to the boot-quiet window.
+  - **Trigger-fired run failures now log at ERROR** (stderr — always visible): the automation engine no longer drops the AutomationResult of a trigger-fired execution; condition-evaluation faults and node failures surface with the flow name. Condition-not-met skips stay at debug (high-frequency, intentional).
+  - **`RecordChangeTrigger` probes object existence at bind time** and warns when a flow's `objectName` matches no registered object (exact-name matching), instead of silently arming a hook that can never fire.
+  - **`kernel:bootstrapped` binding audit** in the automation plugin: warns per enabled-but-unbound triggered flow with the reason, and reports registered/bound/draft counts (`AutomationEngine.getTriggerBindingAudit()`, extended `getFlowRuntimeStates()` with `status`/`triggerType`/`object`).
+  - **`os validate` flow-wiring advisories** (`@objectstack/lint` `validateFlowTriggerReadiness`): warns when a record-triggered flow targets an object the stack does not define, and when an auto-triggered flow's status is `draft` (authored or defaulted — draft flows still fire; declare `active` or `obsolete`).
+  - Removed leftover boot-debug writes (`registerApp`/`AppPlugin`/`StandaloneStack`/`AuditPlugin` stderr noise) that previous debugging of this same silence had left behind.
+
+- 1e145eb: fix(automation): region-aware run-history compaction keeps loop containers + early failures (#3234)
+
+  `compactStepsForHistory` bounded a terminal run's persisted step log to the last
+  `MAX_PERSISTED_HISTORY_STEPS` entries with a plain tail-slice. With the ADR-0031
+  structured-region step logs (#1505) a single `loop` can emit
+  `iterations × body-steps` entries, so the tail-slice dropped the
+  `loop`/`parallel`/`try_catch` **container** step (it precedes all its body steps)
+  and every early iteration — leaving `getRun`/`listRuns` (after a process restart
+  or ring-buffer eviction) with body steps the Runs surface could no longer nest,
+  and silently hiding an early failure.
+
+  Compaction is now region-aware (new exported `compactStepLogForHistory`): over
+  budget it keeps the run's structural backbone — every top-level step (including
+  the region container steps) and every failure, each pulled in with its ancestor
+  container chain — plus the most recent body steps, order-preserving and
+  hard-capped at `max` so `steps_json` stays bounded (#2585). Every retained body
+  step keeps its enclosing container(s), so the compacted log never contains an
+  orphan and the observability surface's per-iteration / per-region nesting still
+  reconstructs.
+
+- a2795f6: feat(triggers): declarative time-relative trigger — daily sweep instead of fragile date-equality (#1874)
+
+  Time-relative business rules ("alert 60 days before a contract's `end_date`")
+  could only be expressed as a `record_change` flow gated on a date-equality
+  condition like `end_date == daysFromNow(60)`. That predicate is only evaluated
+  when the record _happens to change_, so it fires only if a record is edited on
+  exactly the threshold day — i.e. almost never, unattended. The robust
+  alternative was a hand-written cron + range query that every author
+  re-implemented (contracts `renewal_alert`, hr `document_expiring_soon`,
+  procurement `po_overdue`, …).
+
+  A flow's start node can now declare a `timeRelative` descriptor instead:
+
+  ```ts
+  config: {
+    timeRelative: {
+      object: 'contracts',
+      dateField: 'end_date',
+      offsetDays: [60, 30, 7],      // T-minus reminders — fires on each threshold day
+      // — or — withinDays: 30      // "expiring soon" range; negative = overdue lookback
+      filter: { status: 'active' }, // optional, ANDed with the date window
+    },
+    schedule: { type: 'cron', expression: '0 8 * * *' }, // optional; defaults to daily 08:00 UTC
+  }
+  ```
+
+  The new `time_relative` trigger (shipped in `@objectstack/trigger-schedule` as
+  `TimeRelativeTriggerPlugin`) sweeps the object on that schedule and launches the
+  flow **once per matching record**, with the record on the automation context —
+  so the start-node `condition` gate and `{record.<field>}` interpolation work
+  exactly as for a record-change flow. Because the window is evaluated every day,
+  a threshold is never missed regardless of when the record last changed. The
+  discovery query runs as a system operation (RLS-bypassing) and is capped
+  (`maxRecords`, default 1000) so a mis-scoped window can't fan out unboundedly;
+  per-record failures are isolated so one bad row never aborts the sweep.
+
+  The automation engine routes a start node carrying `config.timeRelative` to the
+  `time_relative` trigger (ahead of the plain `schedule` trigger, whose behavior is
+  unchanged), and `os validate` gains readiness checks for the new descriptor
+  (unknown swept object, ambiguous draft status). New authorable spec key:
+  `TimeRelativeTriggerSchema` (`@objectstack/spec/automation`).
+
+### Patch Changes
+
+- 22013aa: **Split the overloaded `managedBy: 'system'` bucket into engine-owned vs. admin-writable, and enforce engine-owned writes (ADR-0103, #3220).** The `system` bucket conflated two incompatible write policies: rows a platform service owns end to end (never user-written), and platform-defined schema whose rows are legitimately admin/user-writable. It carried the same all-false affordance row as `better-auth`/`append-only` but, unlike `better-auth`, had no engine enforcement — a wildcard admin could raw-write these rows through the generic data API (ADR-0049 gap).
+
+  Rather than add a new `managedBy` enum value (which would fall through to fully-editable `platform` defaults on already-deployed Console clients), the write policy is now the **resolved affordance** (`resolveCrudAffordances` = bucket default + `userActions`), and _engine-owned_ is defined as a `system`/`append-only` object that grants no write:
+
+  - **Writable set declares `userActions`** — the RBAC link tables (`sys_user_position`, `sys_user_permission_set`, `sys_position_permission_set`), `sys_user_preference`, `sys_approval_delegation`, and the messaging config grids (`sys_notification_preference` / `…_subscription` / `…_template`) now declare `userActions: { create, edit, delete: true }`. The affordance is a declaration only — the `DelegatedAdminGate` / RLS / permission sets remain the authz.
+  - **Engine-owned objects locked to reads** — `apiMethods: ['get','list']` added where absent (jobs, notifications, approval request/approver/token/action, `sys_record_share`, `sys_automation_run`, mail/settings/secret audit, the messaging delivery pipeline). `sys_secret` is explicitly read-locked (an empty `apiMethods` array fails open).
+  - **`sys_import_job`** stays engine-owned: the REST import route now writes its job rows `isSystem`-elevated (attribution preserved via the explicit `created_by` stamp) and the object is locked to `['get','list']`.
+  - **New engine write guard** (`assertEngineOwnedWriteAllowed`, plugin-security) fail-closed rejects user-context generic writes to engine-owned `system`/`append-only` objects, keyed off the resolved affordance; `isSystem` and context-less engine/service writes bypass by construction. Wired into the security middleware alongside the other data-layer gates.
+  - **`reconcileManagedApiMethods`** (objectql registry) now runs for **every** managed bucket, not just `better-auth`: any advertised write verb an object's resolved affordances forbid is stripped at registration with a warning (the drift backstop, ADR-0049).
+  - **`/me/permissions` clamp** (plugin-hono-server) now clamps `system`/`append-only` as well as `better-auth`, so the client hint reflects `permission ∩ guard`.
+
+  **Potentially breaking:** a downstream/third-party `system` object that advertised generic write verbs relying on today's fail-open behaviour will have those verbs stripped (with a warning) and user-context generic writes to it rejected. Declare `userActions` opening the verbs the object legitimately takes from a user context. `better-auth` keeps plugin-auth's identity write guard unchanged; the row-level `managed_by` provenance vocabulary (ADR-0066) is a different axis and is untouched.
+
+- 02eafa5: test(automation): end-to-end coverage for the #1928 object-schema resolver wiring
+
+  Adds a kernel-level integration test proving `AutomationServicePlugin` bridges
+  the engine's object-schema resolver to the live `objectql.registry.getObject` at
+  `start()` (fields + types resolved from the registry), and that a flow
+  registered through the running kernel with a text field misused in arithmetic
+  emits the tier-4 advisory — while a sound condition stays quiet. Locks in the
+  production integration point that the engine-level unit tests (which set the
+  resolver by hand) could not exercise. Test-only; no behavior change.
+
+- 158aa14: feat(automation): mark the loop `collection` config field as an interpolate() template so designer forms render it correctly (#3304)
+
+  The flow designer generates a node's config form from its published
+  `configSchema` (ADR-0018). A string property can now carry an `xExpression:
+'expression' | 'template'` marker — riding the same Zod `.meta()` → JSON-Schema
+  channel as `xRef` / `xEnumDeprecated` — that declares whether the string is bare
+  CEL or an `interpolate()` single-brace `{var}` template.
+
+  The `loop` node's `collection` (e.g. `{tasks}`) is a template, so it is now
+  marked `xExpression: 'template'` on both the canonical `LoopConfigSchema` and the
+  shipped descriptor's `configSchema` literal (service-automation loop-node).
+  Without the marker the designer rendered `collection` as plain text online while
+  the offline hardcoded form rendered it as a mono expression editor, and the CEL
+  brace-trap false-flagged `{tasks}` as a malformed condition. The marker closes
+  that divergence — objectui #2670 Phase 3 (#2699) already consumes it.
+
+  Additive and backward-compatible: an unknown `xExpression` value is ignored by
+  the designer, and runtime behavior is unchanged. Filling the same marker in on
+  the remaining node types (map/decision/script and the node types that publish no
+  `configSchema` yet) is tracked as follow-up in #3304.
+
+- Updated dependencies [f972574]
+- Updated dependencies [22013aa]
+- Updated dependencies [3ad3dd5]
+- Updated dependencies [3a18b60]
+- Updated dependencies [a8aa34c]
+- Updated dependencies [e057f42]
+- Updated dependencies [a3823b2]
+- Updated dependencies [43a3efb]
+- Updated dependencies [524696a]
+- Updated dependencies [6b51346]
+- Updated dependencies [80273c8]
+- Updated dependencies [5e3301d]
+- Updated dependencies [dd9f223]
+- Updated dependencies [46e876c]
+- Updated dependencies [5f05de2]
+- Updated dependencies [021ba4c]
+- Updated dependencies [158aa14]
+- Updated dependencies [d2723e2]
+- Updated dependencies [fefcd54]
+- Updated dependencies [beaf2de]
+- Updated dependencies [369eb6e]
+- Updated dependencies [b659111]
+- Updated dependencies [5754a23]
+- Updated dependencies [6c270a6]
+- Updated dependencies [290e2f0]
+- Updated dependencies [668dd17]
+- Updated dependencies [8abf133]
+- Updated dependencies [e0859b1]
+- Updated dependencies [04ecd4e]
+- Updated dependencies [4d5a892]
+- Updated dependencies [16cebeb]
+- Updated dependencies [86d30af]
+- Updated dependencies [8923843]
+- Updated dependencies [ea32ec7]
+- Updated dependencies [a2795f6]
+- Updated dependencies [f16b492]
+- Updated dependencies [4b6fde8]
+- Updated dependencies [2018df9]
+- Updated dependencies [fc5a3a2]
+  - @objectstack/spec@16.0.0-rc.0
+  - @objectstack/core@16.0.0-rc.0
+  - @objectstack/formula@16.0.0-rc.0
+
 ## 15.1.1
 
 ### Patch Changes

@@ -1,5 +1,671 @@
 # @objectstack/spec
 
+## 16.0.0-rc.0
+
+### Major Changes
+
+- 6c270a6: **BREAKING: remove the deprecated `ctx.session.tenantId` / `ctx.user.tenantId` alias from the hook & action authoring surface — converge on `organizationId` (#3290).**
+
+  #3280 made `organizationId` the blessed developer-facing name for the caller's active org across the JS authoring surface and kept `tenantId` as a `@deprecated` alias carrying the identical value. That alias is now **removed** from the hook `ctx.session`, the action-body `ctx.session`, and the action-body `ctx.user`. Read the caller's active org under the single blessed name:
+
+  ```diff
+  - const org = ctx.session.tenantId;   // hook or action body
+  + const org = ctx.user?.organizationId ?? ctx.session?.organizationId;
+  ```
+
+  **FROM → TO migration** (in any `*.hook.ts` / `*.action.ts` body):
+
+  - `ctx.session.tenantId` → `ctx.session.organizationId`
+  - `ctx.user.tenantId` (action body) → `ctx.user.organizationId`
+
+  The value is unchanged — `organizationId` is the same active-org id, matching the `organization_id` column and `current_user.organizationId` in RLS/sharing. `ctx.user` is `undefined` for system / unauthenticated writes, so read `ctx.session?.organizationId` when a hook or action must work regardless of a resolved user.
+
+  What changed internally:
+
+  - **`@objectstack/spec`** — `HookContextSchema.session` drops the `tenantId` field (only `organizationId` remains). A stray `tenantId` on a constructed session is now stripped by the schema.
+  - **`@objectstack/objectql`** — the engine's `buildSession()` no longer emits `session.tenantId`; the audit-stamp plugin sources the `tenant_id` column from `session.organizationId`.
+  - **`@objectstack/runtime`** — `buildActionSession()` and the REST action `ctx.user` no longer emit `tenantId`.
+  - **`@objectstack/trigger-record-change`** — reads `session.organizationId` (was `session.tenantId`) when forwarding the writer's org to a `runAs:'user'` flow; behavior is identical.
+
+  **Explicit non-goal (unchanged):** the generic **driver-layer** tenancy abstraction is _not_ touched — `ExecutionContext.tenantId`, `DriverOptions.tenantId`, `SqlDriver.applyTenantScope` / `TenancyConfig.tenantField`, and `ExecutionLog.tenantId`. That isolation column is configurable and legitimately carries an _environment_ id in database-per-tenant kernels; it is a distinct axis from the developer-facing org. The build-time `check:org-identifier` guard now also covers `packages/**` to keep reference bodies off the removed name.
+
+### Minor Changes
+
+- f972574: feat(spec): `ActionParamSchema` gains optional widget config — `multiple`, `accept`, `maxSize`
+
+  The console now renders action params through the same field-widget renderer
+  the record form uses (objectui#2700, objectui ADR-0059), so inline params can
+  declare the widget config the form widgets consume: `multiple` (array value
+  shape, mirrors `FieldSchema.multiple`), and the upload constraints `accept`
+  (MIME types / extensions) and `maxSize` (bytes) for `file`/`image` params.
+  Field-backed params (`{ field }`) keep inheriting these from the referenced
+  field at runtime; inline values override. Purely additive — no existing
+  schema changes shape.
+
+- 3a18b60: feat(approvals): rename the `role` approver type to `org_membership_level` (#3133)
+
+  `ApproverType.role` was the last platform surface projecting the reserved word
+  "role" (ADR-0090 D3). It is not covered by D3's better-auth exception: that
+  exception protects better-auth's own `sys_member.role` **column**, which we do
+  not own — `ApproverType` is our own enum, an authoring surface, and D3 mandates
+  that the projection of that concept is spelled `org_membership_level` and
+  labelled "organization membership", **never "role"**.
+
+  The sentence licensing the leak was also false: ADR-0090 D3 claims
+  `sys_member.role` is "already relabelled `org_membership_level` in the platform
+  projection", but `org_membership_level` existed nowhere in the codebase and
+  ADR-0057 D7 lists that relabel under "Deferred (evidence-gated, P4)". The
+  projection never landed, so the word reached authors.
+
+  The name manufactured a real, silent failure — "hotcrm class": every other
+  surface renamed to `position` (`sys_role`, `ShareRecipientType.role`,
+  `ctx.roles[]`), so `{ type: 'role', value: 'sales_manager' }` reads as the
+  legacy spelling of a position. It resolves against the membership tier, finds
+  no member row, falls back to an inert `role:sales_manager` literal, and the
+  request waits forever on an approver that cannot exist.
+
+  - **spec**: `ApproverType` gains `org_membership_level`; `role` stays as a
+    deprecated alias for one window (a published 15.x flow keeps loading) with
+    `DEPRECATED_APPROVER_TYPES` + `canonicalApproverType()` as the single source
+    for the mapping. Removed in the next major.
+  - **plugin-approvals**: resolves on the canonical type and warns on the
+    deprecated spelling. The `type:value` fallback literal keeps the **authored**
+    spelling — stored `sys_approval_approver` rows and `pending_approvers` slots
+    from 15.x carry `role:<v>`, and rewriting it would orphan them.
+  - **lint**: `approval-role-not-membership-tier` → `approval-approver-not-membership-tier`
+    (the rule id carried the reserved word too), plus a new
+    `approval-approver-type-deprecated`. The two are mutually exclusive: a bad
+    _value_ wins, because prescribing `org_membership_level` for a position name
+    would be wrong advice — the fix there is `position`.
+
+  Authoring `type: 'role'` keeps working and now says so out loud. Rewrite it as
+  `org_membership_level`; if the value is an org position, the fix is `position`.
+
+- 43a3efb: fix(rest): gate the cross-object transactional batch by the same per-object API rules as single-record writes (#1604)
+
+  The `POST {basePath}/batch` route (issue #1604 / ADR-0034) wraps N cross-object
+  create/update/delete ops in one engine transaction, but it skipped the
+  per-object API-exposure gate every single-record route applies — an
+  authenticated caller could write to an `apiEnabled: false` object, or run an
+  operation outside an object's `apiMethods` whitelist, straight through the batch
+  surface (ADR-0049 / #1889 — the same "declared ≠ enforced" hole closed for the
+  generic write path in #3220 / #3213).
+
+  The route now:
+
+  - validates the body against a new `CrossObjectBatchRequestSchema`
+    (`@objectstack/spec/api`, Zod-First) — a malformed op, an unknown action, or a
+    missing `object` is a `400` instead of a `500`;
+  - enforces `enable.apiEnabled` / `enable.apiMethods` for **every** op (metadata
+    fetched once, each distinct `(object, action)` checked) BEFORE opening the
+    transaction — `404 OBJECT_API_DISABLED` / `405 OBJECT_API_METHOD_NOT_ALLOWED`;
+  - requires an `id` for `update` / `delete` (`400`);
+  - rejects an unresolvable `{ $ref }` with `400 BATCH_UNRESOLVED_REF` instead of
+    silently writing a `null` FK;
+  - rejects an explicit `atomic: false` (`400 BATCH_NOT_ATOMIC`) rather than
+    silently applying atomically — non-atomic per-object batches stay on
+    `POST /data/:object/batch`.
+
+  `enforceApiAccess` is refactored to share the pure `apiAccessDenialFromEnable`
+  check + a `loadObjectItems` helper with the batch route (single-record behavior
+  unchanged). Adds `rest-batch-endpoint.test.ts` — the REST-boundary coverage
+  ADR-0034 flagged as missing (commit, `$ref`, rollback surfacing, API-access
+  denial, request validation).
+
+- 524696a: feat(spec)!: `DashboardWidgetSchema.strict()` — reject undeclared widget keys (framework#3251)
+
+  The ADR-0021 analytics endpoint. `DashboardWidgetSchema` now rejects any
+  undeclared top-level key instead of silently stripping it, moving a whole class
+  of author error (a hallucinated or legacy key that renders as a silent no-op)
+  from fallible human review to deterministic CI. `options: z.unknown()` remains
+  the escape hatch for renderer-specific extras.
+
+  A custom error map names the offending key(s) and, when a key is a removed
+  pre-ADR-0021 inline-analytics key (`object` / `categoryField` / `valueField` /
+  `aggregate`, pivot `rowField` / `columnField`) or an objectui-internal prop
+  (`component`, inline `data`), points the author at the dataset shape
+  (`dataset` + `dimensions` + `values`).
+
+  Recorded as protocol-16 migration `step16`
+  (`dashboard-widget-strict-unknown-keys`), mirroring protocol-15's `step15`
+  strict flip on the form/page schemas (ADR-0089 D3a). The inline-analytics shape
+  itself was already removed at protocol 9 (single-form cutover), so there is no
+  mechanical rewrite — the residue is the strictness, delegated to the author.
+
+  **Breaking:** shipped as `minor` per the launch-window policy (a breaking change
+  does not burn a major while the stack is in lockstep), riding the already-pending
+  16.0.0 train. The release train's Version-Packages PR must set
+  `PROTOCOL_VERSION = '16.0.0'`; until then `step16` is inert
+  (`composeMigrationChain` caps at `PROTOCOL_MAJOR`).
+
+  `@objectstack/lint` — the `widget-legacy-analytics-shape` /
+  `widget-legacy-analytics-unrenderable` rules are retained as the friendly,
+  suppressible bridge on the raw-config lint/doctor paths (strict preempts them on
+  the schema-parsed compile/validate paths); doc comment updated to explain the
+  interplay.
+
+- fefcd54: fix(spec): declare `ownership` as a first-class ObjectSchema field (#3175)
+
+  The object-level record-ownership model — `ownership: 'user' | 'org' | 'none'`,
+  which drives the registry's `owner_id` auto-provisioning (`applySystemFields`) —
+  was read by the engine via `(schema as any).ownership` while `ObjectSchema.create()`
+  **rejected** it as an unknown top-level key (ADR-0032 / #1535). So a tested engine
+  opt-out (`ownership: 'org' | 'none'` on catalog / junction tables) could not be
+  set through the sanctioned authoring path, and the same `ownership` word was read
+  elsewhere as the unrelated package-contribution kind (`own` / `extend`).
+
+  - **spec**: `ObjectSchema` now declares `ownership: z.enum(['user','org','none']).optional()`.
+    Authoring the record-ownership opt-out validates cleanly; the registry reads it
+    off the typed schema (no `as any`). A retired `ownership: 'own'` / `'extend'`
+    value fails with guidance pointing at the record-ownership model and noting that
+    `own`/`extend` is the contribution kind (`registerObject`), not an object-schema value.
+  - **cli**: the `object` scaffold no longer emits the now-invalid `ownership: 'own'`
+    (owner injection is the default), and `objectstack info` labels the record model
+    with the correct `user` default.
+
+  No runtime behavior change: `applySystemFields` and its `owner_id` injection logic
+  are unchanged — this makes the property the engine already honors legally authorable
+  and consistently typed.
+
+- 369eb6e: refactor(spec): remove unenforced agent `visibility` field (ADR-0056 D8, #1901)
+
+  The agent `visibility` (`global`/`organization`/`private`) field is **removed**
+  from `AgentSchema`. It was never enforced: the chat-access evaluator excluded it
+  and the agent list route did not filter by it, so setting `private` never hid an
+  agent. Per ADR-0049 / ADR-0056 D8 ("design+enforce or remove"), a security-shaped
+  field with no runtime consumer is a liability — authors who set `private` believe
+  they've restricted an agent when they have not.
+
+  Unlike `field-encryption` (kept `[EXPERIMENTAL]` — it has a stable schema shape on
+  a real roadmap), correct `visibility` enforcement is undesigned: it needs
+  owner/org anchors that do not exist today. `agent.tenantId` was already removed
+  (#2377), agents carry no owner field, and the `EXTERNAL` posture rung is defined
+  but never derived — so `organization` vs `global` is runtime-indistinguishable.
+  The semantics, not just the plumbing, are unresolved, so the field is dropped
+  rather than carried marked.
+
+  - `AgentSchema` is not `.strict()`, so existing metadata that still sets
+    `visibility` parses cleanly — the unknown key is stripped, not rejected.
+  - Use `access` / `permissions` to restrict who can use an agent — both **enforced**
+    at the chat route (#1884).
+  - Re-introduce `visibility` when the agent listing surface gains real owner/org
+    semantics; tracked in #1901.
+
+  Also updated: authoring form (`agent.form.ts`), liveness ledger
+  (`liveness/agent.json`), the ADR-0056 D10 authz-conformance matrix (moved from
+  `experimental` to `removed`), and the generated schema reference docs.
+
+- b659111: feat(spec)!: remove dead author-facing metadata properties (#2377, ADR-0049 enforce-or-remove)
+
+  Breaking spec-surface removal, versioned as `minor` per the launch-window changeset
+  policy (a `major` would promote the whole fixed-group monorepo; breaking cleanups ride
+  the minor line, as with #2402 → 11.1.0).
+
+  Removes a batch of spec properties that parsed but had **no runtime consumer** —
+  authoring them was a false affordance (especially dangerous for AI-authored
+  metadata). Verified dead against the liveness ledger (`packages/spec/liveness/*.json`)
+  and a repo-wide grep of readers. This is the follow-up slice to #2402.
+
+  ## Removed (each was `dead` + no reader anywhere)
+
+  - **field** (`field.zod.ts`): `vectorConfig` (+ `VectorConfigSchema` + types),
+    `fileAttachmentConfig` (+ `FileAttachmentConfigSchema` + types), `dependencies`.
+    Vector fields keep the live flat `dimensions` prop; file/image fields keep the
+    live flat `multiple`/`accept`/`maxSize` siblings.
+  - **object** (`object.zod.ts`): `versioning` (+ `VersioningConfigSchema`),
+    `softDelete` (+ `SoftDeleteConfigSchema`), `search` (+ `SearchConfigSchema`),
+    `recordName`, `keyPrefix`. Each is now a **rejecting tombstone** in
+    `UNKNOWN_KEY_GUIDANCE` carrying the upgrade prescription.
+  - **action** (`action.zod.ts`): `timeout` (server uses `body.timeoutMs`; no
+    action-level timeout is enforced).
+  - **agent** (`agent.zod.ts`): `planning.strategy`, `planning.allowReplan`
+    (only `planning.maxIterations` is read by the runtime).
+  - **dataset** (`dataset.zod.ts`): `measures.certified` (declared-but-unenforced
+    governance flag — never compiled into the Cube).
+
+  Liveness ledgers, the ledger README table, and `api-surface.json` are updated;
+  the removed sub-schema keys are dropped from `json-schema.manifest.json`.
+
+  ## Migration
+
+  - **field/agent/dataset/action props**: authoring them is now silently stripped
+    (they never did anything). Remove them. Vector → set flat `dimensions`;
+    file/image → set flat `multiple`/`accept`/`maxSize`.
+  - **object props**: `ObjectSchema.create()` now throws a located error naming the
+    replacement — `versioning`/`softDelete` → hard deletes + `Field.trackHistory` /
+    `lifecycle`; `search` → `searchableFields`; `recordName` → an `autonumber`
+    `Field` designated as `nameField`; `keyPrefix` → remove (never had an effect).
+
+  ## Deliberately NOT removed (dead, but entangled — a scoped follow-up)
+
+  `field.index`/`columnName`/`referenceFilters` and object
+  `tags`/`active`/`isSystem`/`abstract`/`enable.searchable`/`enable.trash`/`enable.mru`
+  and `agent.tenantId` are surfaced in the Studio metadata-authoring forms
+  (`*.form.ts`) — removing them cascades into i18n bundle regeneration, so they are
+  deferred. `action.type:'form'` has a dedicated build-time lint (`lint-view-refs.ts`)
+  and a first-party showcase usage, so it needs a UX decision. `field.columnName`
+  additionally has an ADR-0062 D7 lint. These stay `dead` + `authorWarn` in the
+  ledgers.
+
+- 5754a23: feat(spec)!: remove form-surfaced dead metadata props + correct 3 misclassified-live entries (#2377, ADR-0049)
+
+  The next enforce-or-remove slice of #2377. Versioned `minor` per the launch-window
+  policy (the fixed group makes a `major` promote the whole monorepo).
+
+  ## Removed (dead, no runtime reader — verified in both framework and objectui)
+
+  - **field**: `columnName`, `index`, `referenceFilters`. This empties the field
+    dead-prop set. `columnName` also removed its now-moot **ADR-0062 D7** lint
+    (`validate-expressions.ts`), the dead `StorageNameMapping.resolveColumnName` /
+    `buildColumnMap` / `buildReverseColumnMap` helpers, and closes ADR-0062 R10 —
+    external physical-column mapping is `external.columnMap` only.
+  - **object**: `tags`, `active`, `abstract` — now rejecting tombstones in
+    `UNKNOWN_KEY_GUIDANCE`.
+  - **agent**: `tenantId`.
+
+  The removed props are dropped from the authoring forms (`field/object/agent.form.ts`)
+  and the regenerated metadata-forms i18n bundles.
+
+  ## Corrected to `live` (the ledger was wrong — readers existed)
+
+  - **object `isSystem`** — `plugin-sharing` `effectiveSharingModel` defaults a
+    no-`sharingModel` `isSystem` object to public; also read by the security-posture
+    lint. KEPT.
+  - **object `enable.searchable`** — `metadata-protocol` global search (`searchAll`)
+    uses `enable.searchable === false` as an opt-out. KEPT.
+  - **action `type:'form'`** — objectui `ActionRunner.executeForm` routes it to the
+    FormView at `/forms/:target`; a build-time lint validates the target. KEPT.
+
+  ## Deliberately deferred
+
+  `object.enable.trash` / `enable.mru` — dead, but inert `default(true)` flags set by
+  ~35 `sys-*.object.ts` files; removing them is high-churn / low-value. Left `dead`
+  (authorWarn-skipped).
+
+  ## Migration
+
+  - field/agent props: authoring them was already a no-op; they now strip silently.
+    `columnName` → the physical column is always the field key (rename the field, or
+    use `external.columnMap` for external objects); `index` → declare it in object
+    `indexes[]`; `referenceFilters` → `lookupFilters`.
+  - object `tags`/`active`/`abstract`: `ObjectSchema.create()` now throws a located
+    error naming the removal. None gated anything at runtime — remove them.
+
+- 668dd17: **Breaking (npm type surface): retire the vestigial feed contracts + protocol surface (ADR-0052 §5 follow-up, #1959).**
+
+  The `service-feed` runtime was deleted in #1955; `sys_comment` / `sys_activity`
+  are the canonical record-collaboration/timeline backend. This removes the dead
+  type surface that still pointed at the deleted runtime — every removed method was
+  already unreachable (the feed REST route was never mounted → 404; the protocol
+  implementation was never wired with a feed service, so `requireFeedService()`
+  could only throw). No behavior changes.
+
+  No authorable metadata key is removed (the `feeds:` object capability flag and
+  the `RecordActivity` UI component config are unchanged), so `PROTOCOL_MAJOR`
+  stays 15 and this ships as `minor` rather than a protocol major.
+
+  FROM → TO migration for every removed export:
+
+  - `@objectstack/spec/contracts` — `IFeedService`, `CreateFeedItemInput`,
+    `UpdateFeedItemInput`, `ListFeedOptions`, `FeedListResult` → **removed, no
+    replacement**. Comments/activity are plain records: write `sys_comment` / read
+    `sys_activity` via the data engine or the REST data API.
+  - `@objectstack/spec/api` — `FeedApiContracts`, `FeedApiErrorCode`,
+    `FeedProtocol`, and all feed request/response schemas + types (`GetFeed*`,
+    `CreateFeedItem*`, `UpdateFeedItem*`, `DeleteFeedItem*`, `AddReaction*`,
+    `RemoveReaction*`, `PinFeedItem*`, `UnpinFeedItem*`, `StarFeedItem*`,
+    `UnstarFeedItem*`, `SearchFeed*`, `GetChangelog*`, `ChangelogEntry`,
+    `SubscribeRequest/Response`, `FeedUnsubscribeRequest`, `UnsubscribeResponse`,
+    `FeedPathParams`, `FeedItemPathParams`, `FeedListFilterType`) → **removed**. Use
+    the data API against `sys_comment` / `sys_activity` (`/api/v1/data/sys_comment/…`);
+    reactions and threaded replies are fields on `sys_comment`.
+  - `@objectstack/spec/data` — `FeedItemSchema`/`FeedItem`, `FeedActorSchema`/`FeedActor`,
+    `MentionSchema`/`Mention`, `ReactionSchema`/`Reaction`,
+    `FieldChangeEntrySchema`/`FieldChangeEntry`, `FeedVisibility`,
+    `RecordSubscriptionSchema`/`RecordSubscription`, `SubscriptionEventType`, and the
+    `data`-namespace `NotificationChannel` → **removed**. `FeedItemType` and
+    `FeedFilterMode` are **kept** (live UI activity-timeline config). For notification
+    channels use `NotificationChannelSchema` from `@objectstack/spec/system`.
+  - `@objectstack/client` — `client.feed.*` (`list` / `create` / `update` / `delete` /
+    `addReaction` / `removeReaction` / `pin` / `unpin` / `star` / `unstar` / `search` /
+    `getChangelog` / `subscribe` / `unsubscribe`) and the re-exported feed response
+    types → **removed**. One-line fix: use `client.data.*` on `sys_comment` /
+    `sys_activity`, e.g. `client.data.create('sys_comment', { object, record_id, body })`
+    and `client.data.find('sys_activity', { filters: [['record_id', '=', id]] })`.
+  - `@objectstack/metadata-protocol` — `ObjectStackProtocolImplementation` no longer
+    implements the 14 feed methods; its constructor
+    `(engine, getServicesRegistry?, getFeedService?, environmentId?)` becomes
+    `(engine, getServicesRegistry?, environmentId?)`. One-line fix: delete the third
+    argument.
+
+- 8abf133: **Breaking (discovery response shape): retire the residual feed capability surface (#3180, follow-up to #1959 / ADR-0052 §5).**
+
+  The feed backend was retired long ago; #1959 removed the feed contracts + SDK. This
+  removes the last discovery/dispatcher references to it, and fixes a real bug where the
+  `comments` capability was permanently `false`.
+
+  - `@objectstack/spec` — `WellKnownCapabilitiesSchema.feed` and `ApiRoutesSchema.feed`
+    (`routes.feed`) are **removed**, and the `/api/v1/feed` entry is dropped from
+    `DEFAULT_DISPATCHER_ROUTES`. FROM → TO: clients reading `discovery.capabilities.feed`
+    or `discovery.routes.feed` → use `discovery.capabilities.comments`; comments/activity
+    are served by the generic data API on `sys_comment` / `sys_activity`
+    (`/api/v1/data/sys_comment/…`).
+  - `@objectstack/metadata-protocol` — `getDiscovery()` no longer emits the always-`false`
+    `feed` service/capability. **Bug fix:** the `comments` capability previously keyed off
+    the deleted `'feed'` service (so it was permanently `false` after #1955); it now tracks
+    the presence of the `sys_comment` object (provided by the always-on audit slate), so
+    `declared === enforced`.
+  - `@objectstack/client` — the internal `feed: '/api/v1/feed'` route constant is removed
+    (it only existed to satisfy the now-removed `ApiRoutes.feed` type; no client code used it).
+
+- 04ecd4e: feat(validation): `state_machine.initialStates` enforces the FSM entry point on INSERT (#3165)
+
+  A `state_machine` rule's `transitions` only governs UPDATE — on INSERT the rule
+  was a no-op, and a `select` field permits ANY declared option as the initial
+  value. So a record could be born mid-flow (created already `approved`), skipping
+  the whole state machine. This was the gap #3043's mitigation idea assumed didn't
+  exist (declared ≠ enforced, ADR-0049).
+
+  `state_machine` rules gain an optional `initialStates: string[]` — the states a
+  record may be CREATED in. When set, an insert whose (defaulted) state-field value
+  is outside the list is rejected server-side with `code: 'invalid_initial_state'`.
+  Omit it to keep the legacy behavior (no initial-state check on insert). A missing
+  / empty value is left to required-validation; `transitions` (UPDATE) is
+  unaffected. Enforced at the same `evaluateValidationRules(..., 'insert')` seam the
+  engine already runs after field defaults.
+
+- 4d5a892: feat(objectql): roll-up `summary` fields can filter which child rows they aggregate (#1868)
+
+  `summaryOperations` gains an optional `filter` — a query `where` FilterCondition
+  evaluated against each child row, so a summary aggregates only the matching
+  children instead of the whole collection. This is what lets a single child object
+  feed several distinct parent totals, which the cross-object rollup templates need:
+
+  ```typescript
+  // One `engagement` child → distinct filtered totals.
+  total_signups: {
+    type: 'summary',
+    summaryOperations: { object: 'engagement', field: 'id', function: 'count', filter: { type: 'signup' } },
+  }
+  // Sum only received receipt lines (3-way match).
+  received_amount: {
+    type: 'summary',
+    summaryOperations: { object: 'procurement_receipt', field: 'amount', function: 'sum', filter: { status: 'received' } },
+  }
+  ```
+
+  The engine ANDs the predicate with the parent-FK match when it recomputes, and
+  because the whole filtered aggregate is re-run on every child write, a child that
+  moves in or out of the predicate (e.g. a status change) keeps the parent current
+  with no extra wiring. Operator and compound forms work too
+  (`filter: { type: { $in: ['signup', 'trial'] }, amount: { $gte: 100 } }`).
+
+  Purely additive: omitting `filter` aggregates every child exactly as before.
+
+- 16cebeb: fix(spec): drop the dead `systemFields.owner` key (#3175 follow-up)
+
+  `ObjectSchema.systemFields` exposed an `owner?: boolean` opt-out key that nothing
+  read — the registry (`applySystemFields`) only consumes `systemFields.tenant` and
+  `systemFields.audit`, and `owner_id` provisioning is governed by the object-level
+  `ownership` property (`'user' | 'org' | 'none'`, made first-class in #3185). The
+  key was declared but wired to nothing.
+
+  Removed it so the schema only advertises the two opt-outs it actually honors
+  (`tenant`, `audit`). Backward-compatible at runtime: the key was ignored before and
+  is stripped now (both no-ops). A TypeScript author who set `systemFields.owner`
+  will now see an excess-property error — the fix is to delete the key (it never did
+  anything) or use `ownership: 'org' | 'none'` to skip `owner_id`. Also corrected the
+  stale `objectql/security` doc that called `audit` "reserved" (it is active).
+
+- 86d30af: fix(tenancy): platform-global (`tenancy.enabled:false`) objects are never driver-org-scoped (#3249)
+
+  An org-context read of a platform-global object (e.g. `sys_license`, ADR-0066)
+  could return 0 rows for an authenticated caller while an anonymous read saw the
+  data: the engine stamped `execCtx.tenantId` into driver options unconditionally,
+  and the SQL driver's tenant-field cache could be re-corrupted to
+  `organization_id` by a partial re-registration (lifecycle archive `syncSchema`,
+  schema-drift re-sync) whose schema omitted the `tenancy` block.
+
+  - New `isTenancyDisabled(schema)` export from `@objectstack/spec/data` — the
+    single source of truth for the ADR-0066 platform-global posture, now shared by
+    the registry (tenant-column injection), the ObjectQL engine, and the SQL
+    driver.
+  - `ObjectQL.buildDriverOptions` no longer stamps `tenantId` for objects whose
+    registered schema declares `tenancy.enabled: false` (an explicitly-passed
+    options `tenantId` still wins — deliberate caller intent).
+  - `SqlDriver` (and `SqliteWasmDriver`) now keep a sticky record of an explicit
+    `tenancy.enabled:false` declaration: a later registration without a `tenancy`
+    block preserves the opt-out instead of re-scoping via the implicit
+    `organization_id` heuristic; a registration that carries a `tenancy`
+    declaration stays authoritative.
+
+- a2795f6: feat(triggers): declarative time-relative trigger — daily sweep instead of fragile date-equality (#1874)
+
+  Time-relative business rules ("alert 60 days before a contract's `end_date`")
+  could only be expressed as a `record_change` flow gated on a date-equality
+  condition like `end_date == daysFromNow(60)`. That predicate is only evaluated
+  when the record _happens to change_, so it fires only if a record is edited on
+  exactly the threshold day — i.e. almost never, unattended. The robust
+  alternative was a hand-written cron + range query that every author
+  re-implemented (contracts `renewal_alert`, hr `document_expiring_soon`,
+  procurement `po_overdue`, …).
+
+  A flow's start node can now declare a `timeRelative` descriptor instead:
+
+  ```ts
+  config: {
+    timeRelative: {
+      object: 'contracts',
+      dateField: 'end_date',
+      offsetDays: [60, 30, 7],      // T-minus reminders — fires on each threshold day
+      // — or — withinDays: 30      // "expiring soon" range; negative = overdue lookback
+      filter: { status: 'active' }, // optional, ANDed with the date window
+    },
+    schedule: { type: 'cron', expression: '0 8 * * *' }, // optional; defaults to daily 08:00 UTC
+  }
+  ```
+
+  The new `time_relative` trigger (shipped in `@objectstack/trigger-schedule` as
+  `TimeRelativeTriggerPlugin`) sweeps the object on that schedule and launches the
+  flow **once per matching record**, with the record on the automation context —
+  so the start-node `condition` gate and `{record.<field>}` interpolation work
+  exactly as for a record-change flow. Because the window is evaluated every day,
+  a threshold is never missed regardless of when the record last changed. The
+  discovery query runs as a system operation (RLS-bypassing) and is capped
+  (`maxRecords`, default 1000) so a mis-scoped window can't fan out unboundedly;
+  per-record failures are isolated so one bad row never aborts the sweep.
+
+  The automation engine routes a start node carrying `config.timeRelative` to the
+  `time_relative` trigger (ahead of the plain `schedule` trigger, whose behavior is
+  unchanged), and `os validate` gains readiness checks for the new descriptor
+  (unknown swept object, ambiguous draft status). New authorable spec key:
+  `TimeRelativeTriggerSchema` (`@objectstack/spec/automation`).
+
+### Patch Changes
+
+- 22013aa: **Split the overloaded `managedBy: 'system'` bucket into engine-owned vs. admin-writable, and enforce engine-owned writes (ADR-0103, #3220).** The `system` bucket conflated two incompatible write policies: rows a platform service owns end to end (never user-written), and platform-defined schema whose rows are legitimately admin/user-writable. It carried the same all-false affordance row as `better-auth`/`append-only` but, unlike `better-auth`, had no engine enforcement — a wildcard admin could raw-write these rows through the generic data API (ADR-0049 gap).
+
+  Rather than add a new `managedBy` enum value (which would fall through to fully-editable `platform` defaults on already-deployed Console clients), the write policy is now the **resolved affordance** (`resolveCrudAffordances` = bucket default + `userActions`), and _engine-owned_ is defined as a `system`/`append-only` object that grants no write:
+
+  - **Writable set declares `userActions`** — the RBAC link tables (`sys_user_position`, `sys_user_permission_set`, `sys_position_permission_set`), `sys_user_preference`, `sys_approval_delegation`, and the messaging config grids (`sys_notification_preference` / `…_subscription` / `…_template`) now declare `userActions: { create, edit, delete: true }`. The affordance is a declaration only — the `DelegatedAdminGate` / RLS / permission sets remain the authz.
+  - **Engine-owned objects locked to reads** — `apiMethods: ['get','list']` added where absent (jobs, notifications, approval request/approver/token/action, `sys_record_share`, `sys_automation_run`, mail/settings/secret audit, the messaging delivery pipeline). `sys_secret` is explicitly read-locked (an empty `apiMethods` array fails open).
+  - **`sys_import_job`** stays engine-owned: the REST import route now writes its job rows `isSystem`-elevated (attribution preserved via the explicit `created_by` stamp) and the object is locked to `['get','list']`.
+  - **New engine write guard** (`assertEngineOwnedWriteAllowed`, plugin-security) fail-closed rejects user-context generic writes to engine-owned `system`/`append-only` objects, keyed off the resolved affordance; `isSystem` and context-less engine/service writes bypass by construction. Wired into the security middleware alongside the other data-layer gates.
+  - **`reconcileManagedApiMethods`** (objectql registry) now runs for **every** managed bucket, not just `better-auth`: any advertised write verb an object's resolved affordances forbid is stripped at registration with a warning (the drift backstop, ADR-0049).
+  - **`/me/permissions` clamp** (plugin-hono-server) now clamps `system`/`append-only` as well as `better-auth`, so the client hint reflects `permission ∩ guard`.
+
+  **Potentially breaking:** a downstream/third-party `system` object that advertised generic write verbs relying on today's fail-open behaviour will have those verbs stripped (with a warning) and user-context generic writes to it rejected. Declare `userActions` opening the verbs the object legitimately takes from a user context. `better-auth` keeps plugin-auth's identity write guard unchanged; the row-level `managed_by` provenance vocabulary (ADR-0066) is a different axis and is untouched.
+
+- 3ad3dd5: Annotate the schema-only event/subscription/connector surfaces flagged by the #3197 audit with explicit "not yet enforced / not yet implemented" notes in their doc comments and `.describe()` texts, so authoring metadata against them is no longer silently swallowed. No runtime behavior or schema shape changes — documentation only.
+
+  Surfaces annotated (each trace re-confirmed against the current tree before annotating):
+
+  - `GraphQLSubscriptionConfigSchema` (`api/graphql.zod.ts`) — no subscription transport exists; the GraphQL HTTP entry serves query/mutation only.
+  - `WebSocketMessageType` + module header (`api/websocket.zod.ts`) — no WebSocket server is mounted (#2462); the protocol is a future wire contract.
+  - `RealtimeEventType` (`api/realtime.zod.ts`) — zero runtime importers; the engine emits `data.record.*` names (which don't match this enum's members) and nothing emits `field.changed`.
+  - Connector `webhooks`/`WebhookConfigSchema`/`WebhookEventSchema` and `triggers`/`ConnectorTriggerSchema` (`integration/connector.zod.ts`) — `AutomationEngine.registerConnector` reads only `actions`; webhook events and trigger definitions parse but are never dispatched or polled.
+  - Automation `ConnectorTriggerSchema`/`TriggerRegistrySchema` (`automation/trigger-registry.zod.ts`) — no runtime importer; the `stream` trigger mechanism exists only here.
+  - `NotificationChannelSchema` (`system/notification.zod.ts`) + the mirrored `NotificationChannel` contract type — implemented delivery channels are `inbox`/`email`/`sms`; `push`/`slack`/`teams`/`webhook` dead-letter, and the enum's `in-app` does not match the registered `inbox` channel id.
+
+  The audit's sixth row (`SubscriptionEventType`, formerly `data/subscription.zod.ts`) needed no annotation — it was already removed outright by the feed-contract retirement (#1959).
+
+- a8aa34c: Enforce validation rules, `requiredWhen`, and per-option `visibleWhen` on multi-row updates (#3106). The bulk branch of `engine.update` (`options.multi` → `driver.updateMany`) previously never called `evaluateValidationRules`, so every object-level rule (`script`, `state_machine`, `format`, `cross_field`, `json_schema`, `conditional`), field-level `requiredWhen`, and per-option `visibleWhen` check was a silent no-op there. The engine now reads the row-scoped match set (the same AST the write binds, one query shared with the `readonlyWhen` bulk strip) and evaluates the payload against each matched row's prior state; any error-severity violation rejects the whole batch with `ValidationError` (annotated with the failing record id) before anything is written. Schemas needing no prior state (`format`/`json_schema`-only) are evaluated once against the payload with no fetch, and rule-free schemas are unaffected. Behavior change: bulk writes that previously slipped past declared rules now throw. Doc comments in `rule-validator.ts` and `validation.zod.ts` no longer overstate coverage and name the remaining `events: ['delete']` gap (tracked separately).
+- a3823b2: Collapse the hook event taxonomy from 18 declared events to the 8 the engine actually dispatches (#3195). The removed 10 (`beforeFindOne`/`afterFindOne`, `beforeCount`/`afterCount`, `beforeAggregate`/`afterAggregate`, `beforeUpdateMany`/`afterUpdateMany`, `beforeDeleteMany`/`afterDeleteMany`) were declared in `HookEvent` but never fired — the enum mirrored the engine method table instead of domain events, so a hook subscribing to them registered fine and then silently no-op'd.
+
+  - `findOne` now fires the same `beforeFind`/`afterFind` hooks as `find` — the read event attaches to record materialization, not the engine method, so one subscription covers every read shape (no separate `beforeFindOne`/`afterFindOne`).
+  - Bulk (`multi: true`) updates/deletes already fire the singular `beforeUpdate`/`beforeDelete`/`afterUpdate`/`afterDelete` events with the row-scoping predicate in `ctx.input.ast`; this is now documented, and there is no `*Many` event.
+  - Read authorization / row filtering is the RLS/permission-rule layer's job and field masking is field-level metadata — neither is a hook every author must re-attach.
+  - `engine.registerHook` now warns when a hook subscribes to an event the engine never dispatches, so enum-vs-dispatch drift can't recur silently.
+
+  No shipped hook or authored metadata used any of the removed events; authoring one now fails loudly at parse/validate time instead of registering a dead hook. Skills and docs updated to teach the 8 events and the declarative alternatives.
+
+- 5e3301d: Document two validation-rule facts surfaced by the 2026-06 liveness audit (follow-up to #3106 / #3184), and clean up a stale form-schema mirror — no runtime behavior change:
+
+  - `label` / `description` / `tags` on validation rules are governance / editor metadata (surfaced to the Studio rule editor and rule listings), not evaluated on the write path. Documented as such on `BaseValidationSchema` rather than removed — they are set by nearly every example rule and feed the `/meta/types` editor form, so they are declared on purpose, not silent no-ops.
+  - `cross_field` evaluates identically to `script` (same CEL predicate path); only `fields[0]` is read, to target the violation at a field. Documented the overlap on the schema, its `fields` `.describe()`, and the validation docs so authors can choose between them; the variant is kept for the field-targeting affordance and backward compatibility.
+  - Removed dead form-field entries (`scope`, `caseSensitive`, `url`, `handler`) and the stale `type=unique` hint from the hand-written `HAND_CRAFTED_SCHEMAS['validation']` fallback in `@objectstack/metadata-protocol` — leftovers from the removed `unique`/`async`/`custom` variants.
+  - Added the missing `beforeDelete` lifecycle-hook pointer to the validation docs' "not a rule type" callout, so delete-time guards aren't stranded now that validation has no `delete` event (#3184).
+
+- 46e876c: fix(spec): declare `summaryOperations` sub-fields in the Field metadata form (#3257)
+
+  `fieldForm` (the registered metadata form for editing a Field) previously
+  declared `summaryOperations` as a bare `composite` with no sub-fields, so a
+  protocol-driven renderer had to fall back to a raw JSON editor. It now declares
+  the inner shape explicitly — `object` (`ref:object`), `function` (select),
+  `field`, `relationshipField`, and `filter` (bound to `widget: 'filter-condition'`)
+  — mirroring the `summaryOperations` Zod schema and surfacing the roll-up `filter`
+  added in #1868. Also gates the block to `data.type == 'summary'`.
+
+  Small step toward #3257 (making the Studio field designer metadata-driven rather
+  than hand-coded); the live objectui inspector already edits these fields.
+
+- 158aa14: feat(automation): mark the loop `collection` config field as an interpolate() template so designer forms render it correctly (#3304)
+
+  The flow designer generates a node's config form from its published
+  `configSchema` (ADR-0018). A string property can now carry an `xExpression:
+'expression' | 'template'` marker — riding the same Zod `.meta()` → JSON-Schema
+  channel as `xRef` / `xEnumDeprecated` — that declares whether the string is bare
+  CEL or an `interpolate()` single-brace `{var}` template.
+
+  The `loop` node's `collection` (e.g. `{tasks}`) is a template, so it is now
+  marked `xExpression: 'template'` on both the canonical `LoopConfigSchema` and the
+  shipped descriptor's `configSchema` literal (service-automation loop-node).
+  Without the marker the designer rendered `collection` as plain text online while
+  the offline hardcoded form rendered it as a mono expression editor, and the CEL
+  brace-trap false-flagged `{tasks}` as a malformed condition. The marker closes
+  that divergence — objectui #2670 Phase 3 (#2699) already consumes it.
+
+  Additive and backward-compatible: an unknown `xExpression` value is ignored by
+  the designer, and runtime behavior is unchanged. Filling the same marker in on
+  the remaining node types (map/decision/script and the node types that publish no
+  `configSchema` yet) is tracked as follow-up in #3304.
+
+- d2723e2: **`MetadataManager.register()` / `unregister()` now announce to `subscribe()` watchers.** Both updated the registry, persisted to writable loaders and published to realtime, but never fired the watch callbacks — so `subscribe()` looked like it covered every write while silently missing all of them. Only the `saveMetaItem` path (via the repository watch stream) and the filesystem watcher ever reached a subscriber. Runtime consumers that cache metadata — notably ObjectQL's SchemaRegistry bridge, the component that decides what is queryable — went stale on every other write until the process restarted.
+
+  Announcing is now the **default**, so a new call site is correct without knowing this contract exists. This is a contract fix rather than a bug fix: the one live behavior change is that runtime datasource writes (`datasource-admin`) now reach the HMR SSE stream, which subscribes to every registered type. `unregisterPackage()` / `bulkUnregister()` also announce their deletes now — correct, but latent, since neither has a production caller today.
+
+  Bulk ingest opts out explicitly with the new `MetadataWriteOptions` (`{ notify: false }`) — boot-time filesystem priming, artifact ingest, and ObjectQL's registry bridge, each of which either runs before consumers cache anything or announces the whole batch once (as the artifact reload path does via `metadata:reloaded`). The bridge in particular MUST stay silent: it copies objects out of the SchemaRegistry, and announcing would feed them back through a handler that re-registers under `_packageId ?? 'metadata-service'`, overwriting the true package provenance of every object whose body carries no `_packageId`.
+
+  Additive only — `register(type, name, data)` and `unregister(type, name)` keep working unchanged.
+
+  Fixes #3112.
+
+- beaf2de: fix(metadata-protocol): strip static `readonly` on INSERT at the data-write ingress (#3043)
+
+  #2948/#3003 made static `readonly: true` fields server-enforced on UPDATE (a
+  non-system PATCH forging `approval_status: 'approved'` is silently stripped in
+  the engine), but INSERT was exempt. For approval/status/verdict columns that
+  exemption was the _shorter_ attack: instead of the #3003 draft-then-PATCH move, a
+  non-system caller could `POST` a record already `approval_status: 'approved'` in
+  one step — and the UPDATE-only strip never reached it.
+
+  The strip now also runs on INSERT, but at the **external data-write ingress**
+  (`DataProtocol.createData` / `createManyData` / `batchData` / `cloneData`) rather
+  than in the engine. That seam is the single point every external programmatic
+  create funnels through — the REST CRUD route, the GraphQL/MCP dispatcher
+  (`bridge.create` → `callData` → `createData`), and bulk import — while **trusted
+  internal writers** (better-auth's adapter, the metadata repository, the seed
+  loader) call `engine.insert` directly and bypass it. Enforcing at the ingress
+  protects every caller/agent path at once without stripping the internal writers
+  that legitimately seed read-only columns on create (identity provisioning,
+  provenance stamps, event-log cursors) — the blast radius an engine-level insert
+  strip would have.
+
+  - **Caller-forged only, at the ingress.** The payload here is raw caller input
+    (the security middleware stamps `owner_id` / `organization_id` later, inside
+    `engine.insert`), so only keys the caller actually sent are dropped; server
+    stamps are added afterwards and are unaffected.
+  - **Re-derives the default.** A stripped field falls back to its declared
+    `defaultValue` in the engine (a forged `approval_status` becomes `draft`, not
+    NULL).
+  - **System-context exempt.** `isSystem` writes still seed read-only columns.
+  - **Silent** (HTTP 2xx), per-row on batch/import. `readonlyWhen` stays
+    INSERT-exempt (a conditional lock needs a prior record).
+  - **Author-defined business objects only.** Platform objects (`managedBy` set,
+    or the `sys_` namespace) carry their own field-write governance that a silent
+    strip must not pre-empt — e.g. ADR-0086 REJECTS (403) a forged
+    `managed_by:'package'` on `sys_permission_set`, and #3004 rejects a forged
+    `owner_id`; several of those columns are `readonly`, so stripping them here
+    would swallow the payload the guard is meant to reject. The #3043 threat is app
+    approval/status fields, never `sys_` — the same boundary `applySystemFields`
+    uses for ownership.
+
+  Behavior change: a non-system create through the data API (REST / GraphQL / MCP /
+  import) can no longer seed a `readonly` column from the payload. Flows that
+  legitimately write read-only columns at creation must run with a system context
+  (`isSystem`), the same requirement the UPDATE strip already imposes.
+
+- e0859b1: fix(formula): retire the `js` expression dialect and fix the `hasDialect` false-positive (#3278)
+
+  The `js` **expression** dialect was declared in `ExpressionDialect` but never
+  shipped — it existed only as a registry stub with no engine and no author helper
+  (`cel`/`F`/`P` → CEL, `tmpl` → template, `cron` → cron; nothing ever emitted
+  `js`). Per ADR-0049 (enforce-or-remove) it is removed from the enum; the set is
+  now `{cel, cron, template}`.
+
+  Procedural JavaScript is unaffected: it remains the **L2** authoring surface —
+  the sandboxed, capability-gated `ScriptBody { language: 'js' }` in hook/action
+  bodies — which is a separate enum (`hook-body.zod.ts`), not an expression
+  dialect.
+
+  Also fixes a latent bug in `hasDialect`: it detected stubs via
+  `dialect.startsWith('stub:')`, but stubs were registered under their real name,
+  so the check was dead code and `hasDialect('js')` returned a false-positive
+  `true`. With the stub removed, `hasDialect` reports only registered real
+  engines, and the registry test now asserts the negative case (`hasDialect('js')
+=== false`) so the gate can actually go red.
+
+  No runtime behavior changes for any valid persisted artifact — no producer ever
+  emitted `dialect: 'js'`. See the ADR-0058 addendum.
+
+- 8923843: Reject view containers that define no views. A flat list-view object (`{ name, label, type, columns, ... }`) parses to an empty `ViewSchema` container because Zod strips unknown keys — zero views register and the Console silently renders nothing. `defineView()` now throws on a zero-view container, and `os validate` gains a `view-container-shape` check (`validateViewContainers` in `@objectstack/lint`) that reports flat or empty `views: []` entries pre-parse with a wrap-it fix hint.
+- f16b492: Remove the dead `'delete'` member from the validation-rule `events` enum (#3184). The rule evaluator only runs on the insert/update write path — `engine.delete` never invokes it — so a rule declaring `events: ['delete']` was a silent no-op (flagged in #3106 and `docs/audits/2026-06-validationschema-property-liveness.md`). The enum now admits only `insert`/`update`; guard deletions with a `beforeDelete` lifecycle hook instead. No shipped metadata declares `events: ['delete']`; any off-spec metadata that did now fails loudly at `os validate` / registration rather than parsing and doing nothing. Also narrows the two hand-written mirrors (`rule-validator.ts` `BaseRule`, `metadata-protocol` JSON-schema form helper — whose stale `type` enum listing removed `unique`/`async`/`custom` variants is corrected in the same pass), updates the doc comments, the published data skill, and the hand-written validation doc.
+- 4b6fde8: Trim the dead `undelete` and `api` webhook triggers (#3196). `WebhookTriggerType` declared five triggers but only three ever fired:
+
+  - `undelete` had no event source — the engine has no soft-delete/restore capability (`delete` is a hard delete; no `deleted_at` convention, no restore operation, and `data.record.undeleted` is never emitted). The `undeleted` case in the auto-enqueuer's action mapper was dead code awaiting a producer that doesn't exist.
+  - `api` ("manually triggered") had no fire path — the only webhook HTTP surface re-queues already-failed deliveries; nothing originates a manual fire.
+
+  Both are removed from the enum (contract-first, matching #3184/#3195): authoring a webhook on a removed trigger now fails loudly at `os validate` / registration instead of registering a webhook that silently never fires. No shipped webhook metadata used either. The auto-enqueuer now also warns when a persisted `sys_webhook` row carries a trigger it can't map to an emitted record event (a drift-guard, so a dead trigger can't silently no-op again). Reintroduce `undelete` only alongside a real restore subsystem, and `api` only alongside a real manual-fire endpoint. Updated the `sys_webhook` trigger options, field help (all locales), docs, and reference; added rejection tests.
+
+- 2018df9: **Unify the developer-facing org identifier in JS hooks — `organizationId` is now the blessed name; `session.tenantId` becomes a deprecated alias (#3280).** The caller's active organization was surfaced to hook authors as `ctx.session.tenantId`, while everything else on the developer surface — the `organization_id` column, `current_user.organizationId` in RLS/sharing, and seed rows — already said `organization`. A hook author had to internalize the hidden equation `tenantId === organizationId` to move between surfaces. This is additive and non-breaking:
+
+  - **`ctx.session.organizationId`** is added as the blessed name; **`ctx.session.tenantId`** still carries the identical value but is marked `@deprecated` in its TSDoc. Both come from the same resolved `ExecutionContext.tenantId` (which the kernel derives from `session.activeOrganizationId`).
+  - **`ctx.user.organizationId`** is added to the ergonomic `user` shortcut, so a hook that needs "the current org to filter by" writes `ctx.user.organizationId` with zero relearning — matching `current_user.organizationId` (RLS) and the `organization_id` column. The engine now populates `ctx.user` (`{ id, email?, organizationId? }`) at every hook event that already carries a `session`; it stays `undefined` for system / unauthenticated writes.
+
+  **No behavior change and no breaking rename.** The generic driver-layer tenancy abstraction (`ExecutionContext.tenantId`, `DriverOptions.tenantId`, `SqlDriver.applyTenantScope`, `TenancyConfig.tenantField`) is deliberately untouched — that layer's isolation column is configurable and legitimately carries an _environment_ id in per-environment (database-per-tenant) kernels. Hook-authoring docs now teach `organizationId` and distinguish the two isolation axes: **org row-scoping** (`organization_id`, shared DB) vs **environment / database-per-tenant** (`service-tenant`, `driver-turso`). Community edition never populates an org, so `organizationId` is `undefined` there.
+
+- fc5a3a2: **The `view` metadata type-schema now validates all three runtime `view` shapes instead of stripping two of them to `{}`.** `metadata-type-schemas.ts` mapped `view` to the aggregate container `ViewSchema` (`{ list, form, listViews, formViews }`, every slot optional). Zod strips unknown keys, so the two non-container shapes a `view` body actually carries at runtime — a standalone **ViewItem record** (`{ name, object, viewKind, config }`) and a **console personalization overlay** (raw view config + identity inherited by `normalizeViewMetadata`, #2555) — both strip-parsed to `{}`. That made the `422` check in `saveMetaItem` and read-time `computeMetadataDiagnostics` a **no-op** for those shapes: a broken `config` (e.g. a kanban missing `groupByField`) saved with a false `200` and badged valid, and the view create-seed test validated against nothing.
+
+  `view` now maps to a new `ViewMetadataSchema` — a union over the three shapes, each validated genuinely:
+
+  1. **defineView container** — non-empty (`ViewSchema` refined to require at least one of `list`/`form`/`listViews`/`formViews`; an empty container is rejected, mirroring `defineView`).
+  2. **ViewItem record** — `ViewItemSchema`; the nested `config` is validated against ListView/FormView.
+  3. **Flattened personalization overlay** — inline ListView/FormView config plus optional identity fields. Structural guards pin `config`/`list`/`form`/`listViews`/`formViews` to `undefined` so a malformed record or container can never be rescued through this lenient branch with its real payload silently stripped.
+
+  All members strip-parse (no `.strict()`), so auxiliary Studio round-trip keys (`isPinned`, `sortOrder`, …) still ride along without a false `422`, and `saveMetaItem` keeps persisting the body verbatim. `z.toJSONSchema()` emits the schema as an `anyOf` of the four members, which `/api/v1/meta/types/view` serves to Studio's SchemaForm.
+
+  Fixes #3095.
+
 ## 15.1.1
 
 ## 15.1.0

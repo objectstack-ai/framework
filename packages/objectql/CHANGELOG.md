@@ -1,5 +1,286 @@
 # @objectstack/objectql
 
+## 16.0.0-rc.0
+
+### Major Changes
+
+- 6c270a6: **BREAKING: remove the deprecated `ctx.session.tenantId` / `ctx.user.tenantId` alias from the hook & action authoring surface — converge on `organizationId` (#3290).**
+
+  #3280 made `organizationId` the blessed developer-facing name for the caller's active org across the JS authoring surface and kept `tenantId` as a `@deprecated` alias carrying the identical value. That alias is now **removed** from the hook `ctx.session`, the action-body `ctx.session`, and the action-body `ctx.user`. Read the caller's active org under the single blessed name:
+
+  ```diff
+  - const org = ctx.session.tenantId;   // hook or action body
+  + const org = ctx.user?.organizationId ?? ctx.session?.organizationId;
+  ```
+
+  **FROM → TO migration** (in any `*.hook.ts` / `*.action.ts` body):
+
+  - `ctx.session.tenantId` → `ctx.session.organizationId`
+  - `ctx.user.tenantId` (action body) → `ctx.user.organizationId`
+
+  The value is unchanged — `organizationId` is the same active-org id, matching the `organization_id` column and `current_user.organizationId` in RLS/sharing. `ctx.user` is `undefined` for system / unauthenticated writes, so read `ctx.session?.organizationId` when a hook or action must work regardless of a resolved user.
+
+  What changed internally:
+
+  - **`@objectstack/spec`** — `HookContextSchema.session` drops the `tenantId` field (only `organizationId` remains). A stray `tenantId` on a constructed session is now stripped by the schema.
+  - **`@objectstack/objectql`** — the engine's `buildSession()` no longer emits `session.tenantId`; the audit-stamp plugin sources the `tenant_id` column from `session.organizationId`.
+  - **`@objectstack/runtime`** — `buildActionSession()` and the REST action `ctx.user` no longer emit `tenantId`.
+  - **`@objectstack/trigger-record-change`** — reads `session.organizationId` (was `session.tenantId`) when forwarding the writer's org to a `runAs:'user'` flow; behavior is identical.
+
+  **Explicit non-goal (unchanged):** the generic **driver-layer** tenancy abstraction is _not_ touched — `ExecutionContext.tenantId`, `DriverOptions.tenantId`, `SqlDriver.applyTenantScope` / `TenancyConfig.tenantField`, and `ExecutionLog.tenantId`. That isolation column is configurable and legitimately carries an _environment_ id in database-per-tenant kernels; it is a distinct axis from the developer-facing org. The build-time `check:org-identifier` guard now also covers `packages/**` to keep reference bodies off the removed name.
+
+### Minor Changes
+
+- 22013aa: **Split the overloaded `managedBy: 'system'` bucket into engine-owned vs. admin-writable, and enforce engine-owned writes (ADR-0103, #3220).** The `system` bucket conflated two incompatible write policies: rows a platform service owns end to end (never user-written), and platform-defined schema whose rows are legitimately admin/user-writable. It carried the same all-false affordance row as `better-auth`/`append-only` but, unlike `better-auth`, had no engine enforcement — a wildcard admin could raw-write these rows through the generic data API (ADR-0049 gap).
+
+  Rather than add a new `managedBy` enum value (which would fall through to fully-editable `platform` defaults on already-deployed Console clients), the write policy is now the **resolved affordance** (`resolveCrudAffordances` = bucket default + `userActions`), and _engine-owned_ is defined as a `system`/`append-only` object that grants no write:
+
+  - **Writable set declares `userActions`** — the RBAC link tables (`sys_user_position`, `sys_user_permission_set`, `sys_position_permission_set`), `sys_user_preference`, `sys_approval_delegation`, and the messaging config grids (`sys_notification_preference` / `…_subscription` / `…_template`) now declare `userActions: { create, edit, delete: true }`. The affordance is a declaration only — the `DelegatedAdminGate` / RLS / permission sets remain the authz.
+  - **Engine-owned objects locked to reads** — `apiMethods: ['get','list']` added where absent (jobs, notifications, approval request/approver/token/action, `sys_record_share`, `sys_automation_run`, mail/settings/secret audit, the messaging delivery pipeline). `sys_secret` is explicitly read-locked (an empty `apiMethods` array fails open).
+  - **`sys_import_job`** stays engine-owned: the REST import route now writes its job rows `isSystem`-elevated (attribution preserved via the explicit `created_by` stamp) and the object is locked to `['get','list']`.
+  - **New engine write guard** (`assertEngineOwnedWriteAllowed`, plugin-security) fail-closed rejects user-context generic writes to engine-owned `system`/`append-only` objects, keyed off the resolved affordance; `isSystem` and context-less engine/service writes bypass by construction. Wired into the security middleware alongside the other data-layer gates.
+  - **`reconcileManagedApiMethods`** (objectql registry) now runs for **every** managed bucket, not just `better-auth`: any advertised write verb an object's resolved affordances forbid is stripped at registration with a warning (the drift backstop, ADR-0049).
+  - **`/me/permissions` clamp** (plugin-hono-server) now clamps `system`/`append-only` as well as `better-auth`, so the client hint reflects `permission ∩ guard`.
+
+  **Potentially breaking:** a downstream/third-party `system` object that advertised generic write verbs relying on today's fail-open behaviour will have those verbs stripped (with a warning) and user-context generic writes to it rejected. Declare `userActions` opening the verbs the object legitimately takes from a user context. `better-auth` keeps plugin-auth's identity write guard unchanged; the row-level `managed_by` provenance vocabulary (ADR-0066) is a different axis and is untouched.
+
+- 04ecd4e: feat(validation): `state_machine.initialStates` enforces the FSM entry point on INSERT (#3165)
+
+  A `state_machine` rule's `transitions` only governs UPDATE — on INSERT the rule
+  was a no-op, and a `select` field permits ANY declared option as the initial
+  value. So a record could be born mid-flow (created already `approved`), skipping
+  the whole state machine. This was the gap #3043's mitigation idea assumed didn't
+  exist (declared ≠ enforced, ADR-0049).
+
+  `state_machine` rules gain an optional `initialStates: string[]` — the states a
+  record may be CREATED in. When set, an insert whose (defaulted) state-field value
+  is outside the list is rejected server-side with `code: 'invalid_initial_state'`.
+  Omit it to keep the legacy behavior (no initial-state check on insert). A missing
+  / empty value is left to required-validation; `transitions` (UPDATE) is
+  unaffected. Enforced at the same `evaluateValidationRules(..., 'insert')` seam the
+  engine already runs after field defaults.
+
+- 4d5a892: feat(objectql): roll-up `summary` fields can filter which child rows they aggregate (#1868)
+
+  `summaryOperations` gains an optional `filter` — a query `where` FilterCondition
+  evaluated against each child row, so a summary aggregates only the matching
+  children instead of the whole collection. This is what lets a single child object
+  feed several distinct parent totals, which the cross-object rollup templates need:
+
+  ```typescript
+  // One `engagement` child → distinct filtered totals.
+  total_signups: {
+    type: 'summary',
+    summaryOperations: { object: 'engagement', field: 'id', function: 'count', filter: { type: 'signup' } },
+  }
+  // Sum only received receipt lines (3-way match).
+  received_amount: {
+    type: 'summary',
+    summaryOperations: { object: 'procurement_receipt', field: 'amount', function: 'sum', filter: { status: 'received' } },
+  }
+  ```
+
+  The engine ANDs the predicate with the parent-FK match when it recomputes, and
+  because the whole filtered aggregate is re-run on every child write, a child that
+  moves in or out of the predicate (e.g. a status change) keeps the parent current
+  with no extra wiring. Operator and compound forms work too
+  (`filter: { type: { $in: ['signup', 'trial'] }, amount: { $gte: 100 } }`).
+
+  Purely additive: omitting `filter` aggregates every child exactly as before.
+
+### Patch Changes
+
+- a8aa34c: Enforce validation rules, `requiredWhen`, and per-option `visibleWhen` on multi-row updates (#3106). The bulk branch of `engine.update` (`options.multi` → `driver.updateMany`) previously never called `evaluateValidationRules`, so every object-level rule (`script`, `state_machine`, `format`, `cross_field`, `json_schema`, `conditional`), field-level `requiredWhen`, and per-option `visibleWhen` check was a silent no-op there. The engine now reads the row-scoped match set (the same AST the write binds, one query shared with the `readonlyWhen` bulk strip) and evaluates the payload against each matched row's prior state; any error-severity violation rejects the whole batch with `ValidationError` (annotated with the failing record id) before anything is written. Schemas needing no prior state (`format`/`json_schema`-only) are evaluated once against the payload with no fetch, and rule-free schemas are unaffected. Behavior change: bulk writes that previously slipped past declared rules now throw. Doc comments in `rule-validator.ts` and `validation.zod.ts` no longer overstate coverage and name the remaining `events: ['delete']` gap (tracked separately).
+- e057f42: fix: harden the bulk-write path — retries, idempotency, contracts, and summary visibility (#3147–#3152)
+
+  Six reliability fixes to the batched seed/import + `engine.insert(array)` path
+  introduced by the #2678 bulk-write rework:
+
+  - **#3151** `bulkWrite` validates that `writeBatch` returns one record per input
+    row (a short/long/non-array return is degraded per-row, not backfilled as
+    phantom success); `engine.insert(array)` likewise rejects a short driver
+    `bulkCreate` return instead of padding afterInsert with `undefined`.
+  - **#3150** wraps the two remaining un-retried write points (seed
+    `writeRecord`/`resolveDeferredUpdates`, import's no-`createManyData`
+    fallback) in `withTransientRetry`; `defaultIsTransientError` short-circuits
+    definitive logical errors to non-transient.
+  - **#3148** import `resolveRef` flushes pending creates on a same-object miss so
+    a later row can reference an earlier same-file CREATE, and no longer
+    negatively caches a miss.
+  - **#3149** threads an `attempt` counter through `bulkWrite`; seed rechecks by
+    `externalId` and import by `matchFields` before re-writing, so a
+    commit-then-lost-response retry cannot duplicate a batch.
+  - **#3147** `recomputeSummaries` retries transient failures and, on exhaustion,
+    surfaces `SummaryRecomputeError` (`ERR_SUMMARY_RECOMPUTE`) instead of a
+    silent warn; seed/import recover it to a warning without re-writing.
+  - **#3152** autonumbers are assigned after validation, so a batch that dies in
+    validation consumes no sequence value (no number-range gaps).
+
+- a3823b2: Collapse the hook event taxonomy from 18 declared events to the 8 the engine actually dispatches (#3195). The removed 10 (`beforeFindOne`/`afterFindOne`, `beforeCount`/`afterCount`, `beforeAggregate`/`afterAggregate`, `beforeUpdateMany`/`afterUpdateMany`, `beforeDeleteMany`/`afterDeleteMany`) were declared in `HookEvent` but never fired — the enum mirrored the engine method table instead of domain events, so a hook subscribing to them registered fine and then silently no-op'd.
+
+  - `findOne` now fires the same `beforeFind`/`afterFind` hooks as `find` — the read event attaches to record materialization, not the engine method, so one subscription covers every read shape (no separate `beforeFindOne`/`afterFindOne`).
+  - Bulk (`multi: true`) updates/deletes already fire the singular `beforeUpdate`/`beforeDelete`/`afterUpdate`/`afterDelete` events with the row-scoping predicate in `ctx.input.ast`; this is now documented, and there is no `*Many` event.
+  - Read authorization / row filtering is the RLS/permission-rule layer's job and field masking is field-level metadata — neither is a hook every author must re-attach.
+  - `engine.registerHook` now warns when a hook subscribes to an event the engine never dispatches, so enum-vs-dispatch drift can't recur silently.
+
+  No shipped hook or authored metadata used any of the removed events; authoring one now fails loudly at parse/validate time instead of registering a dead hook. Skills and docs updated to teach the 8 events and the declarative alternatives.
+
+- fdc244e: Dev-loop DX fixes from the 15.1 third-party evaluation (P2 batch):
+
+  - **Hot-added objects are now queryable without a restart.** Adding a `*.object.ts` under `os dev` used to recompile "green" while every query answered `no such table` (or `not registered`) until a manual restart: the artifact reload never notified the ObjectQL registry, tables were only created at boot, and seeds only loaded from the boot-time bundle. The `metadata:reloaded` payload now carries the parsed artifact; ObjectQL ingests the object definitions and re-runs the idempotent schema sync (same `skipSchemaSync` opt-out as boot), and the runtime loads seeds for first-seen objects (dev, single-tenant). `os dev` also prints `✚ new object(s): …` on recompile.
+  - **Dev admin credentials stay visible.** The `os dev` startup banner only showed `admin@objectos.ai / admin123` on the boot that actually seeded it; with the persistent default DB every later boot hid it, and the Console login page never knew it existed. The hint now re-arms on every dev boot for as long as the account still verifies against the default password, and `GET /api/v1/auth/config` exposes a dev-gated `devSeedAdmin` field (never present outside `NODE_ENV=development`) so the login page can show it.
+  - **`os doctor` reference analysis understands current metadata shapes.** Objects bound through `defineView` containers (`list`/`listViews`/`form`/`formViews` → `data.object`, subform `childObject`, lookup form fields) and app navigation (`objectName`, nested `children`, `areas`) were reported as "defined but not referenced". The collector now walks the canonical shapes (plus flow node `config.object`/`objectName`) and the orphan-view check descends into containers.
+
+- 2ea08ee: Flow trigger observability — kill the four-layer silence around record-change flows that never fire (2026-07-17 third-party eval).
+
+  A misauthored auto-launched flow (wrong `objectName`, missing `requires: ['automation','triggers']`, failing start condition) produced ZERO output at every layer: the engine's own registration/binding logs land inside the CLI's boot-quiet stdout window (which swallows debug/info/warn — only error/fatal reach stderr), and each "didn't happen" path was itself silent. Fixes:
+
+  - **Startup banner `Flows:` section** (`os serve`/`os dev`/`os start`): flow count, bound-to-trigger count, registered trigger types, draft count — plus loud `⚠` lines for flows declared with no automation engine enabled (`requires` missing), flows whose trigger type has no registered trigger, and bound record-change flows targeting an unknown object (dead binding). Printed after stdout is restored, so it is immune to the boot-quiet window.
+  - **Trigger-fired run failures now log at ERROR** (stderr — always visible): the automation engine no longer drops the AutomationResult of a trigger-fired execution; condition-evaluation faults and node failures surface with the flow name. Condition-not-met skips stay at debug (high-frequency, intentional).
+  - **`RecordChangeTrigger` probes object existence at bind time** and warns when a flow's `objectName` matches no registered object (exact-name matching), instead of silently arming a hook that can never fire.
+  - **`kernel:bootstrapped` binding audit** in the automation plugin: warns per enabled-but-unbound triggered flow with the reason, and reports registered/bound/draft counts (`AutomationEngine.getTriggerBindingAudit()`, extended `getFlowRuntimeStates()` with `status`/`triggerType`/`object`).
+  - **`os validate` flow-wiring advisories** (`@objectstack/lint` `validateFlowTriggerReadiness`): warns when a record-triggered flow targets an object the stack does not define, and when an auto-triggered flow's status is `draft` (authored or defaulted — draft flows still fire; declare `active` or `obsolete`).
+  - Removed leftover boot-debug writes (`registerApp`/`AppPlugin`/`StandaloneStack`/`AuditPlugin` stderr noise) that previous debugging of this same silence had left behind.
+
+- d2723e2: **`MetadataManager.register()` / `unregister()` now announce to `subscribe()` watchers.** Both updated the registry, persisted to writable loaders and published to realtime, but never fired the watch callbacks — so `subscribe()` looked like it covered every write while silently missing all of them. Only the `saveMetaItem` path (via the repository watch stream) and the filesystem watcher ever reached a subscriber. Runtime consumers that cache metadata — notably ObjectQL's SchemaRegistry bridge, the component that decides what is queryable — went stale on every other write until the process restarted.
+
+  Announcing is now the **default**, so a new call site is correct without knowing this contract exists. This is a contract fix rather than a bug fix: the one live behavior change is that runtime datasource writes (`datasource-admin`) now reach the HMR SSE stream, which subscribes to every registered type. `unregisterPackage()` / `bulkUnregister()` also announce their deletes now — correct, but latent, since neither has a production caller today.
+
+  Bulk ingest opts out explicitly with the new `MetadataWriteOptions` (`{ notify: false }`) — boot-time filesystem priming, artifact ingest, and ObjectQL's registry bridge, each of which either runs before consumers cache anything or announces the whole batch once (as the artifact reload path does via `metadata:reloaded`). The bridge in particular MUST stay silent: it copies objects out of the SchemaRegistry, and announcing would feed them back through a handler that re-registers under `_packageId ?? 'metadata-service'`, overwriting the true package provenance of every object whose body carries no `_packageId`.
+
+  Additive only — `register(type, name, data)` and `unregister(type, name)` keep working unchanged.
+
+  Fixes #3112.
+
+- 668dd17: **Breaking (npm type surface): retire the vestigial feed contracts + protocol surface (ADR-0052 §5 follow-up, #1959).**
+
+  The `service-feed` runtime was deleted in #1955; `sys_comment` / `sys_activity`
+  are the canonical record-collaboration/timeline backend. This removes the dead
+  type surface that still pointed at the deleted runtime — every removed method was
+  already unreachable (the feed REST route was never mounted → 404; the protocol
+  implementation was never wired with a feed service, so `requireFeedService()`
+  could only throw). No behavior changes.
+
+  No authorable metadata key is removed (the `feeds:` object capability flag and
+  the `RecordActivity` UI component config are unchanged), so `PROTOCOL_MAJOR`
+  stays 15 and this ships as `minor` rather than a protocol major.
+
+  FROM → TO migration for every removed export:
+
+  - `@objectstack/spec/contracts` — `IFeedService`, `CreateFeedItemInput`,
+    `UpdateFeedItemInput`, `ListFeedOptions`, `FeedListResult` → **removed, no
+    replacement**. Comments/activity are plain records: write `sys_comment` / read
+    `sys_activity` via the data engine or the REST data API.
+  - `@objectstack/spec/api` — `FeedApiContracts`, `FeedApiErrorCode`,
+    `FeedProtocol`, and all feed request/response schemas + types (`GetFeed*`,
+    `CreateFeedItem*`, `UpdateFeedItem*`, `DeleteFeedItem*`, `AddReaction*`,
+    `RemoveReaction*`, `PinFeedItem*`, `UnpinFeedItem*`, `StarFeedItem*`,
+    `UnstarFeedItem*`, `SearchFeed*`, `GetChangelog*`, `ChangelogEntry`,
+    `SubscribeRequest/Response`, `FeedUnsubscribeRequest`, `UnsubscribeResponse`,
+    `FeedPathParams`, `FeedItemPathParams`, `FeedListFilterType`) → **removed**. Use
+    the data API against `sys_comment` / `sys_activity` (`/api/v1/data/sys_comment/…`);
+    reactions and threaded replies are fields on `sys_comment`.
+  - `@objectstack/spec/data` — `FeedItemSchema`/`FeedItem`, `FeedActorSchema`/`FeedActor`,
+    `MentionSchema`/`Mention`, `ReactionSchema`/`Reaction`,
+    `FieldChangeEntrySchema`/`FieldChangeEntry`, `FeedVisibility`,
+    `RecordSubscriptionSchema`/`RecordSubscription`, `SubscriptionEventType`, and the
+    `data`-namespace `NotificationChannel` → **removed**. `FeedItemType` and
+    `FeedFilterMode` are **kept** (live UI activity-timeline config). For notification
+    channels use `NotificationChannelSchema` from `@objectstack/spec/system`.
+  - `@objectstack/client` — `client.feed.*` (`list` / `create` / `update` / `delete` /
+    `addReaction` / `removeReaction` / `pin` / `unpin` / `star` / `unstar` / `search` /
+    `getChangelog` / `subscribe` / `unsubscribe`) and the re-exported feed response
+    types → **removed**. One-line fix: use `client.data.*` on `sys_comment` /
+    `sys_activity`, e.g. `client.data.create('sys_comment', { object, record_id, body })`
+    and `client.data.find('sys_activity', { filters: [['record_id', '=', id]] })`.
+  - `@objectstack/metadata-protocol` — `ObjectStackProtocolImplementation` no longer
+    implements the 14 feed methods; its constructor
+    `(engine, getServicesRegistry?, getFeedService?, environmentId?)` becomes
+    `(engine, getServicesRegistry?, environmentId?)`. One-line fix: delete the third
+    argument.
+
+- 86d30af: fix(tenancy): platform-global (`tenancy.enabled:false`) objects are never driver-org-scoped (#3249)
+
+  An org-context read of a platform-global object (e.g. `sys_license`, ADR-0066)
+  could return 0 rows for an authenticated caller while an anonymous read saw the
+  data: the engine stamped `execCtx.tenantId` into driver options unconditionally,
+  and the SQL driver's tenant-field cache could be re-corrupted to
+  `organization_id` by a partial re-registration (lifecycle archive `syncSchema`,
+  schema-drift re-sync) whose schema omitted the `tenancy` block.
+
+  - New `isTenancyDisabled(schema)` export from `@objectstack/spec/data` — the
+    single source of truth for the ADR-0066 platform-global posture, now shared by
+    the registry (tenant-column injection), the ObjectQL engine, and the SQL
+    driver.
+  - `ObjectQL.buildDriverOptions` no longer stamps `tenantId` for objects whose
+    registered schema declares `tenancy.enabled: false` (an explicitly-passed
+    options `tenantId` still wins — deliberate caller intent).
+  - `SqlDriver` (and `SqliteWasmDriver`) now keep a sticky record of an explicit
+    `tenancy.enabled:false` declaration: a later registration without a `tenancy`
+    block preserves the opt-out instead of re-scoping via the implicit
+    `organization_id` heuristic; a registration that carries a `tenancy`
+    declaration stays authoritative.
+
+- 2018df9: **Unify the developer-facing org identifier in JS hooks — `organizationId` is now the blessed name; `session.tenantId` becomes a deprecated alias (#3280).** The caller's active organization was surfaced to hook authors as `ctx.session.tenantId`, while everything else on the developer surface — the `organization_id` column, `current_user.organizationId` in RLS/sharing, and seed rows — already said `organization`. A hook author had to internalize the hidden equation `tenantId === organizationId` to move between surfaces. This is additive and non-breaking:
+
+  - **`ctx.session.organizationId`** is added as the blessed name; **`ctx.session.tenantId`** still carries the identical value but is marked `@deprecated` in its TSDoc. Both come from the same resolved `ExecutionContext.tenantId` (which the kernel derives from `session.activeOrganizationId`).
+  - **`ctx.user.organizationId`** is added to the ergonomic `user` shortcut, so a hook that needs "the current org to filter by" writes `ctx.user.organizationId` with zero relearning — matching `current_user.organizationId` (RLS) and the `organization_id` column. The engine now populates `ctx.user` (`{ id, email?, organizationId? }`) at every hook event that already carries a `session`; it stays `undefined` for system / unauthenticated writes.
+
+  **No behavior change and no breaking rename.** The generic driver-layer tenancy abstraction (`ExecutionContext.tenantId`, `DriverOptions.tenantId`, `SqlDriver.applyTenantScope`, `TenancyConfig.tenantField`) is deliberately untouched — that layer's isolation column is configurable and legitimately carries an _environment_ id in per-environment (database-per-tenant) kernels. Hook-authoring docs now teach `organizationId` and distinguish the two isolation axes: **org row-scoping** (`organization_id`, shared DB) vs **environment / database-per-tenant** (`service-tenant`, `driver-turso`). Community edition never populates an org, so `organizationId` is `undefined` there.
+
+- Updated dependencies [f972574]
+- Updated dependencies [22013aa]
+- Updated dependencies [3ad3dd5]
+- Updated dependencies [3a18b60]
+- Updated dependencies [a8aa34c]
+- Updated dependencies [e057f42]
+- Updated dependencies [a3823b2]
+- Updated dependencies [43a3efb]
+- Updated dependencies [524696a]
+- Updated dependencies [6b51346]
+- Updated dependencies [80273c8]
+- Updated dependencies [5e3301d]
+- Updated dependencies [dd9f223]
+- Updated dependencies [46e876c]
+- Updated dependencies [5f05de2]
+- Updated dependencies [021ba4c]
+- Updated dependencies [158aa14]
+- Updated dependencies [83e8f7d]
+- Updated dependencies [0e41302]
+- Updated dependencies [d2723e2]
+- Updated dependencies [fefcd54]
+- Updated dependencies [b8a21ad]
+- Updated dependencies [beaf2de]
+- Updated dependencies [06cb319]
+- Updated dependencies [369eb6e]
+- Updated dependencies [b659111]
+- Updated dependencies [5754a23]
+- Updated dependencies [6c270a6]
+- Updated dependencies [290e2f0]
+- Updated dependencies [668dd17]
+- Updated dependencies [8abf133]
+- Updated dependencies [e0859b1]
+- Updated dependencies [92f5f19]
+- Updated dependencies [32899e6]
+- Updated dependencies [515f11a]
+- Updated dependencies [04ecd4e]
+- Updated dependencies [4d5a892]
+- Updated dependencies [16cebeb]
+- Updated dependencies [86d30af]
+- Updated dependencies [8923843]
+- Updated dependencies [ea32ec7]
+- Updated dependencies [a2795f6]
+- Updated dependencies [f16b492]
+- Updated dependencies [4b6fde8]
+- Updated dependencies [2018df9]
+- Updated dependencies [fc5a3a2]
+  - @objectstack/spec@16.0.0-rc.0
+  - @objectstack/core@16.0.0-rc.0
+  - @objectstack/metadata-protocol@16.0.0-rc.0
+  - @objectstack/formula@16.0.0-rc.0
+  - @objectstack/types@16.0.0-rc.0
+  - @objectstack/metadata-core@16.0.0-rc.0
+
 ## 15.1.1
 
 ### Patch Changes

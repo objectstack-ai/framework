@@ -1,5 +1,124 @@
 # @objectstack/rest
 
+## 16.0.0-rc.0
+
+### Patch Changes
+
+- 22013aa: **Split the overloaded `managedBy: 'system'` bucket into engine-owned vs. admin-writable, and enforce engine-owned writes (ADR-0103, #3220).** The `system` bucket conflated two incompatible write policies: rows a platform service owns end to end (never user-written), and platform-defined schema whose rows are legitimately admin/user-writable. It carried the same all-false affordance row as `better-auth`/`append-only` but, unlike `better-auth`, had no engine enforcement — a wildcard admin could raw-write these rows through the generic data API (ADR-0049 gap).
+
+  Rather than add a new `managedBy` enum value (which would fall through to fully-editable `platform` defaults on already-deployed Console clients), the write policy is now the **resolved affordance** (`resolveCrudAffordances` = bucket default + `userActions`), and _engine-owned_ is defined as a `system`/`append-only` object that grants no write:
+
+  - **Writable set declares `userActions`** — the RBAC link tables (`sys_user_position`, `sys_user_permission_set`, `sys_position_permission_set`), `sys_user_preference`, `sys_approval_delegation`, and the messaging config grids (`sys_notification_preference` / `…_subscription` / `…_template`) now declare `userActions: { create, edit, delete: true }`. The affordance is a declaration only — the `DelegatedAdminGate` / RLS / permission sets remain the authz.
+  - **Engine-owned objects locked to reads** — `apiMethods: ['get','list']` added where absent (jobs, notifications, approval request/approver/token/action, `sys_record_share`, `sys_automation_run`, mail/settings/secret audit, the messaging delivery pipeline). `sys_secret` is explicitly read-locked (an empty `apiMethods` array fails open).
+  - **`sys_import_job`** stays engine-owned: the REST import route now writes its job rows `isSystem`-elevated (attribution preserved via the explicit `created_by` stamp) and the object is locked to `['get','list']`.
+  - **New engine write guard** (`assertEngineOwnedWriteAllowed`, plugin-security) fail-closed rejects user-context generic writes to engine-owned `system`/`append-only` objects, keyed off the resolved affordance; `isSystem` and context-less engine/service writes bypass by construction. Wired into the security middleware alongside the other data-layer gates.
+  - **`reconcileManagedApiMethods`** (objectql registry) now runs for **every** managed bucket, not just `better-auth`: any advertised write verb an object's resolved affordances forbid is stripped at registration with a warning (the drift backstop, ADR-0049).
+  - **`/me/permissions` clamp** (plugin-hono-server) now clamps `system`/`append-only` as well as `better-auth`, so the client hint reflects `permission ∩ guard`.
+
+  **Potentially breaking:** a downstream/third-party `system` object that advertised generic write verbs relying on today's fail-open behaviour will have those verbs stripped (with a warning) and user-context generic writes to it rejected. Declare `userActions` opening the verbs the object legitimately takes from a user context. `better-auth` keeps plugin-auth's identity write guard unchanged; the row-level `managed_by` provenance vocabulary (ADR-0066) is a different axis and is untouched.
+
+- e057f42: fix: harden the bulk-write path — retries, idempotency, contracts, and summary visibility (#3147–#3152)
+
+  Six reliability fixes to the batched seed/import + `engine.insert(array)` path
+  introduced by the #2678 bulk-write rework:
+
+  - **#3151** `bulkWrite` validates that `writeBatch` returns one record per input
+    row (a short/long/non-array return is degraded per-row, not backfilled as
+    phantom success); `engine.insert(array)` likewise rejects a short driver
+    `bulkCreate` return instead of padding afterInsert with `undefined`.
+  - **#3150** wraps the two remaining un-retried write points (seed
+    `writeRecord`/`resolveDeferredUpdates`, import's no-`createManyData`
+    fallback) in `withTransientRetry`; `defaultIsTransientError` short-circuits
+    definitive logical errors to non-transient.
+  - **#3148** import `resolveRef` flushes pending creates on a same-object miss so
+    a later row can reference an earlier same-file CREATE, and no longer
+    negatively caches a miss.
+  - **#3149** threads an `attempt` counter through `bulkWrite`; seed rechecks by
+    `externalId` and import by `matchFields` before re-writing, so a
+    commit-then-lost-response retry cannot duplicate a batch.
+  - **#3147** `recomputeSummaries` retries transient failures and, on exhaustion,
+    surfaces `SummaryRecomputeError` (`ERR_SUMMARY_RECOMPUTE`) instead of a
+    silent warn; seed/import recover it to a warning without re-writing.
+  - **#3152** autonumbers are assigned after validation, so a batch that dies in
+    validation consumes no sequence value (no number-range gaps).
+
+- 43a3efb: fix(rest): gate the cross-object transactional batch by the same per-object API rules as single-record writes (#1604)
+
+  The `POST {basePath}/batch` route (issue #1604 / ADR-0034) wraps N cross-object
+  create/update/delete ops in one engine transaction, but it skipped the
+  per-object API-exposure gate every single-record route applies — an
+  authenticated caller could write to an `apiEnabled: false` object, or run an
+  operation outside an object's `apiMethods` whitelist, straight through the batch
+  surface (ADR-0049 / #1889 — the same "declared ≠ enforced" hole closed for the
+  generic write path in #3220 / #3213).
+
+  The route now:
+
+  - validates the body against a new `CrossObjectBatchRequestSchema`
+    (`@objectstack/spec/api`, Zod-First) — a malformed op, an unknown action, or a
+    missing `object` is a `400` instead of a `500`;
+  - enforces `enable.apiEnabled` / `enable.apiMethods` for **every** op (metadata
+    fetched once, each distinct `(object, action)` checked) BEFORE opening the
+    transaction — `404 OBJECT_API_DISABLED` / `405 OBJECT_API_METHOD_NOT_ALLOWED`;
+  - requires an `id` for `update` / `delete` (`400`);
+  - rejects an unresolvable `{ $ref }` with `400 BATCH_UNRESOLVED_REF` instead of
+    silently writing a `null` FK;
+  - rejects an explicit `atomic: false` (`400 BATCH_NOT_ATOMIC`) rather than
+    silently applying atomically — non-atomic per-object batches stay on
+    `POST /data/:object/batch`.
+
+  `enforceApiAccess` is refactored to share the pure `apiAccessDenialFromEnable`
+  check + a `loadObjectItems` helper with the batch route (single-record behavior
+  unchanged). Adds `rest-batch-endpoint.test.ts` — the REST-boundary coverage
+  ADR-0034 flagged as missing (commit, `$ref`, rollback surfacing, API-access
+  denial, request validation).
+
+- Updated dependencies [f972574]
+- Updated dependencies [22013aa]
+- Updated dependencies [3ad3dd5]
+- Updated dependencies [3a18b60]
+- Updated dependencies [a8aa34c]
+- Updated dependencies [e057f42]
+- Updated dependencies [a3823b2]
+- Updated dependencies [bc65105]
+- Updated dependencies [43a3efb]
+- Updated dependencies [524696a]
+- Updated dependencies [5e3301d]
+- Updated dependencies [dd9f223]
+- Updated dependencies [46e876c]
+- Updated dependencies [5f05de2]
+- Updated dependencies [021ba4c]
+- Updated dependencies [158aa14]
+- Updated dependencies [83e8f7d]
+- Updated dependencies [d2723e2]
+- Updated dependencies [fefcd54]
+- Updated dependencies [beaf2de]
+- Updated dependencies [369eb6e]
+- Updated dependencies [b659111]
+- Updated dependencies [5754a23]
+- Updated dependencies [6c270a6]
+- Updated dependencies [290e2f0]
+- Updated dependencies [668dd17]
+- Updated dependencies [8abf133]
+- Updated dependencies [e0859b1]
+- Updated dependencies [92f5f19]
+- Updated dependencies [32899e6]
+- Updated dependencies [04ecd4e]
+- Updated dependencies [4d5a892]
+- Updated dependencies [16cebeb]
+- Updated dependencies [86d30af]
+- Updated dependencies [8923843]
+- Updated dependencies [a2795f6]
+- Updated dependencies [f16b492]
+- Updated dependencies [4b6fde8]
+- Updated dependencies [2018df9]
+- Updated dependencies [fc5a3a2]
+  - @objectstack/spec@16.0.0-rc.0
+  - @objectstack/platform-objects@16.0.0-rc.0
+  - @objectstack/core@16.0.0-rc.0
+  - @objectstack/types@16.0.0-rc.0
+  - @objectstack/service-package@16.0.0-rc.0
+
 ## 15.1.1
 
 ### Patch Changes

@@ -1,5 +1,82 @@
 # @objectstack/verify
 
+## 16.0.0-rc.0
+
+### Patch Changes
+
+- Updated dependencies [b39c65d]
+- Updated dependencies [f972574]
+- Updated dependencies [2f3c641]
+- Updated dependencies [e38da5b]
+- Updated dependencies [f9b118d]
+- Updated dependencies [22013aa]
+- Updated dependencies [a9459e6]
+- Updated dependencies [3ad3dd5]
+- Updated dependencies [3a18b60]
+- Updated dependencies [02eafa5]
+- Updated dependencies [deb7e7e]
+- Updated dependencies [a8aa34c]
+- Updated dependencies [e057f42]
+- Updated dependencies [a3823b2]
+- Updated dependencies [43a3efb]
+- Updated dependencies [524696a]
+- Updated dependencies [fdc244e]
+- Updated dependencies [5e3301d]
+- Updated dependencies [dd9f223]
+- Updated dependencies [46e876c]
+- Updated dependencies [780b4b5]
+- Updated dependencies [2ea08ee]
+- Updated dependencies [d1d1c40]
+- Updated dependencies [616e839]
+- Updated dependencies [5f05de2]
+- Updated dependencies [021ba4c]
+- Updated dependencies [158aa14]
+- Updated dependencies [d2723e2]
+- Updated dependencies [fefcd54]
+- Updated dependencies [efbcfe1]
+- Updated dependencies [2049b6a]
+- Updated dependencies [beaf2de]
+- Updated dependencies [1e145eb]
+- Updated dependencies [369eb6e]
+- Updated dependencies [b659111]
+- Updated dependencies [5754a23]
+- Updated dependencies [6c270a6]
+- Updated dependencies [290e2f0]
+- Updated dependencies [668dd17]
+- Updated dependencies [8abf133]
+- Updated dependencies [e0859b1]
+- Updated dependencies [92f5f19]
+- Updated dependencies [a2d6555]
+- Updated dependencies [3a6310c]
+- Updated dependencies [32899e6]
+- Updated dependencies [515f11a]
+- Updated dependencies [4174a07]
+- Updated dependencies [ce468c8]
+- Updated dependencies [04ecd4e]
+- Updated dependencies [4d5a892]
+- Updated dependencies [16cebeb]
+- Updated dependencies [86d30af]
+- Updated dependencies [8923843]
+- Updated dependencies [a2795f6]
+- Updated dependencies [f16b492]
+- Updated dependencies [4b6fde8]
+- Updated dependencies [2018df9]
+- Updated dependencies [fc5a3a2]
+  - @objectstack/runtime@16.0.0-rc.0
+  - @objectstack/spec@16.0.0-rc.0
+  - @objectstack/plugin-security@16.0.0-rc.0
+  - @objectstack/objectql@16.0.0-rc.0
+  - @objectstack/plugin-hono-server@16.0.0-rc.0
+  - @objectstack/service-automation@16.0.0-rc.0
+  - @objectstack/plugin-sharing@16.0.0-rc.0
+  - @objectstack/rest@16.0.0-rc.0
+  - @objectstack/service-analytics@16.0.0-rc.0
+  - @objectstack/plugin-auth@16.0.0-rc.0
+  - @objectstack/core@16.0.0-rc.0
+  - @objectstack/driver-sqlite-wasm@16.0.0-rc.0
+  - @objectstack/service-datasource@16.0.0-rc.0
+  - @objectstack/service-settings@16.0.0-rc.0
+
 ## 15.1.1
 
 ### Patch Changes

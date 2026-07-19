@@ -1,5 +1,129 @@
 # @objectstack/plugin-mcp-server
 
+## 16.0.0-rc.0
+
+### Minor Changes
+
+- 15dbe18: feat(mcp)!: stdio transport requires an API-key principal — fail-closed, no unscoped bridge (ADR-0101, #3246)
+
+  The long-lived MCP **stdio** transport no longer reads data unscoped. It now runs
+  under an env-supplied identity, closing the platform's last identity-less
+  execution surface (the `mcp-stdio-authority` conformance row graduates
+  `experimental` → `enforced`).
+
+  - `OS_MCP_STDIO_API_KEY=osk_...` supplies the stdio identity, resolved through
+    the SAME `@objectstack/core` verify + authorization chain as the HTTP/REST
+    surfaces; the `record_by_id` resource reads via `ql.find(obj, { where:{id},
+context })`, so RLS/FLS/tenant apply exactly as on REST `/data`. Re-resolved
+    per read, so a revoked/expired key stops working on a live session.
+  - **Fail-closed** — enabling stdio auto-start (`OS_MCP_STDIO_ENABLED=true` /
+    `autoStart`) without a resolvable key throws and refuses to start. There is no
+    unscoped fallback and deliberately no `system` bypass; full authority is a key
+    minted on a platform-admin or dedicated service identity.
+
+  **BREAKING (stdio auto-start only):** previously `OS_MCP_STDIO_ENABLED=true`
+  (or the plugin `autoStart` option) started stdio with full, unscoped authority
+  and no credential. It now requires `OS_MCP_STDIO_API_KEY`; without it, boot
+  fails closed. The default-on HTTP surface and any deployment that never enables
+  stdio auto-start are unaffected.
+
+- 83e8f7d: feat(mcp): decouple the stdio auto-start switch from the HTTP surface + surface the MCP endpoint on `os dev` boot (#3167)
+
+  The MCP HTTP surface (`/api/v1/mcp`) and the long-lived stdio transport used to
+  share one env var: `OS_MCP_SERVER_ENABLED=true` turned the HTTP surface on **and**
+  silently auto-started the stdio transport — which bridges the raw metadata service
+
+  - data engine with no per-request principal (unscoped). An operator setting it to
+    "make sure MCP is on" got an unscoped transport as a side effect.
+
+  * **`@objectstack/types`** — new `resolveMcpStdioAutoStart()`. Stdio auto-start is
+    now its own switch, `OS_MCP_STDIO_ENABLED` (default off); `OS_MCP_SERVER_ENABLED`
+    governs only the HTTP surface. The legacy `OS_MCP_SERVER_ENABLED=true` trigger
+    still starts stdio for one release, flagged as deprecated. `=false` is unchanged
+    (it only ever gated HTTP).
+  * **`@objectstack/mcp`** — `MCPServerPlugin.start()` gates stdio on the new switch
+    and logs a one-time deprecation warning when started via the legacy alias.
+  * **`@objectstack/cli`** — `os dev` now prints the MCP endpoint, the agent-skill
+    URL, and a ready-to-paste `claude mcp add` command on boot (gated on the HTTP
+    surface being on), so the "an agent operates the app it's building" loop is
+    discoverable at dev time.
+  * **`create-objectstack`** — the blank scaffold README documents that the app is
+    itself an MCP server (the serve side), distinct from the consume-side connector.
+
+- 230358c: feat(mcp): `validate_expression` tool — validate a CEL expression against a schema before authoring (#1928)
+
+  Adds an agent-callable MCP tool that runs the same build-time expression checks
+  as `objectstack build`, so an AI can validate a formula / predicate / flow
+  condition **while authoring** instead of shipping one that silently evaluates to
+  `null`. Given `{ objectName, expression, site? }` it resolves the object's real
+  schema (field names + types, via the principal-bound `describeObject` bridge)
+  and returns:
+
+  - **errors** — bare field refs (`amount` → `record.amount`), unknown fields
+    (with a did-you-mean), unknown functions;
+  - **warnings** — text/boolean fields misused in arithmetic, date-equality
+    pitfalls;
+  - **inScope** — the fields, stdlib functions, and namespace roots available, so
+    the model can self-correct;
+  - **inferredType** for a `formula` site.
+
+  `site` (`formula` | `validation` | `flow_condition` | `template`, default
+  `formula`) maps to the validator's role + scope — `flow_condition` binds fields
+  bare, the rest bind `record.<field>`. Read-only, gated by the `data:read` OAuth
+  scope, and fail-closed on `sys_*` objects like the other schema tools. This is
+  the authoring-time surface the guardrail series (#1928) always pointed at;
+  `@objectstack/mcp` gains a `@objectstack/formula` dependency (acyclic; formula is
+  a leaf).
+
+### Patch Changes
+
+- Updated dependencies [f972574]
+- Updated dependencies [22013aa]
+- Updated dependencies [3ad3dd5]
+- Updated dependencies [3a18b60]
+- Updated dependencies [a8aa34c]
+- Updated dependencies [e057f42]
+- Updated dependencies [a3823b2]
+- Updated dependencies [43a3efb]
+- Updated dependencies [524696a]
+- Updated dependencies [6b51346]
+- Updated dependencies [80273c8]
+- Updated dependencies [5e3301d]
+- Updated dependencies [dd9f223]
+- Updated dependencies [46e876c]
+- Updated dependencies [5f05de2]
+- Updated dependencies [021ba4c]
+- Updated dependencies [158aa14]
+- Updated dependencies [83e8f7d]
+- Updated dependencies [d2723e2]
+- Updated dependencies [fefcd54]
+- Updated dependencies [beaf2de]
+- Updated dependencies [369eb6e]
+- Updated dependencies [b659111]
+- Updated dependencies [5754a23]
+- Updated dependencies [6c270a6]
+- Updated dependencies [290e2f0]
+- Updated dependencies [668dd17]
+- Updated dependencies [8abf133]
+- Updated dependencies [e0859b1]
+- Updated dependencies [92f5f19]
+- Updated dependencies [32899e6]
+- Updated dependencies [04ecd4e]
+- Updated dependencies [4d5a892]
+- Updated dependencies [16cebeb]
+- Updated dependencies [86d30af]
+- Updated dependencies [8923843]
+- Updated dependencies [ea32ec7]
+- Updated dependencies [a2795f6]
+- Updated dependencies [f16b492]
+- Updated dependencies [4b6fde8]
+- Updated dependencies [2018df9]
+- Updated dependencies [fc5a3a2]
+  - @objectstack/spec@16.0.0-rc.0
+  - @objectstack/core@16.0.0-rc.0
+  - @objectstack/formula@16.0.0-rc.0
+  - @objectstack/types@16.0.0-rc.0
+
 ## 15.1.1
 
 ### Patch Changes

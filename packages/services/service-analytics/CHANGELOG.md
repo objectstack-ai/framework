@@ -1,5 +1,97 @@
 # Changelog — @objectstack/service-analytics
 
+## 16.0.0-rc.0
+
+### Minor Changes
+
+- a9459e6: Analytics drill metadata now snapshots raw grouped values for totals/subtotal rows too (#3214). The ADR-0021 D2 drill sidecar (`drillRawRows`, #2080) only covered `result.rows`, but the totals rows added in #1753 carry dimension values and go through the same label resolution — which overwrote their stored value (select option value, lookup/master_detail FK id) with the display label, leaving a subtotal drill nothing to exact-match on.
+
+  `queryDataset` now also emits `drillRawTotals`, aligned to `result.totals` by index (`drillRawTotals[i][j]` ↔ `result.totals[i].rows[j]`), captured in the same pre-label-resolution pass. Each map is restricted to the drillable dimensions the grouping actually groups by, so the grand-total grouping (`[]`) contributes an empty map per row. Purely additive result props (same as #2080) — no spec-contract change.
+
+- dd9f223: feat(analytics): scope a datetime date-bucket drill to the reference-tz midnight instants (#1752 follow-up)
+
+  Closes the one gap left by the initial #1752 change: a `datetime` date dimension
+  bucketed under a **non-UTC reference timezone** previously fell back to a superset
+  drill (its bucket boundary is that tz's midnight _instant_, which `YYYY-MM-DD`
+  calendar bounds can't express).
+
+  - **`@objectstack/core`** adds `zonedDateStartToUtcMs(ymd, tz)` — the UTC instant
+    at which a calendar day begins in a reference timezone (the inverse of
+    `calendarPartsInTz`). DST-safe: the offset is read from the platform tz
+    database via `Intl`, with a two-pass resolution for the rare offset-boundary
+    case; an unset/`'UTC'`/invalid zone returns plain UTC midnight.
+  - **`@objectstack/service-analytics`** now emits `drillRanges` bounds per the
+    field's temporal type (ADR-0053): a `datetime` field → ISO **instant** bounds
+    at the reference tz's midnight (works under any tz, incl. DST); a `date` field
+    → `YYYY-MM-DD` calendar bounds (tz-naive, exact under any tz). An unknown field
+    type is still emitted only under UTC and omitted (superset) under a non-UTC tz.
+
+  No objectui change is needed — the client already forwards whatever bound values
+  the server sends into the drill filter and the `filter[field][gte|lt]` URL.
+
+- 290e2f0: feat(analytics): emit a half-open date-range drill scope for granularity-bucketed date dimensions (#1752)
+
+  A report/dashboard cell grouped by a `dateGranularity` date dimension ("2026-Q2")
+  covers a SPAN of records, so drilling it needs a range (`>= start AND < nextStart`),
+  which the equality drill contract (`drillRawRows`) can't express — date dims were
+  therefore excluded from drill metadata and a drill landed on an unscoped superset.
+
+  - **`@objectstack/core`** adds `bucketKeyToCalendarRange(key, granularity)`, the
+    inverse of `bucketDateValue`: it turns a canonical bucket key into its half-open
+    `[start, end)` calendar span (`YYYY-MM-DD`, `end` exclusive). Pure, timezone-naive
+    calendar arithmetic; returns `null` for unbucketable / out-of-range keys so the
+    caller falls back to an unscoped (superset) drill rather than emit a wrong bound.
+  - **`@objectstack/service-analytics`** emits a `drillRanges` sidecar (aligned to
+    `rows` by index — the range companion to `drillRawRows`) for `date` +
+    `dateGranularity` dimensions, computed from the canonical bucket key in the
+    pre-label-resolution snapshot pass. A `datetime` field under a non-UTC reference
+    timezone is omitted (host drills a superset) until instant-boundary support
+    lands; a tz-naive `date` field is exact under any timezone (ADR-0053).
+
+  Consumed by objectui's report drill-through to scope the drilled record list to the
+  clicked time bucket.
+
+### Patch Changes
+
+- Updated dependencies [f972574]
+- Updated dependencies [22013aa]
+- Updated dependencies [3ad3dd5]
+- Updated dependencies [3a18b60]
+- Updated dependencies [a8aa34c]
+- Updated dependencies [e057f42]
+- Updated dependencies [a3823b2]
+- Updated dependencies [43a3efb]
+- Updated dependencies [524696a]
+- Updated dependencies [5e3301d]
+- Updated dependencies [dd9f223]
+- Updated dependencies [46e876c]
+- Updated dependencies [5f05de2]
+- Updated dependencies [021ba4c]
+- Updated dependencies [158aa14]
+- Updated dependencies [d2723e2]
+- Updated dependencies [fefcd54]
+- Updated dependencies [beaf2de]
+- Updated dependencies [369eb6e]
+- Updated dependencies [b659111]
+- Updated dependencies [5754a23]
+- Updated dependencies [6c270a6]
+- Updated dependencies [290e2f0]
+- Updated dependencies [668dd17]
+- Updated dependencies [8abf133]
+- Updated dependencies [e0859b1]
+- Updated dependencies [04ecd4e]
+- Updated dependencies [4d5a892]
+- Updated dependencies [16cebeb]
+- Updated dependencies [86d30af]
+- Updated dependencies [8923843]
+- Updated dependencies [a2795f6]
+- Updated dependencies [f16b492]
+- Updated dependencies [4b6fde8]
+- Updated dependencies [2018df9]
+- Updated dependencies [fc5a3a2]
+  - @objectstack/spec@16.0.0-rc.0
+  - @objectstack/core@16.0.0-rc.0
+
 ## 15.1.1
 
 ### Patch Changes

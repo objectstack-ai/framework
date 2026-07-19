@@ -1,5 +1,92 @@
 # @objectstack/plugin-trigger-schedule
 
+## 16.0.0-rc.0
+
+### Minor Changes
+
+- a2795f6: feat(triggers): declarative time-relative trigger — daily sweep instead of fragile date-equality (#1874)
+
+  Time-relative business rules ("alert 60 days before a contract's `end_date`")
+  could only be expressed as a `record_change` flow gated on a date-equality
+  condition like `end_date == daysFromNow(60)`. That predicate is only evaluated
+  when the record _happens to change_, so it fires only if a record is edited on
+  exactly the threshold day — i.e. almost never, unattended. The robust
+  alternative was a hand-written cron + range query that every author
+  re-implemented (contracts `renewal_alert`, hr `document_expiring_soon`,
+  procurement `po_overdue`, …).
+
+  A flow's start node can now declare a `timeRelative` descriptor instead:
+
+  ```ts
+  config: {
+    timeRelative: {
+      object: 'contracts',
+      dateField: 'end_date',
+      offsetDays: [60, 30, 7],      // T-minus reminders — fires on each threshold day
+      // — or — withinDays: 30      // "expiring soon" range; negative = overdue lookback
+      filter: { status: 'active' }, // optional, ANDed with the date window
+    },
+    schedule: { type: 'cron', expression: '0 8 * * *' }, // optional; defaults to daily 08:00 UTC
+  }
+  ```
+
+  The new `time_relative` trigger (shipped in `@objectstack/trigger-schedule` as
+  `TimeRelativeTriggerPlugin`) sweeps the object on that schedule and launches the
+  flow **once per matching record**, with the record on the automation context —
+  so the start-node `condition` gate and `{record.<field>}` interpolation work
+  exactly as for a record-change flow. Because the window is evaluated every day,
+  a threshold is never missed regardless of when the record last changed. The
+  discovery query runs as a system operation (RLS-bypassing) and is capped
+  (`maxRecords`, default 1000) so a mis-scoped window can't fan out unboundedly;
+  per-record failures are isolated so one bad row never aborts the sweep.
+
+  The automation engine routes a start node carrying `config.timeRelative` to the
+  `time_relative` trigger (ahead of the plain `schedule` trigger, whose behavior is
+  unchanged), and `os validate` gains readiness checks for the new descriptor
+  (unknown swept object, ambiguous draft status). New authorable spec key:
+  `TimeRelativeTriggerSchema` (`@objectstack/spec/automation`).
+
+### Patch Changes
+
+- Updated dependencies [f972574]
+- Updated dependencies [22013aa]
+- Updated dependencies [3ad3dd5]
+- Updated dependencies [3a18b60]
+- Updated dependencies [a8aa34c]
+- Updated dependencies [e057f42]
+- Updated dependencies [a3823b2]
+- Updated dependencies [43a3efb]
+- Updated dependencies [524696a]
+- Updated dependencies [5e3301d]
+- Updated dependencies [dd9f223]
+- Updated dependencies [46e876c]
+- Updated dependencies [5f05de2]
+- Updated dependencies [021ba4c]
+- Updated dependencies [158aa14]
+- Updated dependencies [d2723e2]
+- Updated dependencies [fefcd54]
+- Updated dependencies [beaf2de]
+- Updated dependencies [369eb6e]
+- Updated dependencies [b659111]
+- Updated dependencies [5754a23]
+- Updated dependencies [6c270a6]
+- Updated dependencies [290e2f0]
+- Updated dependencies [668dd17]
+- Updated dependencies [8abf133]
+- Updated dependencies [e0859b1]
+- Updated dependencies [04ecd4e]
+- Updated dependencies [4d5a892]
+- Updated dependencies [16cebeb]
+- Updated dependencies [86d30af]
+- Updated dependencies [8923843]
+- Updated dependencies [a2795f6]
+- Updated dependencies [f16b492]
+- Updated dependencies [4b6fde8]
+- Updated dependencies [2018df9]
+- Updated dependencies [fc5a3a2]
+  - @objectstack/spec@16.0.0-rc.0
+  - @objectstack/core@16.0.0-rc.0
+
 ## 15.1.1
 
 ### Patch Changes

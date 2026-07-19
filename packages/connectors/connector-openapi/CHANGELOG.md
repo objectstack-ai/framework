@@ -1,5 +1,67 @@
 # @objectstack/connector-openapi
 
+## 16.0.0-rc.0
+
+### Minor Changes
+
+- 41e703b: feat(connector-openapi): degrade + retry on an unreachable remote spec URL (#3049 follow-up)
+
+  The `openapi` provider fetches `providerConfig.spec` when it is an http(s) URL.
+  That fetch previously threw plain on any failure, so a momentarily-unreachable
+  spec endpoint aborted the whole app boot. It now classifies the fault the same
+  way `connector-mcp` classifies its connect path (ADR-0097):
+
+  - **Network error** (DNS / connection refused / timeout) or a **transient HTTP
+    status** (`408` / `429` / `5xx`, mirroring the `retryableStatusCodes`
+    convention) throws `ConnectorUpstreamUnavailableError` — the materializer
+    degrades the instance (`state: 'degraded'` on `GET /connectors`, dispatch
+    fails clearly) and retries with backoff plus on every `metadata:reloaded`.
+  - A **wrong URL** (non-retryable `4xx`) or an **unparseable document** stays a
+    plain, fatal configuration fault.
+
+  Inline and file-path (`#3016`) specs do no boot I/O and are unaffected.
+
+### Patch Changes
+
+- Updated dependencies [f972574]
+- Updated dependencies [22013aa]
+- Updated dependencies [3ad3dd5]
+- Updated dependencies [3a18b60]
+- Updated dependencies [a8aa34c]
+- Updated dependencies [e057f42]
+- Updated dependencies [a3823b2]
+- Updated dependencies [43a3efb]
+- Updated dependencies [524696a]
+- Updated dependencies [5e3301d]
+- Updated dependencies [dd9f223]
+- Updated dependencies [46e876c]
+- Updated dependencies [5f05de2]
+- Updated dependencies [021ba4c]
+- Updated dependencies [158aa14]
+- Updated dependencies [d2723e2]
+- Updated dependencies [fefcd54]
+- Updated dependencies [beaf2de]
+- Updated dependencies [369eb6e]
+- Updated dependencies [b659111]
+- Updated dependencies [5754a23]
+- Updated dependencies [6c270a6]
+- Updated dependencies [290e2f0]
+- Updated dependencies [668dd17]
+- Updated dependencies [8abf133]
+- Updated dependencies [e0859b1]
+- Updated dependencies [04ecd4e]
+- Updated dependencies [4d5a892]
+- Updated dependencies [16cebeb]
+- Updated dependencies [86d30af]
+- Updated dependencies [8923843]
+- Updated dependencies [a2795f6]
+- Updated dependencies [f16b492]
+- Updated dependencies [4b6fde8]
+- Updated dependencies [2018df9]
+- Updated dependencies [fc5a3a2]
+  - @objectstack/spec@16.0.0-rc.0
+  - @objectstack/core@16.0.0-rc.0
+
 ## 15.1.1
 
 ### Patch Changes

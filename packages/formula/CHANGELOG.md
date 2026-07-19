@@ -1,5 +1,174 @@
 # @objectstack/formula
 
+## 16.0.0-rc.0
+
+### Minor Changes
+
+- 6b51346: feat(formula): `dateField == today()` now matches — AST temporal-comparison rewrite (#3183)
+
+  **Behavior change (the fix):** a `Field.date` compared with `==`/`!=` against a
+  temporal function now matches on the calendar day. Previously it **silently
+  returned the wrong answer** — `record.due_date == today()` was always `false`
+  (and `!= today()` always `true`) even for a same-day record, because a
+  `Field.date` reads back as a `YYYY-MM-DD` **string** (ADR-0053 Phase 1) and
+  cel-js's equality (`overloads.js` `isEqual`) treats a string and a timestamp as
+  unequal without consulting any overload.
+
+  `celEngine.evaluate` now rewrites the parsed AST: for each `==`/`!=` whose one
+  operand is `today()`/`daysFromNow()`/`daysAgo()`/`now()`, the **field operand**
+  is wrapped in `date(...)` (the stdlib coercion), then the expression is
+  serialized and evaluated. So `record.due_date == today()` runs as
+  `date(record.due_date) == today()`.
+
+  - **Per-occurrence**, not per-field: `record.d == "2026-06-20" || record.d == today()`
+    keeps the string-literal comparison intact while fixing the temporal one.
+  - **Type-blind-safe**: `date()` degrades gracefully — an already-`Date`
+    (`Field.datetime`) operand passes through; a non-date string or null →
+    `Invalid Date` → the comparison stays `false`, exactly as before. No
+    field-type information is needed, and no currently-correct result is worsened.
+  - **Cheap**: the rewrite only reserializes when such a comparison is present
+    (a plain-`includes` gate skips the rest), and is memoized per source string.
+
+  Applies to every interpreter site — read-time `Field.formula`, default values,
+  validation rules, hook conditions, and flow conditions — since all route through
+  `celEngine.evaluate`. RLS/sharing conditions are unaffected: they compile via
+  `cel-to-filter`, which already rejects function calls as a loud authoring error.
+
+  **Supersedes the #3192 advisory lint.** That build-time warning
+  (`checkTemporalDateEquality`) flagged `dateField == today()` as a silent-miss;
+  with the runtime fixed it would be a false alarm, so it (and the
+  `temporalEqualityFields` helper it used) is removed. Authors can now write the
+  natural `record.due_date == today()` directly; the `date(...)` /
+  `daysBetween(...) == 0` / range idioms all keep working.
+
+- 80273c8: feat(formula): warn when a `date` field is compared to a temporal function with `==`/`!=` (#3183)
+
+  A `Field.date` deserializes as a `YYYY-MM-DD` **string** (ADR-0053 Phase 1), and
+  cel-js's equality hard-codes `string == <timestamp>` to `false` — it returns
+  `false` for a string left operand without ever consulting a registered overload,
+  and refuses cross-type object equality (`@marcbachmann/cel-js` `overloads.js`
+  `isEqual`). So the most natural "is it due today" predicate —
+
+  ```cel
+  record.due_date == today()      // silently false, even when due_date IS today
+  record.due_date != today()      // silently true for a same-day record
+  ```
+
+  — compiles clean, throws nothing, and silently never matches. Same silent-miss
+  family as #1928; **timezone-independent** (fails identically at UTC) and
+  cross-cutting (formulas, validation, RLS, flow/action/sharing/hook predicates).
+
+  cel-js gives no operator-layer hook to fix the comparison, so this adds a
+  **build-time advisory warning** (the established ADR-0032 guardrail strategy)
+  rather than a runtime behavior change. `validateExpression` reuses the shared
+  `ExprSchemaHint.fieldTypes` (the same per-field type map the #1928 tier-4
+  soundness check already threads through `@objectstack/lint`) to flag a `==`/`!=`
+  between a `date` field (`record.`/`previous.`/bare) and
+  `today()`/`daysFromNow()`/`daysAgo()`/`now()`, with a self-correcting message
+  pointing at the working idioms: `date(record.d) == today()`, a range
+  (`>= … && <= …`), or `daysBetween(today(), record.d) == 0`.
+
+  Warning severity — never fails the build (the write/validation path may carry a
+  real `Date`). Restricted to `type: 'date'` (unambiguously a string); `datetime`
+  is excluded to avoid false positives. Ordering operators (`>=`/`<=`/`<`/`>`)
+  already work — cel-js _throws_ for them, tripping the engine's existing
+  string-hydration retry — so they are not flagged.
+
+  A runtime fix (normalizing the peer of a temporal operand in the data layer)
+  remains tracked in #3183; a naive "hydrate date fields to `Date`" version would
+  trade this silent-miss for another (breaking `dateField == "2026-06-20"`), so it
+  needs its own design.
+
+- ea32ec7: feat(formula,lint): advisory type-soundness warnings for formula/predicate expressions (#1928 tier 4)
+
+  Closes the last open guardrail from #1928. A `Field.formula` or record-scoped
+  predicate that uses a **text or boolean field with an arithmetic (`+ - * / %`)
+  or ordering (`< > <= >=`) operator against a number** faults the runtime
+  overload and silently evaluates to `null` (e.g. `record.title * 2`,
+  `record.is_active + 1`). The build now surfaces this as a **non-blocking
+  warning** with the offending field and a corrective message.
+
+  Honours the ADR-0032 design law — the checker only flags what the runtime
+  would also fail:
+
+  - Number / currency / percent / date / datetime fields are declared `dyn`, so
+    the cases the runtime rescues never warn — `record.amount / 100` (the #1930
+    `registerOperator` fix), `record.due == today()` and numeric-string / ISO-date
+    values (the string-hydration retry), and numeric-coded `select` option values.
+  - Equality (`==` / `!=`) is excluded: a heterogeneous equality is runtime-safe
+    (evaluates to `false`), never a fault.
+
+  New `firstTypeMismatch(source, fieldCelTypes, scope)` export in
+  `@objectstack/formula` (and an optional `fieldTypes` hint on
+  `validateExpression`); `@objectstack/lint`'s `validateStackExpressions` threads
+  each object's field types into every checked site:
+
+  - **record-scoped** sites (`record.<field>`) — formula fields, validation rules,
+    action / hook / sharing predicates;
+  - **flattened** flow / automation conditions (bare `field`) — where flow
+    variables stay `dyn` and are never flagged, and equality stays runtime-safe.
+
+  Warnings are advisory in `objectstack build` / `validate` (fatal only under
+  `--strict`), matching the tier-3 channel.
+
+### Patch Changes
+
+- e0859b1: fix(formula): retire the `js` expression dialect and fix the `hasDialect` false-positive (#3278)
+
+  The `js` **expression** dialect was declared in `ExpressionDialect` but never
+  shipped — it existed only as a registry stub with no engine and no author helper
+  (`cel`/`F`/`P` → CEL, `tmpl` → template, `cron` → cron; nothing ever emitted
+  `js`). Per ADR-0049 (enforce-or-remove) it is removed from the enum; the set is
+  now `{cel, cron, template}`.
+
+  Procedural JavaScript is unaffected: it remains the **L2** authoring surface —
+  the sandboxed, capability-gated `ScriptBody { language: 'js' }` in hook/action
+  bodies — which is a separate enum (`hook-body.zod.ts`), not an expression
+  dialect.
+
+  Also fixes a latent bug in `hasDialect`: it detected stubs via
+  `dialect.startsWith('stub:')`, but stubs were registered under their real name,
+  so the check was dead code and `hasDialect('js')` returned a false-positive
+  `true`. With the stub removed, `hasDialect` reports only registered real
+  engines, and the registry test now asserts the negative case (`hasDialect('js')
+=== false`) so the gate can actually go red.
+
+  No runtime behavior changes for any valid persisted artifact — no producer ever
+  emitted `dialect: 'js'`. See the ADR-0058 addendum.
+
+- Updated dependencies [f972574]
+- Updated dependencies [22013aa]
+- Updated dependencies [3ad3dd5]
+- Updated dependencies [3a18b60]
+- Updated dependencies [a8aa34c]
+- Updated dependencies [a3823b2]
+- Updated dependencies [43a3efb]
+- Updated dependencies [524696a]
+- Updated dependencies [5e3301d]
+- Updated dependencies [46e876c]
+- Updated dependencies [158aa14]
+- Updated dependencies [d2723e2]
+- Updated dependencies [fefcd54]
+- Updated dependencies [beaf2de]
+- Updated dependencies [369eb6e]
+- Updated dependencies [b659111]
+- Updated dependencies [5754a23]
+- Updated dependencies [6c270a6]
+- Updated dependencies [668dd17]
+- Updated dependencies [8abf133]
+- Updated dependencies [e0859b1]
+- Updated dependencies [04ecd4e]
+- Updated dependencies [4d5a892]
+- Updated dependencies [16cebeb]
+- Updated dependencies [86d30af]
+- Updated dependencies [8923843]
+- Updated dependencies [a2795f6]
+- Updated dependencies [f16b492]
+- Updated dependencies [4b6fde8]
+- Updated dependencies [2018df9]
+- Updated dependencies [fc5a3a2]
+  - @objectstack/spec@16.0.0-rc.0
+
 ## 15.1.1
 
 ### Patch Changes

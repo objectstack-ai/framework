@@ -1,5 +1,133 @@
 # @objectstack/client
 
+## 16.0.0-rc.0
+
+### Minor Changes
+
+- 9ccd1e9: feat(client): typed `data.batchTransaction()` for the atomic cross-object batch (#1604 / ADR-0034 item 4)
+
+  Adds `client.data.batchTransaction(operations)` (and the environment-scoped
+  `client.project(id).data.batchTransaction`) — a typed SDK surface for
+  `POST {basePath}/batch`, the all-or-nothing cross-object transactional batch
+  that master-detail saves go through. Reuses `CrossObjectBatchOperation` /
+  `CrossObjectBatchRequest` / `CrossObjectBatchResponse` from
+  `@objectstack/spec/api` (also re-exported from the client for convenience);
+  supports `{ $ref: <opIndex> }` intra-batch parent references.
+
+  The method is always atomic and deliberately exposes no `atomic` flag — the
+  endpoint rejects `atomic: false` with `400 BATCH_NOT_ATOMIC`. Non-atomic
+  per-object bulk writes stay on `data.batch()` / `createMany` / `updateMany`,
+  so any best-effort fallback is isolated in the caller's adapter (the ObjectUI
+  `masterDetailTx` adapter), not in the SDK.
+
+- 668dd17: **Breaking (npm type surface): retire the vestigial feed contracts + protocol surface (ADR-0052 §5 follow-up, #1959).**
+
+  The `service-feed` runtime was deleted in #1955; `sys_comment` / `sys_activity`
+  are the canonical record-collaboration/timeline backend. This removes the dead
+  type surface that still pointed at the deleted runtime — every removed method was
+  already unreachable (the feed REST route was never mounted → 404; the protocol
+  implementation was never wired with a feed service, so `requireFeedService()`
+  could only throw). No behavior changes.
+
+  No authorable metadata key is removed (the `feeds:` object capability flag and
+  the `RecordActivity` UI component config are unchanged), so `PROTOCOL_MAJOR`
+  stays 15 and this ships as `minor` rather than a protocol major.
+
+  FROM → TO migration for every removed export:
+
+  - `@objectstack/spec/contracts` — `IFeedService`, `CreateFeedItemInput`,
+    `UpdateFeedItemInput`, `ListFeedOptions`, `FeedListResult` → **removed, no
+    replacement**. Comments/activity are plain records: write `sys_comment` / read
+    `sys_activity` via the data engine or the REST data API.
+  - `@objectstack/spec/api` — `FeedApiContracts`, `FeedApiErrorCode`,
+    `FeedProtocol`, and all feed request/response schemas + types (`GetFeed*`,
+    `CreateFeedItem*`, `UpdateFeedItem*`, `DeleteFeedItem*`, `AddReaction*`,
+    `RemoveReaction*`, `PinFeedItem*`, `UnpinFeedItem*`, `StarFeedItem*`,
+    `UnstarFeedItem*`, `SearchFeed*`, `GetChangelog*`, `ChangelogEntry`,
+    `SubscribeRequest/Response`, `FeedUnsubscribeRequest`, `UnsubscribeResponse`,
+    `FeedPathParams`, `FeedItemPathParams`, `FeedListFilterType`) → **removed**. Use
+    the data API against `sys_comment` / `sys_activity` (`/api/v1/data/sys_comment/…`);
+    reactions and threaded replies are fields on `sys_comment`.
+  - `@objectstack/spec/data` — `FeedItemSchema`/`FeedItem`, `FeedActorSchema`/`FeedActor`,
+    `MentionSchema`/`Mention`, `ReactionSchema`/`Reaction`,
+    `FieldChangeEntrySchema`/`FieldChangeEntry`, `FeedVisibility`,
+    `RecordSubscriptionSchema`/`RecordSubscription`, `SubscriptionEventType`, and the
+    `data`-namespace `NotificationChannel` → **removed**. `FeedItemType` and
+    `FeedFilterMode` are **kept** (live UI activity-timeline config). For notification
+    channels use `NotificationChannelSchema` from `@objectstack/spec/system`.
+  - `@objectstack/client` — `client.feed.*` (`list` / `create` / `update` / `delete` /
+    `addReaction` / `removeReaction` / `pin` / `unpin` / `star` / `unstar` / `search` /
+    `getChangelog` / `subscribe` / `unsubscribe`) and the re-exported feed response
+    types → **removed**. One-line fix: use `client.data.*` on `sys_comment` /
+    `sys_activity`, e.g. `client.data.create('sys_comment', { object, record_id, body })`
+    and `client.data.find('sys_activity', { filters: [['record_id', '=', id]] })`.
+  - `@objectstack/metadata-protocol` — `ObjectStackProtocolImplementation` no longer
+    implements the 14 feed methods; its constructor
+    `(engine, getServicesRegistry?, getFeedService?, environmentId?)` becomes
+    `(engine, getServicesRegistry?, environmentId?)`. One-line fix: delete the third
+    argument.
+
+### Patch Changes
+
+- 8abf133: **Breaking (discovery response shape): retire the residual feed capability surface (#3180, follow-up to #1959 / ADR-0052 §5).**
+
+  The feed backend was retired long ago; #1959 removed the feed contracts + SDK. This
+  removes the last discovery/dispatcher references to it, and fixes a real bug where the
+  `comments` capability was permanently `false`.
+
+  - `@objectstack/spec` — `WellKnownCapabilitiesSchema.feed` and `ApiRoutesSchema.feed`
+    (`routes.feed`) are **removed**, and the `/api/v1/feed` entry is dropped from
+    `DEFAULT_DISPATCHER_ROUTES`. FROM → TO: clients reading `discovery.capabilities.feed`
+    or `discovery.routes.feed` → use `discovery.capabilities.comments`; comments/activity
+    are served by the generic data API on `sys_comment` / `sys_activity`
+    (`/api/v1/data/sys_comment/…`).
+  - `@objectstack/metadata-protocol` — `getDiscovery()` no longer emits the always-`false`
+    `feed` service/capability. **Bug fix:** the `comments` capability previously keyed off
+    the deleted `'feed'` service (so it was permanently `false` after #1955); it now tracks
+    the presence of the `sys_comment` object (provided by the always-on audit slate), so
+    `declared === enforced`.
+  - `@objectstack/client` — the internal `feed: '/api/v1/feed'` route constant is removed
+    (it only existed to satisfy the now-removed `ApiRoutes.feed` type; no client code used it).
+
+- Updated dependencies [f972574]
+- Updated dependencies [22013aa]
+- Updated dependencies [3ad3dd5]
+- Updated dependencies [3a18b60]
+- Updated dependencies [a8aa34c]
+- Updated dependencies [e057f42]
+- Updated dependencies [a3823b2]
+- Updated dependencies [43a3efb]
+- Updated dependencies [524696a]
+- Updated dependencies [5e3301d]
+- Updated dependencies [dd9f223]
+- Updated dependencies [46e876c]
+- Updated dependencies [5f05de2]
+- Updated dependencies [021ba4c]
+- Updated dependencies [158aa14]
+- Updated dependencies [d2723e2]
+- Updated dependencies [fefcd54]
+- Updated dependencies [beaf2de]
+- Updated dependencies [369eb6e]
+- Updated dependencies [b659111]
+- Updated dependencies [5754a23]
+- Updated dependencies [6c270a6]
+- Updated dependencies [290e2f0]
+- Updated dependencies [668dd17]
+- Updated dependencies [8abf133]
+- Updated dependencies [e0859b1]
+- Updated dependencies [04ecd4e]
+- Updated dependencies [4d5a892]
+- Updated dependencies [16cebeb]
+- Updated dependencies [86d30af]
+- Updated dependencies [8923843]
+- Updated dependencies [a2795f6]
+- Updated dependencies [f16b492]
+- Updated dependencies [4b6fde8]
+- Updated dependencies [2018df9]
+- Updated dependencies [fc5a3a2]
+  - @objectstack/spec@16.0.0-rc.0
+  - @objectstack/core@16.0.0-rc.0
+
 ## 15.1.1
 
 ### Patch Changes
