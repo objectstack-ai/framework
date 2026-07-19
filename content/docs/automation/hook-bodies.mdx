@@ -129,11 +129,11 @@ Hooks mutate `ctx.input`/`ctx.result`; actions return their output value explici
 
 The sandbox engine is **`quickjs-emscripten`** — pure-WASM, runs on every JS host. We considered `isolated-vm` but its native dependency disqualifies edge targets. The choice is hidden behind the `ScriptRunner` interface in `packages/runtime/src/sandbox/`, so a node-only deployment can swap in a faster engine later without touching call sites.
 
-Per-invocation timeouts default to **250ms** for hooks and **5000ms** for actions; per-invocation memory caps at **32 MB**. Both are overridable per body.
+Per-invocation budgets default to **250ms** (hooks) / **5000ms** (actions) of **script CPU time** — VM-active time, *not* wall clock (ADR-0102): time spent awaiting host calls, or running a nested hook, is not charged. A separate **30s wall-clock ceiling** backstops a body stuck on a host call that never settles. Per-invocation memory caps at **32 MB**. All are overridable per body and deployment-wide via `OS_SANDBOX_HOOK_TIMEOUT_MS` / `OS_SANDBOX_ACTION_TIMEOUT_MS` / `OS_SANDBOX_WALL_CEILING_MS`.
 
 ### Nested cross-object writes
 
-A body may write *other* objects — e.g. `await ctx.api.object('parent').update({ ... })` from a child's `afterInsert`/`afterUpdate` (requires `api.write`). The target's own hooks fire too: the nested write runs in a **fresh sandbox VM** while the calling body is suspended, and this composes to any depth. This is the natural "when a child changes, roll the total up to the parent" automation — it does **not** need a denormalized, hand-maintained mirror field. The 250ms default suits a single quick write; give a deeper or slower rollup chain headroom by declaring a larger `timeoutMs` on the outer body (up to 30_000ms), so the whole chain settles within budget.
+A body may write *other* objects — e.g. `await ctx.api.object('parent').update({ ... })` from a child's `afterInsert`/`afterUpdate` (requires `api.write`). The target's own hooks fire too: the nested write runs in a **fresh sandbox VM** while the calling body is suspended, and this composes to any depth. This is the natural "when a child changes, roll the total up to the parent" automation — it does **not** need a denormalized, hand-maintained mirror field. Because each body's budget is **CPU time** (ADR-0102), the caller is **not** charged for the nested write's own run — so the stock 250ms default comfortably covers deep rollup chains, and you rarely need to raise `timeoutMs` (the spec still permits up to 30_000ms for a genuinely CPU-heavy body).
 
 ## L3 — Compiled modules (intentionally disabled)
 
