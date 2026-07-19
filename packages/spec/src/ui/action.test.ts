@@ -38,6 +38,42 @@ describe('ActionParamSchema', () => {
 
     expect(() => ActionParamSchema.parse(param)).not.toThrow();
   });
+
+  // objectui ADR-0059 — params render through the shared form field-widget
+  // renderer, so inline params can carry the widget config the form widgets
+  // consume (field-backed params inherit these from the field at runtime).
+  it('accepts a file param with upload widget config (multiple/accept/maxSize)', () => {
+    const result = ActionParamSchema.parse({
+      name: 'attachments',
+      label: 'Attachments',
+      type: 'file' as const,
+      multiple: true,
+      accept: ['application/pdf', 'image/*'],
+      maxSize: 5 * 1024 * 1024,
+    });
+    expect(result.multiple).toBe(true);
+    expect(result.accept).toEqual(['application/pdf', 'image/*']);
+    expect(result.maxSize).toBe(5 * 1024 * 1024);
+  });
+
+  it('leaves widget config undefined when not declared (runtime inherits from the field)', () => {
+    const result = ActionParamSchema.parse({ field: 'avatar_file' });
+    expect(result.multiple).toBeUndefined();
+    expect(result.accept).toBeUndefined();
+    expect(result.maxSize).toBeUndefined();
+  });
+
+  it('rejects a non-positive or fractional maxSize', () => {
+    expect(() => ActionParamSchema.parse({ name: 'f', type: 'file', maxSize: 0 })).toThrow();
+    expect(() => ActionParamSchema.parse({ name: 'f', type: 'file', maxSize: -1 })).toThrow();
+    expect(() => ActionParamSchema.parse({ name: 'f', type: 'file', maxSize: 1.5 })).toThrow();
+  });
+
+  it('accepts rich field types for params (rendered by the shared widget renderer)', () => {
+    for (const type of ['file', 'image', 'richtext', 'color', 'date', 'address', 'code'] as const) {
+      expect(() => ActionParamSchema.parse({ name: 'p', label: 'P', type })).not.toThrow();
+    }
+  });
 });
 
 // #2874 P1 — declarative `requiresFeature` sugar, lowered at parse time into

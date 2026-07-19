@@ -168,9 +168,13 @@ engine still requires the action to declare the matching location (that's why
 
 - **`params`** — prompt the user for input before execution. Prefer
   field-backed params (`{ field: 'due_date' }`) which inherit the object
-  field's label, type, and validation; inline params
+  field's label, type, validation, and widget config; inline params
   (`{ name, label, type, required, options }`) cover the rest.
-  `defaultFromRow` prefills from the current record.
+  `defaultFromRow` prefills from the current record. The console renders each
+  param through the **same field widgets as the record form** (objectui
+  ADR-0059), so any `FieldType` works — a `file` param shows a real upload
+  control (`multiple` / `accept` / `maxSize` honored), `lookup` a record
+  picker, `date` a date picker, `richtext` the rich-text editor, and so on.
 - **`confirmText`** — confirmation dialog before running.
 - **`successMessage` / `errorMessage` / `refreshAfter`** — post-run feedback
   and an automatic data refresh.

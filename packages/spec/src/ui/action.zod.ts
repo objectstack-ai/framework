@@ -64,6 +64,19 @@ export const ActionParamSchema = lazySchema(() => z.object({
   /** Default value for the dialog input. */
   defaultValue: z.unknown().optional(),
   /**
+   * Widget config for inline params (field-backed params inherit these from
+   * the referenced field at runtime; inline values override). The param
+   * dialog renders every param through the same field-widget renderer the
+   * object form uses (objectui ADR-0059), so these mirror the corresponding
+   * `FieldSchema` knobs.
+   */
+  /** Allow multiple values (file/image/lookup/user params → array value). */
+  multiple: z.boolean().optional().describe('Allow multiple values (array value shape); mirrors FieldSchema.multiple.'),
+  /** Accepted upload types (MIME types / extensions) for `file`/`image` params. */
+  accept: z.array(z.string()).optional().describe('Accepted upload types (MIME types / extensions) for file/image params.'),
+  /** Max upload size in bytes for `file`/`image` params. */
+  maxSize: z.number().int().positive().optional().describe('Max upload size in bytes for file/image params.'),
+  /**
    * When true, the param's default value is pulled from the current row record
    * (key = the resolved field name) when the action runs from a list_item
    * context. Useful for edit dialogs that pre-fill from the selected row.

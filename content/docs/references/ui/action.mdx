@@ -150,6 +150,9 @@ const result = Action.parse(data);
 | **placeholder** | `string` | optional |  |
 | **helpText** | `string` | optional |  |
 | **defaultValue** | `any` | optional |  |
+| **multiple** | `boolean` | optional | Allow multiple values (array value shape); mirrors FieldSchema.multiple. |
+| **accept** | `string[]` | optional | Accepted upload types (MIME types / extensions) for file/image params. |
+| **maxSize** | `integer` | optional | Max upload size in bytes for file/image params. |
 | **defaultFromRow** | `boolean` | optional |  |
 | **visible** | `string \| { dialect: Enum<'cel' \| 'cron' \| 'template'>; source?: string; ast?: any; meta?: object }` | optional | Param visibility predicate (CEL); omits the param when false. |
 | **requiresFeature** | `Enum<'twoFactor' \| 'passkeys' \| 'magicLink' \| 'organization' \| 'multiOrgEnabled' \| 'degradedTenancy' \| 'oidcProvider' \| 'sso' \| 'ssoEnforced' \| 'deviceAuthorization' \| 'admin' \| 'phoneNumber' \| 'phoneNumberOtp'>` | optional | Public auth feature flag gating this param; lowered into `visible` at parse time. |
