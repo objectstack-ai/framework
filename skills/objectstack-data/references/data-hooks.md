@@ -255,7 +255,9 @@ interface HookContext {
   // Execution context
   session?: {
     userId?: string;
-    tenantId?: string;
+    organizationId?: string; // Active org — blessed name. Matches the
+                             // `organization_id` column + `current_user.organizationId` (RLS)
+    tenantId?: string;       // @deprecated alias of organizationId (identical value)
     roles?: string[];
     accessToken?: string;
   };
@@ -266,14 +268,46 @@ interface HookContext {
   ql: IDataEngine;       // ObjectQL engine instance
   api?: ScopedContext;   // Cross-object CRUD API
 
-  // User info shortcut
+  // User info shortcut (undefined for system / unauthenticated writes)
   user?: {
     id?: string;
     name?: string;
     email?: string;
+    organizationId?: string; // Same value as session.organizationId
   };
 }
 ```
+
+### Reading the current organization
+
+The value a hook usually wants when it needs "the current org to filter/scope
+by" is the caller's **active organization** — the same value that lives in the
+`organization_id` column, in `current_user.organizationId` inside RLS/sharing
+predicates, and in seed rows. Read it as **`organizationId`**:
+
+```typescript
+// ✅ Blessed — matches columns, RLS `current_user`, and seed data
+const org = ctx.user?.organizationId ?? ctx.session?.organizationId;
+
+// ⚠️ Deprecated alias — still works, carries the identical value
+const org = ctx.session?.tenantId;
+```
+
+`ctx.user` is the ergonomic shortcut for an authenticated caller; it is
+`undefined` for system / unauthenticated writes, so read `ctx.session?.organizationId`
+when a hook must work regardless of whether a user resolved.
+
+> **Two isolation axes — don't conflate them.** `organization_id` is
+> **org row-scoping**: many organizations share one database and every row
+> carries its owning org (`current_user.organizationId` filters reads/writes;
+> multi-org needs cloud + `@objectstack/organizations`). That is different from
+> **environment / database-per-tenant** isolation (`service-tenant`,
+> `driver-turso`), where "tenant" means an entire environment/database and the
+> generic driver-layer `tenantId` knob can carry that environment id. The
+> object-metadata `tenancy.*` knob configures the *mechanism* (isolation on/off
+> + which column); the *value* you read and write is your `organization_id`
+> column. Community edition never populates an org, so `organizationId` is
+> `undefined` there.
 
 ### `input` — Operation Parameters
 

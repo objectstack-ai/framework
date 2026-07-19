@@ -566,6 +566,41 @@ describe('HookContextSchema', () => {
 
       expect(context.session?.accessToken).toBe('token_abc123');
     });
+
+    // #3280 — `organizationId` is the blessed developer-facing name; `tenantId`
+    // stays as a deprecated alias carrying the identical value.
+    it('should accept session.organizationId (blessed) alongside tenantId (deprecated alias)', () => {
+      const context = HookContextSchema.parse({
+        object: 'account',
+        event: 'beforeInsert',
+        input: {},
+        session: {
+          userId: 'user_123',
+          organizationId: 'org_456',
+          tenantId: 'org_456',
+        },
+        ql: {},
+      });
+
+      expect(context.session?.organizationId).toBe('org_456');
+      expect(context.session?.tenantId).toBe('org_456');
+    });
+
+    it('should accept user.organizationId shortcut', () => {
+      const context = HookContextSchema.parse({
+        object: 'account',
+        event: 'beforeInsert',
+        input: {},
+        user: {
+          id: 'user_123',
+          email: 'dev@example.com',
+          organizationId: 'org_456',
+        },
+        ql: {},
+      });
+
+      expect(context.user?.organizationId).toBe('org_456');
+    });
   });
 
   describe('Transaction Support', () => {

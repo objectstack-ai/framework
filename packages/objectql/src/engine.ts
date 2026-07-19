@@ -743,6 +743,12 @@ export class ObjectQL implements IDataEngine {
     if (!execCtx) return undefined;
     return {
       userId: execCtx.userId,
+      // `organizationId` is the blessed developer-facing name for the caller's
+      // active org (matches the `organization_id` column, `current_user`
+      // RLS shape, and seed rows). `tenantId` is kept as a deprecated alias
+      // carrying the IDENTICAL value — both come from `execCtx.tenantId`, which
+      // the kernel resolves from `session.activeOrganizationId` (#3280).
+      organizationId: execCtx.tenantId,
       tenantId: execCtx.tenantId,
       positions: execCtx.positions,
       accessToken: execCtx.accessToken,
@@ -775,6 +781,28 @@ export class ObjectQL implements IDataEngine {
       id: String(execCtx.userId),
       positions: execCtx.positions ?? [],
       organizationId: execCtx.tenantId != null ? String(execCtx.tenantId) : null,
+    };
+  }
+
+  /**
+   * Build the `HookContext.user` shortcut — the ergonomic "current user"
+   * object surfaced to JS hooks. Carries `organizationId` (the blessed name
+   * for the caller's active org, identical to `session.organizationId` and
+   * `current_user.organizationId`) so a hook author who needs "the current org
+   * to filter by" writes `ctx.user.organizationId` with zero relearning (#3280).
+   *
+   * Returns undefined for system / unauthenticated writes (no acting user) —
+   * hooks that need an org regardless of a resolved user read
+   * `ctx.session.organizationId`, which is populated whenever a session is.
+   */
+  private buildUser(execCtx?: ExecutionContext): HookContext['user'] {
+    if (!execCtx || execCtx.userId == null) return undefined;
+    return {
+      id: String(execCtx.userId),
+      ...(execCtx.email ? { email: execCtx.email } : {}),
+      // Always equals `session.organizationId` (both from `execCtx.tenantId`).
+      // Undefined on unscoped (platform/community) calls.
+      ...(execCtx.tenantId != null ? { organizationId: String(execCtx.tenantId) } : {}),
     };
   }
 
@@ -2188,6 +2216,7 @@ export class ObjectQL implements IDataEngine {
           event: 'beforeFind',
           input: { ast: opCtx.ast, options: opCtx.options },
           session: this.buildSession(opCtx.context),
+          user: this.buildUser(opCtx.context),
           api: this.buildHookApi(opCtx.context),
           transaction: opCtx.context?.transaction,
           ql: this
@@ -2270,6 +2299,7 @@ export class ObjectQL implements IDataEngine {
           event: 'beforeFind',
           input: { ast: opCtx.ast, options: opCtx.options },
           session: this.buildSession(opCtx.context),
+          user: this.buildUser(opCtx.context),
           api: this.buildHookApi(opCtx.context),
           transaction: opCtx.context?.transaction,
           ql: this
@@ -2356,6 +2386,7 @@ export class ObjectQL implements IDataEngine {
           event: 'beforeInsert',
           input: { data: row, options: opCtx.options },
           session: this.buildSession(opCtx.context),
+          user: this.buildUser(opCtx.context),
           api: this.buildHookApi(opCtx.context),
           transaction: opCtx.context?.transaction,
           ql: this,
@@ -2625,6 +2656,7 @@ export class ObjectQL implements IDataEngine {
           event: 'beforeUpdate',
           input: { id, data: opCtx.data, options: opCtx.options },
           session: this.buildSession(opCtx.context),
+          user: this.buildUser(opCtx.context),
           api: this.buildHookApi(opCtx.context),
           transaction: opCtx.context?.transaction,
           ql: this
@@ -2950,6 +2982,7 @@ export class ObjectQL implements IDataEngine {
           event: 'beforeDelete',
           input: { id, options: opCtx.options },
           session: this.buildSession(opCtx.context),
+          user: this.buildUser(opCtx.context),
           api: this.buildHookApi(opCtx.context),
           transaction: opCtx.context?.transaction,
           ql: this
