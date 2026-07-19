@@ -1,6 +1,6 @@
 # ADR-0102: Sandbox Execution Budget & Engine Variant — CPU-time budget with a wall ceiling; per-invocation sync WASM modules, precompiled
 
-**Status**: Accepted (2026-07-19) — **D1 landed** with Phase 1 (#3295): CPU-time budget + wall ceiling in `QuickJSScriptRunner`, nested-write integration tests now green at the stock 250ms budget. D2 (#3296, drop asyncify) and D3 (#3297, precompile) remain **Proposed**; D3 is explicitly deferrable without weakening D1/D2.
+**Status**: Accepted (2026-07-19) — **D1 + D2 landed**: Phase 1 (#3295 / PR #3301) shipped the CPU-time budget + wall ceiling (nested-write integration green at the stock 250ms budget); Phase 2 (#3296 / PR #3309) dropped asyncify for the sync variant with per-invocation isolation. **D3 (#3297, precompile) is DEFERRED** — verifying the 0.32 API showed no clean, portable, edge-safe way to obtain the variant's `.wasm` bytes to precompile (see D3), and it does not weaken D1/D2.
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: the #1867 sandbox redesign (deferred-promise host calls + pump loop) — the mechanism that both retired asyncify's only remaining justification (D2) and created the discrete VM-entry points D1 meters. No earlier ADR covers the sandbox runner; prior art is code history (#3232 honor body `timeoutMs`, #3264 test de-flake, #3270 env-overridable defaults).
 **Tracking**: framework#3275 (implementation-ready spec) · #3295 / #3296 / #3297 (phases) · #3259 (motivating CI flake, closed by the #3270 stopgap)
@@ -51,9 +51,15 @@ Switch `newAsyncContext()` → `newQuickJSWASMModule().newContext()` (the sync r
 - Disposal (verified against 0.32): `QuickJSWASMModule.newContext()` docs "the runtime will be disposed when the context is disposed", and — unlike the async convenience — the sync `QuickJSWASMModule` exposes **no `dispose()`**. So we `dispose()` the context (frees its runtime + QuickJS allocations), then drop the module reference; the module's WebAssembly instance + linear memory are reclaimed by **GC**. This is the library's intended sync pattern (only `newContext()` on a *shared* module shares memory), and it preserves the per-invocation-isolation invariant — but reclamation is GC-timed rather than the async path's explicit module dispose. **This is the one behavioural delta of D2 and MUST be gated by the RSS soak** (see Verification): burst hook-storm load must not ratchet RSS.
 - Wins: no asyncify state machine on every call (per-instruction speedup), smaller binary, faster compile/instantiate, and removal of an entire class of suspended-stack failure modes the current code only avoids by convention.
 
-### D3 — Compile the WASM once; instantiate per invocation (deferrable)
+### D3 — Compile the WASM once; instantiate per invocation — DEFERRED
 
-Cache one compiled `WebAssembly.Module` per process and build a customized variant via `newVariant(RELEASE_SYNC, { wasmModule })` (verified in 0.32: *"Emscripten will instantiate the WebAssembly.Instance from this existing WebAssembly.Module"*), so each invocation pays only instantiation — fresh linear memory, shared stateless bytecode. The `instantiateWasm` Emscripten hook is the lower-level fallback. **`wasmMemory` must never be passed** — injecting a shared memory would silently recreate the rejected D4 shape. If clean access to the variant's `.wasm` bytes proves awkward, D3 defers without weakening D1/D2.
+**Decision: deferred**, after verifying the 0.32 API against the installed variant. The intent held — cache one compiled `WebAssembly.Module` and build a customized variant via `newVariant(RELEASE_SYNC, { wasmModule })` so each invocation pays only instantiation (fresh linear memory, shared stateless bytecode) — but it does not clear the bar D3 set for itself:
+
+- **No clean, portable, edge-safe way to obtain the bytes.** `@jitl/quickjs-wasmfile-release-sync` loads its `.wasm` lazily through the variant's own `importModuleLoader` (with `node` / `browser` / `workerd` export conditions). Precompiling requires the raw bytes first; sourcing them ourselves means either a Node `fs`/fetch of `emscripten-module.wasm` — which breaks the Workers/edge-safe design that motivated choosing quickjs-emscripten over isolated-vm — or replicating emscripten's per-runtime `locateFile` (fragile, bundler-specific). The `instantiateWasm` hook has the same bytes-sourcing problem.
+- **Uncertain payoff.** JS engines already code-cache WebAssembly compilation for identical bytes, so repeated `newQuickJSWASMModule()` largely amortizes the *compile* already; D3 removes only that, not the inherent per-invocation *instantiate* (fresh memory), which stays. Phase 2 already delivered the dominant win — dropping the asyncify build.
+- **`wasmMemory` must never be passed** — injecting a shared memory would silently recreate the rejected D4 shape.
+
+Revisit only if profiling shows per-invocation compile is a real hotspot AND quickjs-emscripten exposes a portable precompiled-module handle. Until then, D1 (CPU budget) and D2 (sync variant) stand on their own.
 
 ### D4 — No shared singleton module (rejected alternative: shared module + per-invocation contexts)
 
