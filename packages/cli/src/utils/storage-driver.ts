@@ -33,6 +33,28 @@
 export type SqliteFamilyEngine = 'better-sqlite3' | 'sqlite-wasm' | 'memory';
 
 /**
+ * Thrown by {@link createStorageDriver} when a driver kind is *recognized* but the
+ * open-core CLI cannot construct it — currently `turso`/libSQL, which ships in the
+ * ObjectStack cloud / enterprise distribution (`@objectstack/driver-turso`, an
+ * extension of SqlDriver over `@libsql/client`), composed by the cloud runtime's
+ * own kernel factory, not by open-core's auto driver-registration.
+ *
+ * The whole point of surfacing this as a *typed* error is so `serve.ts` can fail
+ * LOUDLY (fatal) instead of letting the selection fall through to the SQLite
+ * default. That silent fall-through is the same "declared ≠ enforced" bug as
+ * #3276 (the CLI advertised `memory`/`turso` but had no dispatch branch, so both
+ * silently became SQLite-in-memory).
+ */
+export class UnsupportedDriverError extends Error {
+  readonly driverType: string;
+  constructor(driverType: string, message: string) {
+    super(message);
+    this.name = 'UnsupportedDriverError';
+    this.driverType = driverType;
+  }
+}
+
+/**
  * Infer a canonical driver kind from an `OS_DATABASE_URL` scheme.
  * Returns `''` when the URL is absent or its scheme is unrecognized (the caller
  * then falls back to the dev default / registers nothing in production).
@@ -43,6 +65,11 @@ export function inferDriverTypeFromUrl(url: string | undefined): string {
   if (/^mongodb(\+srv)?:\/\//i.test(u)) return 'mongodb';
   if (/^postgres(ql)?:\/\//i.test(u)) return 'postgres';
   if (/^mysql2?:\/\//i.test(u)) return 'mysql';
+  // libSQL / Turso URLs are DELIBERATELY still classified as `turso` (not left
+  // unrecognized). Open-core can't construct that driver, but classifying it
+  // lets createStorageDriver fail LOUDLY with a clear cloud/EE message — if we
+  // returned '' here instead, a `libsql://` URL would fall through to the SQLite
+  // default and silently ignore the remote connection (the very bug we're fixing).
   if (/^libsql:\/\//i.test(u)) return 'turso';
   if (/^https?:\/\//i.test(u) && /\.turso\./i.test(u)) return 'turso';
   if (/^wasm-sqlite:\/\//i.test(u) || /\.wasm\.db$/i.test(u)) return 'sqlite-wasm';
@@ -100,6 +127,10 @@ export interface StorageDriverResolution {
  * Construct the storage driver for a canonical driver kind. Returns `null` when
  * nothing matches and we are NOT in dev (production with an unknown/absent
  * driver registers no driver, matching the prior inline behavior).
+ *
+ * Throws {@link UnsupportedDriverError} for `turso`/libSQL — a cloud/EE driver the
+ * open-core CLI cannot construct. serve.ts surfaces that as a fatal, actionable
+ * boot error so the selection never silently degrades to SQLite.
  *
  * @see {@link resolveDriverType}
  */
@@ -205,6 +236,27 @@ export async function createStorageDriver(
       label: 'SqlDriver(mysql2)',
       displayUrl: databaseUrl,
     };
+  }
+
+  // turso / libSQL: recognized but NOT constructible by the open-core CLI. The
+  // driver (`@objectstack/driver-turso`) ships in the cloud / enterprise
+  // distribution and is composed by the cloud runtime's own kernel factory —
+  // runtime/standalone-stack.ts explicitly stopped consuming its auth token, and
+  // its config schema lives in the cloud package so it never pollutes open-core
+  // `@objectstack/spec`. Fail LOUDLY here rather than let the selection fall
+  // through to the SQLite default (the reported "declared ≠ enforced" bug):
+  // serve.ts turns this typed error into a fatal, actionable boot message.
+  if (driverType === 'turso' || driverType === 'libsql') {
+    throw new UnsupportedDriverError(
+      'turso',
+      'The `turso`/libSQL driver ships with the ObjectStack cloud / enterprise '
+        + 'distribution (@objectstack/driver-turso), not the open-core CLI. To use '
+        + "it, register it explicitly in your stack config (a datasource with driver: "
+        + "'turso' and config { url, authToken }, with @objectstack/driver-turso "
+        + 'installed), or run under the cloud distribution. Otherwise select an '
+        + 'open-core driver via OS_DATABASE_DRIVER / OS_DATABASE_URL: '
+        + 'sqlite | postgres | mysql | mongodb | memory.',
+    );
   }
 
   // #3276: explicit in-memory (mingo) driver. Honored in dev AND production — an
