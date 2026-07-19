@@ -331,6 +331,8 @@ the hosted ObjectOS Cloud control plane.
 | `OS_ENV_CACHE_TTL_MS` | number | `300000` | Env-record cache TTL in ms. |
 | `OS_ARTIFACT_CACHE_TTL_MS` | number | `300000` | Artifact-record cache TTL in ms. |
 | `OS_ARTIFACT_FETCH_TIMEOUT_MS` | number | `60000` | Timeout for remote artifact fetches. Only a positive value is honored — an unset, non-numeric, or `0` value falls back to the 60s default (pass `fetchTimeoutMs: 0` in `artifactSource` config to actually disable the timeout). |
+| `OS_SANDBOX_HOOK_TIMEOUT_MS` | number | `250` | Default wall-clock budget for a sandboxed **hook** body (QuickJS). Each invocation compiles a fresh WASM module and a nested hook compiles another inside the parent's budget, so a loaded/slow host (e.g. an oversubscribed CI runner) may need a larger floor. Only a positive integer is honored; unset / non-numeric / non-positive keeps the 250ms default. A hook body's own declared `timeoutMs` still wins over this. |
+| `OS_SANDBOX_ACTION_TIMEOUT_MS` | number | `5000` | Default wall-clock budget for a sandboxed **action** body (QuickJS). Same resolution rules as the hook variant above (positive integer only; an action body's own `timeoutMs` still wins). |
 | `OS_INLINE_SEED_BUDGET_MS` | number | `8000` | Time budget for synchronous seed execution at boot before deferring to a worker. |
 | `OS_TENANT_AUDIT` | flag | `1` | Set to `0` to silence the tenant-isolation audit warnings emitted by the SQL driver. |
 
