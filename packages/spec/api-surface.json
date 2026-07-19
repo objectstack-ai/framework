@@ -508,6 +508,7 @@
     "isDateMacroToken (function)",
     "isFilterAST (function)",
     "isIncoherentAggregate (function)",
+    "isTenancyDisabled (function)",
     "isTitleEligible (function)",
     "missingFieldValues (function)",
     "objectForm (const)",
