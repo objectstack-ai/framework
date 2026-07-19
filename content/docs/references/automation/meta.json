@@ -7,6 +7,7 @@
     "flow",
     "node-executor",
     "state-machine",
+    "time-relative-trigger",
     "trigger-registry",
     "---Integration & Data---",
     "bpmn-interop",

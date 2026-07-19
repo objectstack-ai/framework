@@ -221,17 +221,31 @@ running app and gets a generated tool surface over your objects and actions
 same RBAC / RLS as the Console. No custom tooling, no separate API. See
 [Actions as Tools](/docs/ai/actions-as-tools) for the tool set.
 
+The **HTTP surface** and the long-lived **stdio transport** are separate switches
+(they used to share one, which let `=true` silently attach an unscoped transport —
+see the note below):
+
 ```bash
-os start                                # MCP is served at /api/v1/mcp by default
-OS_MCP_SERVER_ENABLED=false os start    # opt out of the MCP surface
-OS_MCP_SERVER_ENABLED=true os start     # additionally auto-start the stdio transport
+os start                                                  # HTTP MCP served at /api/v1/mcp by default
+OS_MCP_SERVER_ENABLED=false os start                      # opt out of the HTTP MCP surface
+OS_MCP_STDIO_ENABLED=true OS_MCP_STDIO_API_KEY=osk_... os start   # start the local stdio transport as that key's identity
 ```
 
 | Variable | Type | Default | Description |
 |:---|:---|:---|:---|
-| `OS_MCP_SERVER_ENABLED` | boolean | `true` | The MCP HTTP surface (`/api/v1/mcp`) is a core capability and defaults **on**. Set `false` to disable it. An explicit `true` additionally auto-starts the long-lived stdio transport at boot. |
+| `OS_MCP_SERVER_ENABLED` | boolean | `true` | The MCP **HTTP** surface (`/api/v1/mcp`) is a core capability and defaults **on**. Set `false` to disable it (endpoint 404s, the Connect-an-Agent page disappears). |
+| `OS_MCP_STDIO_ENABLED` | boolean | `false` | Auto-start the long-lived **stdio** transport at boot. Opt-in and **stricter** than the HTTP surface. **Requires `OS_MCP_STDIO_API_KEY`** — stdio runs as that key's identity with RLS/FLS/tenant applied; if the key is missing or invalid, boot **fails closed** (stdio refuses to start). See ADR-0101. |
+| `OS_MCP_STDIO_API_KEY` | string | — | The `osk_...` API key the **stdio** transport runs as. Resolved through the same verify chain as the HTTP/REST surfaces, so reads are scoped to that identity's permissions. Mint one from **Setup → Connect an Agent** (or `POST /api/v1/keys`). For full authority, mint a key on a platform-admin or dedicated **service** identity — there is deliberately no `system`/unscoped bypass. |
 | `OS_MCP_SERVER_NAME` | string | `objectstack` | Server name advertised to MCP clients. |
 | `OS_MCP_SERVER_TRANSPORT` | enum | `stdio` | `stdio` \| `http`. Use `http` (Streamable HTTP) for a remote client; `stdio` for a local one. |
+
+<Callout type="warn">
+**Deprecated (one release):** `OS_MCP_SERVER_ENABLED=true` also used to auto-start
+the stdio transport — overloading the HTTP switch, so setting it to "make sure MCP
+is on" silently attached the unscoped stdio bridge. That trigger still works but now
+logs a deprecation warning; use `OS_MCP_STDIO_ENABLED=true` instead.
+`OS_MCP_SERVER_ENABLED=false` only ever gated HTTP and is unaffected.
+</Callout>
 
 ---
 

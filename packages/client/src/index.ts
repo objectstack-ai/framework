@@ -2493,11 +2493,11 @@ export class ObjectStackClient {
      * Record an approve decision on a request. Finalises the request when the
      * node's behaviour is satisfied and resumes the owning flow run.
      */
-    approve: async (requestId: string, decision?: { actorId?: string; comment?: string }): Promise<ApprovalDecisionResult> => {
+    approve: async (requestId: string, decision?: { actorId?: string; comment?: string; attachments?: string[] }): Promise<ApprovalDecisionResult> => {
       const route = this.getRoute('approvals');
       const res = await this.fetch(`${this.baseUrl}${route}/requests/${encodeURIComponent(requestId)}/approve`, {
         method: 'POST',
-        body: JSON.stringify({ actorId: decision?.actorId, comment: decision?.comment })
+        body: JSON.stringify({ actorId: decision?.actorId, comment: decision?.comment, attachments: decision?.attachments })
       });
       return this.unwrapResponse<ApprovalDecisionResult>(res);
     },
@@ -2506,13 +2506,32 @@ export class ObjectStackClient {
      * Record a reject decision on a request. Resumes the owning flow run down
      * the `reject` edge.
      */
-    reject: async (requestId: string, decision?: { actorId?: string; comment?: string }): Promise<ApprovalDecisionResult> => {
+    reject: async (requestId: string, decision?: { actorId?: string; comment?: string; attachments?: string[] }): Promise<ApprovalDecisionResult> => {
       const route = this.getRoute('approvals');
       const res = await this.fetch(`${this.baseUrl}${route}/requests/${encodeURIComponent(requestId)}/reject`, {
         method: 'POST',
-        body: JSON.stringify({ actorId: decision?.actorId, comment: decision?.comment })
+        body: JSON.stringify({ actorId: decision?.actorId, comment: decision?.comment, attachments: decision?.attachments })
       });
       return this.unwrapResponse<ApprovalDecisionResult>(res);
+    },
+
+    /**
+     * Hand a pending-approver slot to someone else (#1322 M2 — self-service
+     * task delegation). `to` is the new approver; `from` defaults to the
+     * caller. Records a `reassign` audit action and notifies the new approver.
+     * (Standing out-of-office delegation is CRUD on `sys_approval_delegation`
+     * via the generic data API, so it needs no dedicated helper here.)
+     */
+    reassign: async (
+      requestId: string,
+      input: { to: string; from?: string; actorId?: string; comment?: string },
+    ): Promise<{ request: ApprovalRequestRow }> => {
+      const route = this.getRoute('approvals');
+      const res = await this.fetch(`${this.baseUrl}${route}/requests/${encodeURIComponent(requestId)}/reassign`, {
+        method: 'POST',
+        body: JSON.stringify({ to: input.to, from: input.from, actorId: input.actorId, comment: input.comment })
+      });
+      return this.unwrapResponse<{ request: ApprovalRequestRow }>(res);
     },
 
     /**

@@ -29,7 +29,7 @@
 | 17 | 🟡 P2 | 批量 | 批量操作 UI 入口存在但未端到端验证 | 大数据集运营卡顿 |
 | 18 | 🟡 P2 | i18n | zh-CN ↔ English 切换偶发错乱 | 国内客户体验差 |
 | 19 | 🟢 P3 | 企业 | SSO / SAML / Okta 未在模板中验证 | 中大客户准入门槛 |
-| 20 | 🟢 P3 | 企业 | 多步审批、委派、不在岗代理缺失 | 同上 |
+| 20 | 🟢 P3 | 企业 | ~~多步审批、委派、不在岗代理缺失~~ 委派 / OOO 社区版部分已修复；代办访问·治理归企业版 | 同上 |
 | 21 | 🟢 P3 | 企业 | 外部审计员 / 只读访客门户缺失 | 合规类应用刚需 |
 | 22 | 🟢 P3 | 移动 | 移动端响应式未验证 | 审批走手机是基本盘 |
 | 23 | 🟢 P3 | 文档 | ~~`services.data.{get,update}` 等 API 未文档化~~ | Fixed in Unreleased: 新增 `content/docs/kernel/runtime-services/*` |
@@ -275,9 +275,17 @@
 
 平台是否支持企业身份接入？模板里只用了本地账号。建议补一个 reference integration + 文档。
 
-### 20. 多步审批、委派、不在岗代理
+### 20. ~~多步审批、委派、不在岗代理~~
 
 见 #5 的延伸——这是企业版的"准入条件"。
+
+**Partially fixed（社区版部分，#1322）：** 委派 / 不在岗（OOO）的"审批不冻结"连续性底线已落在开源核心 `plugin-approvals`：
+
+- **不在岗自动跳过（M1）**：新增自助对象 `sys_approval_delegation`（`{delegator_id, delegate_id, valid_from, valid_until, reason}`）。`ApprovalService.expandApprovers` 解析到具体个人（`type: user` / `field` / `manager`）时，命中生效中的委派即按链路改派给候补人（复用 `isGrantActive` 的半开时间窗，解析时判定，无后台任务；带环/自引用保护）。职位路径的休假仍由 ADR-0091 职务代理覆盖。
+- **临时委派（M2）**：沿用既有 `ApprovalService.reassign`（`POST /approvals/requests/:id/reassign` + 客户端 `approvals.reassign`），单任务转交并留审计。
+- **审计 + 通知（M4）**：改派写 `sys_approval_action`（`action: 'ooo_substitute'`，记 `A → B — reason`）并通知候补人与被跳过人。
+
+**仍属企业版（objectstack-ai/cloud#855）：** 代办访问 / act-as 收件箱、委派治理 + 职责分离（SoD）、组织级代管他人控制台、合规报表 / 认证复核。多步 / 并行审批见 #5（P1），与本条分开推进。
 
 ### 21. 外部审计员 / 只读访客门户
 

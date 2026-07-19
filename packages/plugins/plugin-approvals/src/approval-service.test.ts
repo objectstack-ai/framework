@@ -11,7 +11,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ApprovalService, REMIND_COOLDOWN_MS } from './approval-service.js';
-import { bindApprovalLockHook, unbindAllHooks } from './lifecycle-hooks.js';
+import { bindApprovalLockHook, bindDelegationWriteGuard, unbindAllHooks } from './lifecycle-hooks.js';
 
 interface FakeRow { [k: string]: any }
 
@@ -1074,5 +1074,319 @@ describe('record-lock hook (node era)', () => {
   it('unbindAllHooks removes the lock hook', () => {
     expect(unbindAllHooks(engine as any)).toBe(1);
     expect(engine._hooks['beforeUpdate']).toHaveLength(0);
+  });
+});
+
+// ── Out-of-office auto-skip (#1322 M1/M4) ─────────────────────────────
+//
+// When a resolved individual approver has declared an active OOO delegation,
+// the slot is rerouted to the delegate at resolution time (never a background
+// job), audited as `ooo_substitute`, and both parties are notified. Group /
+// graph approvers (position/team/department/tier) are left untouched.
+describe('ApprovalService — out-of-office delegation (#1322)', () => {
+  // Mid-window instant for the issue's own example (leave 5/26–5/30).
+  const OOO_NOW = new Date('2026-05-27T10:00:00Z').getTime();
+  let engine: ReturnType<typeof makeFakeEngine>;
+  let svc: ApprovalService;
+  let emitted: any[];
+
+  function seedDelegation(rows: Array<Record<string, any>>) {
+    engine._tables['sys_approval_delegation'] = rows.map((r, i) => ({
+      id: `del${i}`,
+      organization_id: 't1',
+      valid_from: '2026-05-26T00:00:00Z',
+      valid_until: '2026-05-30T00:00:00Z',
+      reason: 'Annual leave',
+      ...r,
+    }));
+  }
+
+  beforeEach(() => {
+    engine = makeFakeEngine();
+    emitted = [];
+    svc = new ApprovalService({ engine: engine as any, clock: { now: () => new Date(OOO_NOW) } });
+    svc.attachMessaging({ emit: async (m: any) => { emitted.push(m); } });
+  });
+
+  it('type:user — reroutes an out-of-office approver to the delegate', async () => {
+    seedDelegation([{ delegator_id: 'alice', delegate_id: 'bob' }]);
+    const req = await svc.openNodeRequest(openInput(['alice']), CTX);
+    expect(req.pending_approvers).toEqual(['bob']);
+  });
+
+  it('records an ooo_substitute audit action with "A → B — reason"', async () => {
+    seedDelegation([{ delegator_id: 'alice', delegate_id: 'bob' }]);
+    await svc.openNodeRequest(openInput(['alice']), CTX);
+    const sub = engine._tables['sys_approval_action'].find((a: any) => a.action === 'ooo_substitute');
+    expect(sub).toBeTruthy();
+    expect(sub.comment).toBe('alice → bob — Annual leave');
+    expect(sub.actor_id).toBeNull(); // system-recorded reroute, no human actor
+  });
+
+  it('notifies both the delegate and the skipped approver', async () => {
+    seedDelegation([{ delegator_id: 'alice', delegate_id: 'bob' }]);
+    await svc.openNodeRequest(openInput(['alice']), CTX);
+    const to = emitted.find(e => e.topic === 'approval.ooo_substituted');
+    const from = emitted.find(e => e.topic === 'approval.ooo_skipped');
+    expect(to?.audience).toEqual(['bob']);
+    expect(from?.audience).toEqual(['alice']);
+  });
+
+  it('does not reroute before valid_from (window not yet open)', async () => {
+    seedDelegation([{ delegator_id: 'alice', delegate_id: 'bob', valid_from: '2026-05-28T00:00:00Z' }]);
+    const req = await svc.openNodeRequest(openInput(['alice']), CTX);
+    expect(req.pending_approvers).toEqual(['alice']);
+    expect(engine._tables['sys_approval_action'].some((a: any) => a.action === 'ooo_substitute')).toBe(false);
+  });
+
+  it('does not reroute at/after valid_until (half-open window)', async () => {
+    seedDelegation([{ delegator_id: 'alice', delegate_id: 'bob', valid_until: '2026-05-27T10:00:00Z' }]);
+    const req = await svc.openNodeRequest(openInput(['alice']), CTX);
+    expect(req.pending_approvers).toEqual(['alice']);
+  });
+
+  it('type:field — reroutes the user stored in the record field', async () => {
+    seedDelegation([{ delegator_id: 'alice', delegate_id: 'bob' }]);
+    const input = {
+      ...openInput([]),
+      record: { id: 'opp1', reviewer: 'alice' },
+      config: { approvers: [{ type: 'field', value: 'reviewer' }], behavior: 'first_response', lockRecord: true },
+    };
+    const req = await svc.openNodeRequest(input as any, CTX);
+    expect(req.pending_approvers).toEqual(['bob']);
+  });
+
+  it('type:manager — reroutes when the resolved manager is out of office', async () => {
+    engine._tables['sys_user'] = [{ id: 'carol', manager_id: 'alice' }];
+    seedDelegation([{ delegator_id: 'alice', delegate_id: 'bob' }]);
+    const input = {
+      ...openInput([]),
+      record: { id: 'opp1', owner_id: 'carol' },
+      config: { approvers: [{ type: 'manager', value: 'owner_id' }], behavior: 'first_response', lockRecord: true },
+    };
+    const req = await svc.openNodeRequest(input as any, CTX);
+    expect(req.pending_approvers).toEqual(['bob']);
+  });
+
+  it('follows a delegation chain A → B → C', async () => {
+    seedDelegation([
+      { delegator_id: 'alice', delegate_id: 'bob' },
+      { delegator_id: 'bob', delegate_id: 'carol' },
+    ]);
+    const req = await svc.openNodeRequest(openInput(['alice']), CTX);
+    expect(req.pending_approvers).toEqual(['carol']);
+    expect(engine._tables['sys_approval_action'].filter((a: any) => a.action === 'ooo_substitute')).toHaveLength(2);
+  });
+
+  it('stops on a cycle A → B → A without looping', async () => {
+    seedDelegation([
+      { delegator_id: 'alice', delegate_id: 'bob' },
+      { delegator_id: 'bob', delegate_id: 'alice' },
+    ]);
+    const req = await svc.openNodeRequest(openInput(['alice']), CTX);
+    expect(req.pending_approvers).toEqual(['bob']);
+  });
+
+  it('ignores a self-delegation (A → A)', async () => {
+    seedDelegation([{ delegator_id: 'alice', delegate_id: 'alice' }]);
+    const req = await svc.openNodeRequest(openInput(['alice']), CTX);
+    expect(req.pending_approvers).toEqual(['alice']);
+    expect(engine._tables['sys_approval_action'].some((a: any) => a.action === 'ooo_substitute')).toBe(false);
+  });
+
+  it('leaves approvers unchanged when there is no active delegation', async () => {
+    const req = await svc.openNodeRequest(openInput(['alice']), CTX);
+    expect(req.pending_approvers).toEqual(['alice']);
+  });
+
+  it('does not OOO-substitute group-routed (position) approvers', async () => {
+    engine._tables['sys_user_position'] = [{ id: 'up1', user_id: 'alice', position: 'sales_manager', organization_id: 't1' }];
+    seedDelegation([{ delegator_id: 'alice', delegate_id: 'bob' }]);
+    const input = {
+      ...openInput([]),
+      config: { approvers: [{ type: 'position', value: 'sales_manager' }], behavior: 'first_response', lockRecord: true },
+    };
+    const req = await svc.openNodeRequest(input as any, CTX);
+    // Position-routed leave is ADR-0091's job, not this path: the holder stays.
+    expect(req.pending_approvers).toEqual(['alice']);
+  });
+
+  it('respects tenant scope: a rule scoped to another org does not apply', async () => {
+    seedDelegation([{ delegator_id: 'alice', delegate_id: 'bob', organization_id: 't2' }]);
+    const req = await svc.openNodeRequest(openInput(['alice']), CTX);
+    expect(req.pending_approvers).toEqual(['alice']);
+  });
+
+  it('applies a cross-tenant (null org) rule regardless of request tenant', async () => {
+    seedDelegation([{ delegator_id: 'alice', delegate_id: 'bob', organization_id: null }]);
+    const req = await svc.openNodeRequest(openInput(['alice']), CTX);
+    expect(req.pending_approvers).toEqual(['bob']);
+  });
+});
+
+// ── Delegation self-service write guard (#1322 follow-up) ─────────────
+//
+// sys_approval_delegation is apiEnabled CRUD; a member must not be able to
+// forge a delegation for someone else (delegator_id = victim) and reroute the
+// victim's approvals. The guard forces delegator_id == acting user for normal
+// writes; system/admin contexts bypass. Row-ownership on update/delete is the
+// platform's created_by RLS (not exercised here).
+describe('sys_approval_delegation write guard (#1322)', () => {
+  const DEL = 'sys_approval_delegation';
+  let engine: ReturnType<typeof makeFakeEngine>;
+
+  beforeEach(() => {
+    engine = makeFakeEngine();
+    bindDelegationWriteGuard(engine as any);
+  });
+
+  const fireInsert = (data: any, session: any) =>
+    (engine as any).fire('beforeInsert', { object: DEL, input: { data }, session });
+  const fireUpdate = (data: any, session: any) =>
+    (engine as any).fire('beforeUpdate', { object: DEL, input: { id: data?.id ?? 'd1', data }, session });
+  const member = (userId?: string) => ({ isSystem: false, roles: [], ...(userId ? { userId } : {}) });
+
+  it('allows a member to create their own delegation', async () => {
+    await expect(fireInsert({ delegator_id: 'u1', delegate_id: 'u2' }, member('u1'))).resolves.toBeUndefined();
+  });
+
+  it('rejects a member forging a delegation for someone else', async () => {
+    await expect(fireInsert({ delegator_id: 'victim', delegate_id: 'u1' }, member('u1'))).rejects.toThrow(/FORBIDDEN/);
+  });
+
+  it('stamps the caller as delegator when omitted on insert', async () => {
+    const data: any = { delegate_id: 'u2' };
+    await fireInsert(data, member('u1'));
+    expect(data.delegator_id).toBe('u1');
+  });
+
+  it('rejects an unauthenticated non-system insert', async () => {
+    await expect(fireInsert({ delegate_id: 'u2' }, member())).rejects.toThrow(/FORBIDDEN/);
+  });
+
+  it('bypasses the guard for system context', async () => {
+    await expect(fireInsert({ delegator_id: 'victim', delegate_id: 'u1' }, { isSystem: true })).resolves.toBeUndefined();
+  });
+
+  it('lets an admin set the delegator to anyone', async () => {
+    await expect(fireInsert({ delegator_id: 'victim', delegate_id: 'u2' }, { isSystem: false, roles: ['admin'], userId: 'admin1' })).resolves.toBeUndefined();
+  });
+
+  it('rejects a member relabelling delegator on update', async () => {
+    await expect(fireUpdate({ id: 'd1', delegator_id: 'victim' }, member('u1'))).rejects.toThrow(/FORBIDDEN/);
+  });
+
+  it('allows a member update that does not touch delegator_id', async () => {
+    await expect(fireUpdate({ id: 'd1', valid_until: '2026-06-01T00:00:00Z' }, member('u1'))).resolves.toBeUndefined();
+  });
+
+  it('rejects a batch insert if any row names a foreign delegator', async () => {
+    await expect(fireInsert(
+      [{ delegator_id: 'u1', delegate_id: 'u2' }, { delegator_id: 'victim', delegate_id: 'u3' }],
+      member('u1'),
+    )).rejects.toThrow(/FORBIDDEN/);
+  });
+});
+
+// ── Quorum & per-group sign-off (#3266) ───────────────────────────────
+//
+// quorum = M-of-N collective sign-off; per_group = one (or minApprovals) from
+// EACH group (会签). A single rejection is always a veto. Group membership is
+// snapshotted at open, so OOO-substituted approvers count for their group.
+describe('ApprovalService — quorum & per_group (#3266)', () => {
+  let engine: ReturnType<typeof makeFakeEngine>;
+  let svc: ApprovalService;
+  const base = new Date('2026-08-01T10:00:00Z').getTime();
+
+  beforeEach(() => {
+    engine = makeFakeEngine();
+    let n = 0;
+    svc = new ApprovalService({ engine: engine as any, clock: { now: () => new Date(base + (n++) * 1000) } });
+  });
+
+  // Build an openNodeRequest input with explicit approver specs + behavior.
+  const cfg = (approvers: any[], behavior: string, extra: Record<string, any> = {}) => ({
+    ...openInput([]),
+    config: { approvers, behavior, lockRecord: true, ...extra },
+  });
+  const U = (v: string, group?: string) => (group ? { type: 'user', value: v, group } : { type: 'user', value: v });
+
+  it('quorum: holds until minApprovals reached, then finalizes', async () => {
+    const req = await svc.openNodeRequest(cfg([U('u1'), U('u2'), U('u3')], 'quorum', { minApprovals: 2 }), CTX);
+    const a = await svc.decideNode(req.id, { decision: 'approve', actorId: 'u1' }, SYS);
+    expect(a.finalized).toBe(false);
+    expect(a.request.status).toBe('pending');
+    const b = await svc.decideNode(req.id, { decision: 'approve', actorId: 'u2' }, SYS);
+    expect(b.finalized).toBe(true);
+    expect(b.request.status).toBe('approved');
+  });
+
+  it('quorum: minApprovals clamps to the approver count (no deadlock)', async () => {
+    const req = await svc.openNodeRequest(cfg([U('u1'), U('u2')], 'quorum', { minApprovals: 5 }), CTX);
+    await svc.decideNode(req.id, { decision: 'approve', actorId: 'u1' }, SYS);
+    const b = await svc.decideNode(req.id, { decision: 'approve', actorId: 'u2' }, SYS);
+    expect(b.finalized).toBe(true);
+  });
+
+  it('quorum: any reject is a veto', async () => {
+    const req = await svc.openNodeRequest(cfg([U('u1'), U('u2'), U('u3')], 'quorum', { minApprovals: 2 }), CTX);
+    const r = await svc.decideNode(req.id, { decision: 'reject', actorId: 'u1' }, SYS);
+    expect(r.finalized).toBe(true);
+    expect(r.request.status).toBe('rejected');
+  });
+
+  it('per_group: advances only when EACH group approves', async () => {
+    const req = await svc.openNodeRequest(cfg([U('l1', 'legal'), U('f1', 'finance')], 'per_group'), CTX);
+    const a = await svc.decideNode(req.id, { decision: 'approve', actorId: 'l1' }, SYS);
+    expect(a.finalized).toBe(false); // finance still pending
+    const b = await svc.decideNode(req.id, { decision: 'approve', actorId: 'f1' }, SYS);
+    expect(b.finalized).toBe(true);
+    expect(b.request.status).toBe('approved');
+  });
+
+  it('per_group: two approvals in ONE group do not satisfy another group', async () => {
+    const req = await svc.openNodeRequest(
+      cfg([U('l1', 'legal'), U('l2', 'legal'), U('f1', 'finance')], 'per_group'), CTX);
+    await svc.decideNode(req.id, { decision: 'approve', actorId: 'l1' }, SYS);
+    const b = await svc.decideNode(req.id, { decision: 'approve', actorId: 'l2' }, SYS);
+    expect(b.finalized).toBe(false); // finance still missing
+  });
+
+  it('per_group: minApprovals=2 needs two from each group', async () => {
+    const req = await svc.openNodeRequest(cfg(
+      [U('l1', 'legal'), U('l2', 'legal'), U('f1', 'finance'), U('f2', 'finance')],
+      'per_group', { minApprovals: 2 }), CTX);
+    for (const u of ['l1', 'f1', 'l2']) {
+      const r = await svc.decideNode(req.id, { decision: 'approve', actorId: u }, SYS);
+      expect(r.finalized).toBe(false);
+    }
+    const done = await svc.decideNode(req.id, { decision: 'approve', actorId: 'f2' }, SYS);
+    expect(done.finalized).toBe(true);
+  });
+
+  it('per_group: reject is a veto', async () => {
+    const req = await svc.openNodeRequest(cfg([U('l1', 'legal'), U('f1', 'finance')], 'per_group'), CTX);
+    const r = await svc.decideNode(req.id, { decision: 'reject', actorId: 'l1' }, SYS);
+    expect(r.request.status).toBe('rejected');
+  });
+
+  it('per_group: an OOO-substituted member still counts for their group', async () => {
+    engine._tables['sys_approval_delegation'] = [
+      { id: 'd', delegator_id: 'l1', delegate_id: 'lb', organization_id: 't1', valid_from: null, valid_until: null, reason: 'leave' },
+    ];
+    const req = await svc.openNodeRequest(cfg([U('l1', 'legal'), U('f1', 'finance')], 'per_group'), CTX);
+    expect(req.pending_approvers).toContain('lb');
+    expect(req.pending_approvers).not.toContain('l1');
+    const a = await svc.decideNode(req.id, { decision: 'approve', actorId: 'lb' }, SYS); // delegate covers legal
+    expect(a.finalized).toBe(false);
+    const b = await svc.decideNode(req.id, { decision: 'approve', actorId: 'f1' }, SYS);
+    expect(b.finalized).toBe(true);
+  });
+
+  it('records decision attachments on the audit row', async () => {
+    const req = await svc.openNodeRequest(openInput(['u9']), CTX);
+    await svc.decideNode(req.id, { decision: 'approve', actorId: 'u9', attachments: ['file_1', 'file_2'] }, SYS);
+    const act = engine._tables['sys_approval_action'].find((a: any) => a.action === 'approve');
+    expect(act.attachments).toEqual(['file_1', 'file_2']);
   });
 });

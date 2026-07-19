@@ -11,7 +11,7 @@ import type { Cube, FilterCondition } from '@objectstack/spec/data';
 import type { ExecutionContext } from '@objectstack/spec/kernel';
 import type { Dataset } from '@objectstack/spec/ui';
 import type { Logger } from '@objectstack/spec/contracts';
-import { createLogger } from '@objectstack/core';
+import { createLogger, bucketKeyToCalendarRange, zonedDateStartToUtcMs } from '@objectstack/core';
 import { CubeRegistry } from './cube-registry.js';
 import type { AnalyticsStrategy, DriverCapabilities, StrategyContext } from './strategies/types.js';
 import { NativeSQLStrategy } from './strategies/native-sql-strategy.js';
@@ -50,6 +50,20 @@ type AnalyticsResultWithDrill = AnalyticsResult & {
    * intact and correctly drills the whole (unfiltered) object.
    */
   drillRawTotals?: Array<Array<Record<string, unknown>>>;
+  /**
+   * #1752 — half-open date-range drill scope per row, the RANGE companion to
+   * `drillRawRows` (which handles equality dims). A time-bucketed date
+   * dimension (`dateGranularity`) groups a SPAN of records into one bucket
+   * ("2026-Q2"), so its drill needs `[gte, lt)`, not equality — the humanized
+   * bucket can't be exact-matched (which is why date dims are excluded from
+   * `dimensionFields`/`drillRawRows`). Aligned to `rows` by index; each entry
+   * maps a drillable date-dimension NAME → `{ field, gte, lt }` with `gte`
+   * inclusive and `lt` exclusive (bounds as `YYYY-MM-DD`). Present only for
+   * buckets whose boundaries are unambiguous — a `datetime` field under a
+   * non-UTC reference timezone is omitted (host drills an unscoped superset)
+   * until instant-boundary support lands.
+   */
+  drillRanges?: Array<Record<string, { field: string; gte: string; lt: string }>>;
 };
 
 /**
@@ -533,6 +547,52 @@ export class AnalyticsService implements IAnalyticsService {
           });
         });
       }
+    }
+
+    // #1752 — date-range drill scope. A `dateGranularity` dimension groups a
+    // SPAN of records into one bucket, so drilling it needs a half-open range
+    // `[gte, lt)`, which the equality `drillRawRows` sidecar can't express
+    // (that's exactly why date dims are excluded from `drillDims` above). Emit
+    // a parallel range sidecar computed — via the shared inverse util so server
+    // and client agree on boundaries — from the canonical bucket KEY, which is
+    // still in `rows[i][dim]` here (this runs BEFORE label resolution rewrites
+    // it to a display label).
+    const rangeTz = selection.timezone ?? context?.timezone ?? 'UTC';
+    // Per drillable date+granularity dim, decide how to serialize its bounds
+    // (ADR-0053 temporal semantics):
+    //   - `datetime` → the reference tz's MIDNIGHT INSTANT (ISO), because the
+    //     bucket is defined on that tz's calendar (works under any tz, incl. DST);
+    //   - `date` → `YYYY-MM-DD` calendar bounds, a tz-naive calendar day that is
+    //     exact under ANY reference tz;
+    //   - unknown field type → safe only under UTC (where the calendar day and
+    //     its instant coincide); under a non-UTC tz we can't tell whether to
+    //     shift, so the dim is omitted and the host drills a superset.
+    const rangeDims: Array<{ d: (typeof selectedDims)[number]; instant: boolean }> = [];
+    for (const d of selectedDims) {
+      if (!d.field || d.type !== 'date' || !d.dateGranularity) continue;
+      const ftype = this.measureCurrency?.(dataset.object, d.field as string)?.type;
+      if (ftype === 'datetime') rangeDims.push({ d, instant: true });
+      else if (ftype === 'date') rangeDims.push({ d, instant: false });
+      else if (rangeTz === 'UTC') rangeDims.push({ d, instant: false });
+      // else: unknown field type under a non-UTC reference tz → omit (superset).
+    }
+    if (rangeDims.length && result.rows.length) {
+      const bound = (ymd: string, instant: boolean): string =>
+        instant ? new Date(zonedDateStartToUtcMs(ymd, rangeTz)).toISOString() : ymd;
+      (result as AnalyticsResultWithDrill).drillRanges = result.rows.map((row) => {
+        const ranges: Record<string, { field: string; gte: string; lt: string }> = {};
+        for (const { d, instant } of rangeDims) {
+          const cal = bucketKeyToCalendarRange(row[d.name] as string, d.dateGranularity!);
+          if (cal) {
+            ranges[d.name] = { field: d.field as string, gte: bound(cal.start, instant), lt: bound(cal.end, instant) };
+          }
+        }
+        return ranges;
+      });
+      // The equality drill block sets `object` only when a NON-date drill dim
+      // exists; a report grouped ONLY by time still needs the base object so the
+      // host can open its list. Safe to (re)set to the same dataset object.
+      (result as AnalyticsResultWithDrill).object = dataset.object;
     }
 
     // ADR-0021 — resolve grouped dimension values to human display labels

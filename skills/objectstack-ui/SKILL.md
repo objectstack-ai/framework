@@ -192,6 +192,7 @@ Views ship **inside a `defineView` container** — one per object, aggregating
 the default `list`, named `listViews`, and `formViews`. The loader expands it
 into `<object>.<key>` view items that power the view switcher.
 
+<!-- os:check -->
 ```typescript
 import { defineView } from '@objectstack/spec';
 
@@ -465,6 +466,7 @@ An **App** groups objects, dashboards, reports, and custom pages into a
 structured navigation tree. Build with `App.create({...})` from
 `@objectstack/spec/ui` and register under `defineStack({ apps: [...] })`.
 
+<!-- os:check -->
 ```typescript
 import { App } from '@objectstack/spec/ui';
 
@@ -598,6 +600,7 @@ filter; keep `filter` on the widget when binding a dataset.
 
 ### Report Configuration
 
+<!-- os:check -->
 ```typescript
 import { defineReport } from '@objectstack/spec/ui';
 
@@ -1444,6 +1447,7 @@ named **measures** (aggregates) and **dimensions** (groupings) that BI
 widgets can compose without hand-rolling each query. Register under
 `defineStack({ analyticsCubes: [...] })`.
 
+<!-- os:check -->
 ```typescript
 import { defineCube } from '@objectstack/spec/data';
 
@@ -1520,8 +1524,10 @@ the current record. `record.<field>` resolves identically on every surface
 (`record_header`, `list_item`, …); prefer it over the bare-field form. Never
 wrap a predicate in `${…}` or `{…}` braces (see `objectstack-formula`).
 
+<!-- os:check -->
 ```typescript
 import { defineAction } from '@objectstack/spec/ui';
+import { P } from '@objectstack/spec';
 
 export const ReassignLeadAction = defineAction({
   name: 'reassign_lead',
@@ -1543,6 +1549,7 @@ export const ReassignLeadAction = defineAction({
 
 **Flow-typed action** (delegates to a screen flow):
 
+<!-- os:check -->
 ```typescript
 import { defineAction } from '@objectstack/spec/ui';
 import { P } from '@objectstack/spec';
@@ -1564,6 +1571,7 @@ export const ConvertLeadAction = defineAction({
 
 **Modal-typed action** (collect params, then execute server body):
 
+<!-- os:check -->
 ```typescript
 import { defineAction } from '@objectstack/spec/ui';
 
@@ -1612,6 +1620,7 @@ omit it and external/absolute URLs open in a new tab while relative URLs
 navigate in place. objectui's `ActionRunner.executeUrl` reads `openIn` with
 priority over the legacy heuristic.
 
+<!-- os:check -->
 ```typescript
 import { defineAction } from '@objectstack/spec/ui';
 

@@ -117,6 +117,35 @@ export const opportunityApproval: Flow = {
 For multi-step approvals, chain multiple `approval` nodes. For parallel
 approvals, see the aggregating-node pattern in [Flow Metadata](/docs/automation/flows).
 
+### Combining multiple approvers (#3266)
+
+When a node has several approvers, `behavior` decides what "approved" means —
+one node, no parallel branches needed:
+
+| `behavior` | Advances when… | Use for |
+|:---|:---|:---|
+| `first_response` (default) | any one approves | single reviewer / "any manager" |
+| `unanimous` | every resolved approver approves | small fixed panels |
+| `quorum` | `minApprovals` of N approve (M-of-N) | "2 of 3 directors" |
+| `per_group` | each `group` reaches `minApprovals` (default 1) | "legal **and** finance" sign-off (会签) |
+
+```ts
+// One legal AND one finance approver must sign off; either rejection vetoes.
+{ type: 'approval', config: {
+    approvers: [
+      { type: 'position', value: 'legal_counsel', group: 'legal' },
+      { type: 'position', value: 'controller',    group: 'finance' },
+    ],
+    behavior: 'per_group',   // or 'quorum' with minApprovals: 2
+} }
+```
+
+A single **rejection** always finalizes the node as `rejected` (one veto), in
+every mode. `minApprovals` is clamped to the resolvable approver count / group
+size, so it can never deadlock. A decision may also carry `attachments` (file
+references) recorded on its audit row — e.g. a signed contract. Weighted voting
+and approval-matrix governance are enterprise, not here.
+
 ## The full lifecycle — submit to field change
 
 What actually happens between "the flow hits the approval node" and "the record
@@ -213,6 +242,43 @@ resumes exactly as if a human had clicked. Every escalation writes an audit row.
 **Escalation needs the job service.** The plugin sweeps pending requests on an
 internal timer (~5 min). Without a `job` service registered, SLA timers are
 **display-only** and no escalation ever fires.
+</Callout>
+
+### Out-of-office delegation
+
+An approval routes to a specific person, and people take leave. Declare an
+**out-of-office delegation** so an approver's individually-routed slots reroute
+to a backup while they're away — the approval never freezes:
+
+```bash
+curl -b cookies.txt -X POST \
+  https://your-app.example.com/api/v1/data/sys_approval_delegation \
+  -H "Content-Type: application/json" \
+  -d '{
+    "delegator_id": "usr_alice",
+    "delegate_id":  "usr_bob",
+    "valid_from":   "2026-05-26T00:00:00Z",
+    "valid_until":  "2026-05-30T00:00:00Z",
+    "reason":       "Annual leave"
+  }'
+```
+
+When a request opens, approvers that resolve to a **specific individual**
+(`type: user`, `type: field`, `type: manager`) are checked against active
+delegations and rerouted to the delegate. The window is half-open
+`[valid_from, valid_until)` (UTC), evaluated **at resolution time** — no
+background job — so a lapsed delegation simply stops applying. Chains
+(A → B → C) are followed and cycle-safe. The delegate acts under **their own
+identity**; the reroute is recorded as an `ooo_substitute` audit action and both
+the delegate and the skipped approver are notified.
+
+<Callout type="info">
+**Group-routed approvers are not rerouted.** `type: position` / `team` /
+`department` / `org_membership_level` keep their whole membership, so there is
+nothing to skip; a position-holder's leave is handled by position delegation
+(ADR-0091), not here. Out-of-office delegation is self-service — create your own
+row via the data API (Setup → Approvals → *Delegations (OOO)*). For a single
+in-flight request, `reassign` hands one slot to another user directly.
 </Callout>
 
 ### Error codes

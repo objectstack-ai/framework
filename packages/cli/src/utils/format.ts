@@ -203,6 +203,14 @@ export interface ServerReadyOptions {
    * armed. Collected from the live engine after runtime.start().
    */
   automation?: AutomationReadySummary;
+  /**
+   * Whether the MCP server surface (`/api/v1/mcp`) is on (#3167). Default-on
+   * core capability, but nothing in the dev loop surfaces it — an AI client
+   * (Claude Code, Cursor, …) can operate the running app the instant a
+   * developer knows the endpoint is there. The banner is where they look, so
+   * print the URL + the SKILL.md pointer when it's live.
+   */
+  mcpEnabled?: boolean;
 }
 
 export interface AutomationReadySummary {
@@ -232,6 +240,10 @@ export function printServerReady(opts: ServerReadyOptions) {
   console.log(chalk.cyan('  ➜') + chalk.bold('  API:       ') + chalk.cyan(base + '/'));
   if (opts.uiEnabled && opts.consolePath) {
     console.log(chalk.cyan('  ➜') + chalk.bold('  Console:   ') + chalk.cyan(base + opts.consolePath + '/'));
+  }
+  if (opts.mcpEnabled) {
+    console.log(chalk.cyan('  ➜') + chalk.bold('  MCP:       ') + chalk.cyan(base + '/api/v1/mcp'));
+    console.log(chalk.dim(`      connect an AI client (Claude Code, Cursor, …) · skill: ${base}/api/v1/mcp/skill`));
   }
   if (opts.seededAdmin) {
     console.log('');

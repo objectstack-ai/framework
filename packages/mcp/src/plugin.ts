@@ -1,12 +1,45 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import type { Plugin, PluginContext } from '@objectstack/core';
-import { readEnvWithDeprecation, isMcpServerEnabled } from '@objectstack/types';
-import type { IAIService, IDataEngine, IMetadataService } from '@objectstack/spec/contracts';
+import { resolveAuthzContext } from '@objectstack/core';
+import { readEnvWithDeprecation, isMcpServerEnabled, resolveMcpStdioAutoStart } from '@objectstack/types';
+import type { ExecutionContext } from '@objectstack/spec/kernel';
+import type { IAIService, IMetadataService } from '@objectstack/spec/contracts';
 import { MCPServerRuntime } from './mcp-server-runtime.js';
 import type { MCPServerRuntimeConfig } from './mcp-server-runtime.js';
 import type { ToolRegistry } from './types.js';
 import { CONNECT_AGENT_UI_BUNDLE } from './connect-ui.js';
+
+/**
+ * Resolve `OS_MCP_STDIO_API_KEY` into an {@link ExecutionContext} through the
+ * SAME `@objectstack/core` verify + authorization chain the HTTP and REST
+ * surfaces use (`resolveApiKeyPrincipal` → `resolveAuthzContext`), so a stdio
+ * read is scoped exactly like the same identity over REST (RLS / FLS / tenant).
+ *
+ * Fail-closed: returns `undefined` for an unknown / revoked / expired /
+ * owner-less key (no `userId` resolved). Re-run per read, so revocation of a
+ * key takes effect on the next call of a live stdio session (ADR-0101 D1).
+ */
+async function resolveStdioExecutionContext(
+  ql: { find: (object: string, opts: unknown) => Promise<unknown> },
+  apiKey: string,
+): Promise<ExecutionContext | undefined> {
+  const authz = await resolveAuthzContext({ ql, headers: { 'x-api-key': apiKey } });
+  if (!authz.userId) return undefined;
+  const ec: ExecutionContext = {
+    positions: authz.positions,
+    permissions: authz.permissions,
+    systemPermissions: authz.systemPermissions,
+    isSystem: false,
+    principalKind: 'human',
+    userId: authz.userId,
+  };
+  if (authz.tenantId) ec.tenantId = authz.tenantId;
+  if (authz.email) ec.email = authz.email;
+  if (authz.posture) ec.posture = authz.posture;
+  (ec as unknown as { org_user_ids?: string[] }).org_user_ids = authz.org_user_ids;
+  return ec;
+}
 
 /**
  * Configuration options for the MCPServerPlugin.
@@ -101,40 +134,97 @@ export class MCPServerPlugin implements Plugin {
       ctx.logger.debug('[MCP] AI service not available, skipping tool bridging');
     }
 
-    // ── Bridge resources from MetadataService & DataEngine ──
+    // ── Metadata service for the resource bridge ──
     let metadataService: IMetadataService | undefined;
-    let dataEngine: IDataEngine | undefined;
-
     try {
       metadataService = ctx.getService<IMetadataService>('metadata');
     } catch {
       ctx.logger.debug('[MCP] Metadata service not available, skipping resource bridging');
     }
 
-    try {
-      dataEngine = ctx.getService<IDataEngine>('data');
-    } catch {
-      ctx.logger.debug('[MCP] Data engine not available, skipping record resources');
+    // ── stdio auto-start decision (opt-in, its OWN switch) ──
+    // Deliberately stricter than the HTTP-surface default (`isMcpServerEnabled`,
+    // default-on): start() attaches a long-lived transport claiming the
+    // process's stdin/stdout, so it stays opt-in via a SEPARATE switch
+    // (`OS_MCP_STDIO_ENABLED` / the `autoStart` option), never the HTTP var.
+    // The HTTP surface does not depend on this: the runtime dispatcher serves
+    // `/api/v1/mcp` per-request regardless.
+    const stdio = resolveMcpStdioAutoStart();
+    const shouldStart = this.options.autoStart || stdio.enabled;
+    if (stdio.viaDeprecatedAlias && !this.options.autoStart) {
+      ctx.logger.warn(
+        '[MCP] Starting the stdio transport via OS_MCP_SERVER_ENABLED=true is DEPRECATED — that var now only gates the default-on HTTP surface. Use OS_MCP_STDIO_ENABLED=true (or the plugin `autoStart` option) for the long-lived stdio transport.',
+      );
+    }
+
+    // ── Principal-bound record reader for the stdio transport (ADR-0101) ──
+    // The long-lived stdio server reads ROW data only under an env-supplied
+    // API-key identity, resolved through the same @objectstack/core chain as the
+    // HTTP/REST surfaces (RLS/FLS/tenant apply). FAIL-CLOSED: stdio auto-start
+    // without a resolvable key REFUSES to start — no unscoped fallback, and no
+    // `system`/identity-skipping bypass. Full authority = an admin/service key.
+    let getRecord:
+      | ((objectName: string, recordId: string) => Promise<Record<string, unknown> | null>)
+      | undefined;
+    if (shouldStart) {
+      const apiKey = readEnvWithDeprecation('OS_MCP_STDIO_API_KEY', [], { silent: true });
+      let ql: { find: (object: string, opts: unknown) => Promise<unknown> } | undefined;
+      try {
+        ql = ctx.getService('objectql');
+      } catch {
+        ql = undefined;
+      }
+      if (!apiKey) {
+        throw new Error(
+          '[MCP] The stdio transport is enabled (OS_MCP_STDIO_ENABLED / autoStart) but OS_MCP_STDIO_API_KEY is not set. ' +
+            'stdio must run under a real identity — mint an API key (Setup → Connect an Agent, or POST /api/v1/keys) and set ' +
+            'OS_MCP_STDIO_API_KEY=osk_.... Refusing to start an unscoped stdio server (ADR-0101).',
+        );
+      }
+      if (!ql || typeof ql.find !== 'function') {
+        throw new Error(
+          '[MCP] The stdio transport requires the objectql data service to resolve its principal, but it is not available. ' +
+            'Refusing to start (ADR-0101).',
+        );
+      }
+      // Validate the key up-front (fail-closed) before attaching the transport.
+      const initial = await resolveStdioExecutionContext(ql, apiKey);
+      if (!initial) {
+        throw new Error(
+          '[MCP] OS_MCP_STDIO_API_KEY did not resolve to a valid identity (unknown / revoked / expired / owner-less). ' +
+            'Refusing to start stdio (ADR-0101).',
+        );
+      }
+      const scopedQl = ql;
+      // Re-resolve per call so a revoked/expired key stops working on the next read.
+      getRecord = async (objectName, recordId) => {
+        const ec = await resolveStdioExecutionContext(scopedQl, apiKey);
+        if (!ec) throw new Error('MCP stdio identity is no longer valid (key revoked or expired)');
+        const res = (await scopedQl.find(objectName, {
+          where: { id: recordId },
+          limit: 1,
+          context: ec,
+        })) as unknown;
+        const rows = res && (res as { value?: unknown }).value ? (res as { value: unknown }).value : res;
+        const row = Array.isArray(rows) ? rows[0] : rows;
+        return (row ?? null) as Record<string, unknown> | null;
+      };
+      ctx.logger.info(
+        `[MCP] stdio transport principal-bound to OS_MCP_STDIO_API_KEY identity ${initial.userId} (RLS/FLS/tenant applied)`,
+      );
     }
 
     if (metadataService) {
-      this.runtime.bridgeResources(metadataService, dataEngine);
+      this.runtime.bridgeResources(metadataService, getRecord);
       this.runtime.bridgePrompts(metadataService);
     }
 
-    // ── Auto-start if configured ──
-    // Deliberately stricter than the HTTP-surface default (`isMcpServerEnabled`,
-    // default-on): start() attaches a long-lived transport — for stdio that
-    // means claiming the process's stdin/stdout — so it stays opt-in via
-    // explicit `true` or the `autoStart` option. The HTTP surface does not
-    // depend on this: the runtime dispatcher serves `/api/v1/mcp` per-request.
-    const shouldStart = this.options.autoStart || readEnvWithDeprecation('OS_MCP_SERVER_ENABLED', 'MCP_SERVER_ENABLED', { silent: true }) === 'true';
     if (shouldStart) {
       await this.runtime.start();
       ctx.logger.info('[MCP] Server started automatically');
     } else {
       ctx.logger.info(
-        '[MCP] Transport not auto-started (HTTP is served per-request at /api/v1/mcp regardless). Set OS_MCP_SERVER_ENABLED=true or autoStart for a long-lived (stdio) transport.',
+        '[MCP] Transport not auto-started (HTTP is served per-request at /api/v1/mcp regardless). Set OS_MCP_STDIO_ENABLED=true or autoStart for a long-lived (stdio) transport.',
       );
     }
 

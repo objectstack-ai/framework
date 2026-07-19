@@ -21,6 +21,24 @@ curl -c cookies.txt -X POST http://localhost:3000/api/v1/auth/sign-in/email \
 curl -b cookies.txt "http://localhost:3000/api/v1/data/<your_object>"
 ```
 
+## Your app is an MCP server
+
+Every ObjectStack app is itself a
+[Model Context Protocol](https://modelcontextprotocol.io) server — **on by
+default**, no plugin to install. `pnpm dev` prints the endpoint and a
+ready-to-paste connect command on boot; point a coding agent (Claude Code,
+Cursor, any MCP client) at it and it can read your schema, query data, and run
+your exposed actions — all under the caller's own permissions and RLS:
+
+```bash
+claude mcp add --transport http my-app http://localhost:3000/api/v1/mcp
+```
+
+Set `OS_MCP_SERVER_ENABLED=false` to turn it off. This is the *serve* side — the
+reverse of the `mcp` connector below (which lets your app *call* other MCP
+servers). See [Connect an MCP Client](https://docs.objectstack.ai/docs/ai/connect-mcp)
+for OAuth, API keys, and which objects/actions become tools.
+
 ## Layout
 
 - `objectstack.config.ts` — environment manifest (objects, API, plugins)

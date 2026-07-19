@@ -207,7 +207,8 @@
     "check:liveness": "tsx scripts/liveness/check-liveness.mts",
     "gen:react-blocks": "tsx scripts/build-react-blocks-contract.ts",
     "check:react-blocks": "tsx scripts/build-react-blocks-contract.ts --check",
-    "check:react-conformance": "tsx scripts/check-react-blocks-conformance.ts"
+    "check:react-conformance": "tsx scripts/check-react-blocks-conformance.ts",
+    "check:skill-examples": "tsx scripts/check-skill-examples.ts"
   },
   "keywords": [
     "objectstack",
