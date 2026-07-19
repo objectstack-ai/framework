@@ -92,6 +92,10 @@ describe('identity write guard — insert/delete (ADR-0092 D2)', () => {
     }
   });
 
+  // NOTE: `system`/`append-only` buckets are guarded by plugin-security's
+  // engine-owned write guard (ADR-0103), NOT by THIS identity guard — which
+  // stays scoped to `better-auth`. So `sys_automation_run` is correctly ignored
+  // here even though it is guarded elsewhere.
   it('ignores objects that are not managed by better-auth (incl. other managedBy buckets)', async () => {
     for (const object of ['crm_lead', 'sys_automation_run', 'not_registered']) {
       await expect(

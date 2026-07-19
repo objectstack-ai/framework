@@ -152,4 +152,10 @@ export const SysNotification = ObjectSchema.create({
     { fields: ['dedup_key'], unique: true },
     { fields: ['source_object', 'source_id'] },
   ],
+
+  enable: {
+    // [ADR-0103] Engine-owned: emitted only by NotificationService (single
+    // ingress, SYSTEM_CTX), never the generic data API. Reads stay open.
+    apiMethods: ['get', 'list'],
+  },
 });

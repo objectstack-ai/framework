@@ -34,6 +34,11 @@ export const SysApprovalDelegation = ObjectSchema.create({
   icon: 'user-clock',
   isSystem: true,
   managedBy: 'system',
+  // [ADR-0103] Admin/user-writable DATA on a platform-defined schema: a user
+  // authors their own out-of-office delegation. Affordance only (matches the
+  // full-CRUD apiMethods below) — RLS/permission sets are the authz; opening it
+  // keeps the system write guard from rejecting the self-service write.
+  userActions: { create: true, edit: true, delete: true },
   description:
     'Self-service out-of-office rule: route this user\'s approver slots to a delegate within a time window (#1322 M1).',
   titleFormat: '{delegator_id} → {delegate_id}',

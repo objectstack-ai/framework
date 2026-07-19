@@ -106,4 +106,11 @@ export const SysImportJob = ObjectSchema.create({
     { fields: ['status', 'created_at'] },
     { fields: ['created_by', 'created_at'] },
   ],
+
+  enable: {
+    // [ADR-0103] Engine-owned: the import worker owns the job-row lifecycle and
+    // writes it system-elevated from the REST import route (never hand-edited
+    // through the generic data API). Reads stay open for the Setup import grid.
+    apiMethods: ['get', 'list'],
+  },
 });

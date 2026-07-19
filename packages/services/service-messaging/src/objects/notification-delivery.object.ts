@@ -93,4 +93,10 @@ export const NotificationDelivery = ObjectSchema.create({
         // P3b-2: the digest collapse pass — claim due batched rows by group.
         { fields: ['digest_key', 'status', 'next_attempt_at'] },
     ],
+
+    enable: {
+        // [ADR-0103] Engine-owned delivery outbox: written only by the messaging
+        // service (context-less raw-engine writes), never via the data API.
+        apiMethods: ['get', 'list'],
+    },
 });

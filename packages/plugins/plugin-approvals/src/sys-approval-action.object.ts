@@ -131,4 +131,10 @@ export const SysApprovalAction = ObjectSchema.create({
     { fields: ['request_id', 'created_at'] },
     { fields: ['request_id', 'step_index', 'action'] },
   ],
+
+  enable: {
+    // [ADR-0103] Engine-owned append-only decision log: appended by the approval
+    // engine (SYSTEM_CTX). Reads stay open.
+    apiMethods: ['get', 'list'],
+  },
 });

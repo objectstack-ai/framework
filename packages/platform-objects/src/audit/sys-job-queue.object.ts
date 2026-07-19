@@ -148,4 +148,10 @@ export const SysJobQueue = ObjectSchema.create({
     { fields: ['idempotency_key', 'queue'] },
     { fields: ['status'] },
   ],
+
+  enable: {
+    // [ADR-0103] Engine-owned: written only by the job queue runner (SYSTEM_CTX),
+    // never the generic data API. Reads stay open for the Setup grid.
+    apiMethods: ['get', 'list'],
+  },
 });

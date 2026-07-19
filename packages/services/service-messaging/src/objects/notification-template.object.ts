@@ -23,6 +23,10 @@ export const NotificationTemplate = ObjectSchema.create({
     icon: 'file-text',
     isSystem: true,
     managedBy: 'system',
+    // [ADR-0103] Admin-writable DATA on a platform-defined schema: authored from
+    // the Setup "Notification Templates" grid. Affordance only — opening it keeps
+    // the system write guard from rejecting the admin authoring write.
+    userActions: { create: true, edit: true, delete: true },
     description: 'Per (topic × channel × locale) render template for notifications.',
     titleFormat: '{topic} · {channel} · {locale}',
     highlightFields: ['topic', 'channel', 'locale', 'is_active'],

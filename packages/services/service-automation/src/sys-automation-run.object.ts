@@ -196,4 +196,10 @@ export const SysAutomationRun = ObjectSchema.create({
     // Look up a suspended run by the pausing node's correlation key.
     { fields: ['correlation'] },
   ],
+
+  enable: {
+    // [ADR-0103] Engine-owned: written only by the automation runner / suspended
+    // run store (SYSTEM_CTX), never via the generic data API. Reads stay open.
+    apiMethods: ['get', 'list'],
+  },
 });

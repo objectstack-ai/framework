@@ -25,6 +25,11 @@ export const SysPositionPermissionSet = ObjectSchema.create({
   icon: 'shield-plus',
   isSystem: true,
   managedBy: 'system',
+  // [ADR-0103] Admin/user-writable DATA on a platform-defined schema:
+  // `suggested-audience-bindings.ts` inserts a binding with `context: callerCtx`
+  // (deliberately not isSystem). Affordance only — the DelegatedAdminGate is the
+  // authz.
+  userActions: { create: true, edit: true, delete: true },
   description: 'Binds a permission set to a position.',
   titleFormat: '{position_id} → {permission_set_id}',
   highlightFields: ['position_id', 'permission_set_id'],

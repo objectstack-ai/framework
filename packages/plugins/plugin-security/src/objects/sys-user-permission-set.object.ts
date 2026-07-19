@@ -24,6 +24,10 @@ export const SysUserPermissionSet = ObjectSchema.create({
   icon: 'user-check',
   isSystem: true,
   managedBy: 'system',
+  // [ADR-0103] Admin/user-writable DATA on a platform-defined schema: delegated
+  // `manageBindings` direct grants write this under the caller's context.
+  // Affordance only — the DelegatedAdminGate is the authz.
+  userActions: { create: true, edit: true, delete: true },
   description: 'Direct assignment of a permission set to a user (optionally scoped to an organization).',
   titleFormat: '{user_id} → {permission_set_id}',
   highlightFields: ['user_id', 'permission_set_id', 'organization_id'],

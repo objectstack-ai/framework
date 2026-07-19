@@ -92,4 +92,10 @@ export const SysJob = ObjectSchema.create({
     { fields: ['name'], unique: true },
     { fields: ['active'] },
   ],
+
+  enable: {
+    // [ADR-0103] Engine-owned: written only by the job runner (SYSTEM_CTX),
+    // never the generic data API. Reads stay open for the Setup grid.
+    apiMethods: ['get', 'list'],
+  },
 });

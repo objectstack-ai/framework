@@ -235,23 +235,33 @@ function isWriteOptedIn(v: boolean | { enabled?: boolean } | undefined | null): 
 }
 
 /**
+ * Buckets whose user-context generic writes are guarded fail-closed at the
+ * engine: `better-auth` by plugin-auth's identity write guard (ADR-0092 D2),
+ * `system` / `append-only` by plugin-security's engine-owned write guard
+ * (ADR-0103). `config` / `platform` have no such guard — their permission-set
+ * result stands.
+ */
+const GUARDED_WRITE_BUCKETS: ReadonlySet<string> = new Set(['better-auth', 'system', 'append-only']);
+
+/**
  * Re-clamp a `/me/permissions` `objects` map by the SECOND server-side
- * enforcement layer that permission sets don't model: the identity write guard
- * (ADR-0092 D2). The guard fail-closed rejects USER-CONTEXT insert/update/delete
- * on every `managedBy: 'better-auth'` object except where the object opted a
- * write affordance in (`userActions.{create,edit,delete}` — e.g. sys_user opens
- * `edit` for its profile fields; the field-level `readonly` flags then narrow it
- * to `{name, image}`).
+ * enforcement layer that permission sets don't model: the engine write guards.
+ * They fail-closed reject USER-CONTEXT insert/update/delete on every managed
+ * object whose resolved affordances forbid the verb — `better-auth`
+ * (ADR-0092 D2) and `system`/`append-only` (ADR-0103) — except where the object
+ * opted the write affordance in via `userActions.{create,edit,delete}` (e.g.
+ * sys_user opens `edit` for its profile fields; the RBAC link tables / prefs /
+ * messaging config open their CRUD).
  *
  * Without this clamp, {@link foldWildcardSuperUser} would report `allowEdit:true`
- * for a platform admin on identity tables the guard actually blocks (sys_member,
- * sys_account, …) — a false-POSITIVE that mirrors, inverted, the false-negative
- * the fold fixes. The real effective answer for a user-context caller is
- * `permission-set grant ∩ guard policy`, and the guard policy for a managed
- * object is exactly its resolved CRUD affordance. Only `better-auth` objects are
- * clamped — the guard covers only them; `system`/`config`/`append-only` objects
- * have no such guard, so their permission-set result stands (an admin CAN write
- * them via the data API, and the hint must not under-report that).
+ * for a platform admin on tables the guard actually blocks (sys_member,
+ * sys_automation_run, …) — a false-POSITIVE that mirrors, inverted, the
+ * false-negative the fold fixes. The real effective answer for a user-context
+ * caller is `permission-set grant ∩ guard policy`, and the guard policy for a
+ * guarded object is exactly its resolved CRUD affordance. `config`/`platform`
+ * objects are NOT clamped — no guard covers them, so their permission-set result
+ * stands (an admin CAN write them via the data API, and the hint must not
+ * under-report that).
  */
 export function clampManagedObjectWrites(
     objects: Record<string, any>,
@@ -260,7 +270,7 @@ export function clampManagedObjectWrites(
     for (const [obj, acc] of Object.entries(objects) as Array<[string, any]>) {
         if (obj === '*' || !acc) continue;
         const schema = schemaOf(obj);
-        if (schema?.managedBy !== 'better-auth') continue;
+        if (!schema?.managedBy || !GUARDED_WRITE_BUCKETS.has(schema.managedBy)) continue;
         const ua = schema.userActions ?? {};
         if (!isWriteOptedIn(ua.edit)) acc.allowEdit = false;
         if (ua.create !== true) acc.allowCreate = false;
