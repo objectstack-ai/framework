@@ -29,7 +29,8 @@ GET /.well-known/objectstack HTTP/1.1
 Host: api.acme.com
 ```
 
-`/.well-known/objectstack` redirects to the canonical discovery route:
+`/.well-known/objectstack` and the versioned `/api/v1/discovery` route both return the
+discovery document directly — there is no HTTP redirect between them:
 ```http
 GET /api/v1/discovery HTTP/1.1
 ```
@@ -49,16 +50,12 @@ GET /api/v1/discovery HTTP/1.1
     "storage": "/api/v1/storage",
     "graphql": "/api/v1/graphql"
   },
-  "features": {
-    "graphql": true,
-    "websockets": false,
-    "search": true,
-    "files": true,
-    "analytics": true,
-    "ai": false,
-    "workflow": true,
-    "notifications": true,
-    "i18n": true
+  "services": {
+    "data": { "enabled": true, "status": "available", "route": "/api/v1/data", "provider": "objectql" },
+    "metadata": { "enabled": true, "status": "available", "route": "/api/v1/meta", "provider": "objectql" },
+    "auth": { "enabled": true, "status": "available", "route": "/api/v1/auth", "provider": "plugin-auth" },
+    "workflow": { "enabled": false, "status": "unavailable", "message": "Install plugin-workflow to enable" },
+    "ai": { "enabled": false, "status": "unavailable", "message": "Install plugin-ai to enable" }
   },
   "locale": {
     "default": "en-US",
@@ -71,7 +68,7 @@ GET /api/v1/discovery HTTP/1.1
 **Why discovery matters:**
 - **Environment agnostic:** Works across dev, staging, production without hardcoding URLs
 - **Version tolerance:** API routes can change without breaking clients
-- **Feature detection:** Clients enable/disable features based on server capabilities
+- **Feature detection:** Clients enable/disable features by inspecting each entry's `enabled` / `status` in the `services` map
 - **Automatic configuration:** SDKs auto-configure from discovery response
 
 ## Standard Data API
@@ -147,32 +144,29 @@ Authorization: Bearer <token>
 
 **Success Response:**
 
-List responses are wrapped in the standard `{ success, data }` envelope. For
-queries, `data` is a `FindDataResponse` containing `object`, `records`, and the
-optional `total` / `hasMore` pagination hints.
+A list query returns a `FindDataResponse` directly — there is no outer envelope.
+The response carries the `object` name, the `records` array, and the optional
+`total` / `hasMore` pagination hints.
 
 ```json
 {
-  "success": true,
-  "data": {
-    "object": "task",
-    "records": [
-      {
-        "id": "task_456",
-        "title": "Implement login page",
-        "status": "in_progress",
-        "created_at": "2024-01-15T10:30:00Z"
-      },
-      {
-        "id": "task_789",
-        "title": "Fix navigation bug",
-        "status": "todo",
-        "created_at": "2024-01-14T16:20:00Z"
-      }
-    ],
-    "total": 47,
-    "hasMore": true
-  }
+  "object": "task",
+  "records": [
+    {
+      "id": "task_456",
+      "title": "Implement login page",
+      "status": "in_progress",
+      "created_at": "2024-01-15T10:30:00Z"
+    },
+    {
+      "id": "task_789",
+      "title": "Fix navigation bug",
+      "status": "todo",
+      "created_at": "2024-01-14T16:20:00Z"
+    }
+  ],
+  "total": 47,
+  "hasMore": true
 }
 ```
 
@@ -286,13 +280,10 @@ record count and a `hasMore` flag:
 
 ```json
 {
-  "success": true,
-  "data": {
-    "object": "account",
-    "records": [],
-    "total": 247,
-    "hasMore": true
-  }
+  "object": "account",
+  "records": [],
+  "total": 247,
+  "hasMore": true
 }
 ```
 
@@ -311,18 +302,15 @@ GET /api/data/account?select=id,name,industry,revenue
 **Response:**
 ```json
 {
-  "success": true,
-  "data": {
-    "object": "account",
-    "records": [
-      {
-        "id": "acc_123",
-        "name": "Acme Corp",
-        "industry": "Technology",
-        "revenue": 5000000
-      }
-    ]
-  }
+  "object": "account",
+  "records": [
+    {
+      "id": "acc_123",
+      "name": "Acme Corp",
+      "industry": "Technology",
+      "revenue": 5000000
+    }
+  ]
 }
 ```
 
@@ -345,28 +333,25 @@ GET /api/data/task?expand=assignee,project
 **Response:**
 ```json
 {
-  "success": true,
-  "data": {
-    "object": "task",
-    "records": [
-      {
-        "id": "task_123",
-        "title": "Implement API",
-        "assignee_id": "user_456",
-        "project_id": "proj_789",
-        "assignee": {
-          "id": "user_456",
-          "name": "John Doe",
-          "email": "john@acme.com"
-        },
-        "project": {
-          "id": "proj_789",
-          "name": "CRM Rebuild",
-          "status": "active"
-        }
+  "object": "task",
+  "records": [
+    {
+      "id": "task_123",
+      "title": "Implement API",
+      "assignee_id": "user_456",
+      "project_id": "proj_789",
+      "assignee": {
+        "id": "user_456",
+        "name": "John Doe",
+        "email": "john@acme.com"
+      },
+      "project": {
+        "id": "proj_789",
+        "name": "CRM Rebuild",
+        "status": "active"
       }
-    ]
-  }
+    }
+  ]
 }
 ```
 
@@ -394,10 +379,15 @@ Authorization: Bearer <token>
 ```
 
 **Success Response (HTTP 200):**
+
+A single-record read returns a `GetDataResponse`: the `object` name, the record
+`id`, and the full record under `record`.
+
 ```json
 {
-  "success": true,
-  "data": {
+  "object": "account",
+  "id": "acc_123",
+  "record": {
     "id": "acc_123",
     "name": "Acme Corporation",
     "industry": "Technology",
@@ -446,10 +436,15 @@ Content-Type: application/json
 ```
 
 **Success Response (HTTP 201):**
+
+Create returns a `CreateDataResponse`: the `object` name, the new record `id`, and
+the created record (including server-generated fields) under `record`.
+
 ```json
 {
-  "success": true,
-  "data": {
+  "object": "account",
+  "id": "acc_124",
+  "record": {
     "id": "acc_124",
     "name": "TechStart Inc",
     "industry": "SaaS",
@@ -505,10 +500,15 @@ Content-Type: application/json
 ```
 
 **Success Response (HTTP 200):**
+
+Update returns an `UpdateDataResponse`: the `object` name, the record `id`, and the
+updated record under `record`.
+
 ```json
 {
-  "success": true,
-  "data": {
+  "object": "account",
+  "id": "acc_123",
+  "record": {
     "id": "acc_123",
     "name": "Acme Corporation",
     "industry": "Technology",
@@ -524,20 +524,14 @@ Content-Type: application/json
 **Note:** Only fields included in the request body are updated. Other fields remain unchanged.
 
 **Read-only fields:**
-Attempting to update read-only fields (e.g., `id`, `created_at`) returns HTTP 400:
+Caller-supplied writes to statically read-only fields (e.g., `id`, `created_at`) are
+**silently stripped** from a non-system update rather than rejected (#2948): the
+request succeeds with HTTP 200 and every other field is applied, but the read-only
+field is left unchanged.
 
-```json
-{
-  "error": "Cannot update read-only fields",
-  "code": "VALIDATION_FAILED",
-  "fields": [
-    {
-      "field": "created_at",
-      "message": "Field is read-only"
-    }
-  ]
-}
-```
+> **Note:** This differs from field-level security. A write to a field the caller
+> lacks edit permission on is *rejected* with `403 PermissionDeniedError`, not
+> stripped.
 
 ### Delete Record
 
@@ -555,30 +549,24 @@ Authorization: Bearer <token>
 ```
 
 **Success Response (HTTP 200):**
-```json
-{
-  "success": true,
-  "data": {
-    "id": "acc_123",
-    "deleted": true
-  }
-}
-```
 
-**Soft Delete (if enabled):**
-If object has `enable.trash` enabled, record is marked deleted but not removed:
+Delete returns a `DeleteDataResponse`: the `object` name, the record `id`, and a
+`success` flag.
 
 ```json
 {
-  "success": true,
-  "data": {
-    "id": "acc_123",
-    "deleted": true,
-    "deleted_at": "2024-01-16T12:00:00Z",
-    "deleted_by": "user_456"
-  }
+  "object": "account",
+  "id": "acc_123",
+  "success": true
 }
 ```
+
+<Callout type="warn">
+`enable.trash` exists as an object flag, but there is currently **no soft-delete /
+recycle-bin runtime** (ADR-0049): `DELETE` performs a hard delete and returns the
+`{ object, id, success }` shape above. Records are removed permanently — there are no
+`deleted_at` / `deleted_by` fields and no restore semantics.
+</Callout>
 
 **Constraint Violations:**
 Database constraint failures are surfaced as structured errors. For example, a
@@ -688,10 +676,14 @@ lists items of that type. Types are singular (`object`, `view`, `app`, …), so
 objects are listed at `/api/v1/meta/object`.
 
 **Response:**
+
+A type listing returns `{ type, items }` — the requested metadata `type` plus the
+`items` array of matching entries.
+
 ```json
 {
-  "success": true,
-  "data": [
+  "type": "object",
+  "items": [
     {
       "name": "account",
       "label": "Account",
@@ -720,10 +712,15 @@ Authorization: Bearer <token>
 ```
 
 **Response:**
+
+A single-item read returns `{ type, name, item }` — the metadata `type`, the item
+`name`, and the full schema under `item`.
+
 ```json
 {
-  "success": true,
-  "data": {
+  "type": "object",
+  "name": "account",
+  "item": {
     "name": "account",
     "label": "Account",
     "plural_label": "Accounts",
@@ -888,8 +885,9 @@ GET /api/data/account?select=id,name,status
 ### Use Expand for Relations
 ❌ **Bad:** N+1 queries
 ```javascript
-const tasks = await fetch('/api/data/task');
-for (const task of tasks.data) {
+const res = await fetch('/api/data/task');
+const { records } = await res.json();
+for (const task of records) {
   task.assignee = await fetch(`/api/data/user/${task.assignee_id}`);
 }
 ```

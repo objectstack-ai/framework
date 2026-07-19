@@ -29,7 +29,7 @@ In Server mode, ObjectStack runs inside Vercel Serverless Functions. API request
 │                                                               │
 │  Serverless Functions                                         │
 │  ┌───────────────────────────────────┐                        │
-│  │  /api/[...objectstack]            │                        │
+│  │  /api/index.ts                    │                        │
 │  │    → ObjectKernel                 │                        │
 │  │    → ObjectQL                     │                        │
 │  │    → PostgreSQL / MongoDB / ...   │──── External DB        │
@@ -43,7 +43,7 @@ In Server mode, ObjectStack runs inside Vercel Serverless Functions. API request
 This is a valid self-contained pattern when you want to ship a Vite SPA *and* its API from a single Vercel project: the SPA is served as static assets, and a Hono-based serverless function handles `/api/*` requests.
 
 <Callout type="info">
-The published ObjectStack Studio/console (`@object-ui/console`) does **not** use this topology. It deploys as a pure static SPA with no `api/` function — it is meant to be embedded in, or pointed at, a separate ObjectStack server via `VITE_SERVER_URL`. For that separate server, prefer the CLI (`objectstack serve`) over a hand-rolled Hono function.
+The published ObjectStack Studio/console (`@objectstack/console`) does **not** use this topology. It deploys as a pure static SPA with no `api/` function — it is meant to be embedded in, or pointed at, a separate ObjectStack server via `VITE_SERVER_URL`. For that separate server, prefer the CLI (`objectstack serve`) over a hand-rolled Hono function.
 </Callout>
 
 **1. Create the kernel singleton** (`api/_kernel.ts` — prefixed with `_` to prevent Vercel from creating a route):

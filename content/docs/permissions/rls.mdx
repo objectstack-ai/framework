@@ -74,27 +74,41 @@ everything. Internally `find` / `findOne` / `count` / `aggregate` all map to
 
 ## The expression grammar
 
-This is the part that bites. RLS expressions are **not** general CEL — only
-four forms compile:
+RLS predicates are **canonical CEL**, lowered into a query filter by the shared
+pushdown compiler — the same lowering
+[sharing rules](/docs/permissions/sharing-rules) use. A broad subset compiles;
+anything the compiler can't lower **fails closed** (the policy matches zero rows)
+rather than raising at query time.
+
+These all compile:
 
 | Form | Example |
 |:---|:---|
-| Column equals a context property | `created_by == current_user.id` |
+| Column equals a context value | `created_by == current_user.id` |
 | Column equals a literal | `status == 'active'` |
-| Column is in a context array | `owner_id IN (current_user.org_user_ids)` |
-| Always true | `1 = 1` |
+| Comparison (`!=`, `>`, `>=`, `<`, `<=`) | `amount > 1000` |
+| Set membership | `owner_id in current_user.org_user_ids` |
+| Null check | `deleted_at == null` |
+| Prefix / suffix / substring | `code.startsWith('EU-')` |
+| Boolean combination (`&&`, `\|\|`, `!`) | `owner_id == current_user.id && status == 'open'` |
+| Always true | `1 == 1` |
 
-Everything else is rejected, including `AND` / `OR` / `NOT`, comparison
-operators other than equality (`>`, `<`, `!=`), `IS NULL`, `NOT IN`,
-`LIKE` / `ILIKE`, regex, `ANY` / `ALL`, subqueries, and time functions
-(`NOW()`, `CURRENT_DATE`).
+What **fails closed** (never silently dropped, per the security contract): a
+subquery, a cross-object / relation hop (`account.region`), arithmetic
+(`+ - * /`), and any function call — including time functions like `NOW()` /
+`CURRENT_DATE`. Express anything subquery-shaped as a pre-resolved
+`current_user.*` array instead (see [Context variables](#context-variables)).
 
-<Callout type="warn">
-**There is no `AND` / `OR` inside a policy — use multiple policies instead.**
-Policies on the same object compose with **OR** (see below), which covers
-"owner *or* team member". For "owner *and* active", model the second condition
-in the data (a dedicated column or a narrower context array) rather than
-reaching for a compound expression the compiler will reject.
+The legacy SQL-ish spellings (`=` for equality, `IN (...)`) still compile through
+a transitional bridge that rewrites them to `==` / `in`, but canonical CEL is the
+authoring form — the bridge logs a deprecation warning.
+
+<Callout type="info">
+**Two ways to combine conditions.** Within one policy, use CEL `&&` / `||` —
+`owner_id == current_user.id && status == 'open'` compiles. Across policies,
+separate policies on the same object also compose with **OR** (see below), so
+"owner *or* team member" can be one `||` predicate or two policies. Reach for
+multiple policies when the alternatives apply to different positions.
 </Callout>
 
 ## Context variables
@@ -167,7 +181,7 @@ Don't guess — ask the runtime:
 
 ```bash
 curl -b cookies.txt \
-  "https://your-app.example.com/api/v1/security/explain?object=showcase_task&operation=select&userId=usr_123"
+  "https://your-app.example.com/api/v1/security/explain?object=showcase_task&operation=read&userId=usr_123"
 ```
 
 The response walks the layers (`tenant_isolation`, `object_crud`, `fls`,

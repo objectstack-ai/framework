@@ -464,7 +464,7 @@ customizations:
 ObjectUI definitions are **Zod schemas**, providing both compile-time and runtime safety:
 
 ```typescript
-import { FormViewSchema } from '@objectstack/spec';
+import { FormViewSchema } from '@objectstack/spec/ui';
 import { z } from 'zod';
 
 // Type inference
@@ -472,34 +472,26 @@ type FormView = z.infer<typeof FormViewSchema>;
 
 // Runtime validation
 const config = FormViewSchema.parse({
-  name: 'customer_form',
-  object: 'customer',
-  layout: {
-    sections: [
-      { label: 'Info', fields: ['name', 'email'] }
-    ]
-  }
+  type: 'simple',
+  sections: [
+    { label: 'Info', columns: 2, fields: ['name', 'email'] }
+  ]
 });
 
 // ✅ TypeScript error at compile time
 const badConfig: FormView = {
-  name: 123,  // ❌ Type 'number' is not assignable to type 'string'
+  columns: 'two',  // ❌ Type 'string' is not assignable to type 'number'
 };
 
 // ✅ Runtime error with clear message
 FormViewSchema.parse({
-  layout: {
-    sections: [
-      { columns: 'two' }  // ❌ Expected number, received string
-    ]
-  }
+  columns: 'two'  // ❌ Expected number, received string
 });
 // ZodError: [
 //   {
 //     "code": "invalid_type",
 //     "expected": "number",
-//     "received": "string",
-//     "path": ["layout", "sections", 0, "columns"]
+//     "path": ["columns"]
 //   }
 // ]
 ```

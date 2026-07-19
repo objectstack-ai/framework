@@ -30,7 +30,7 @@ export async function beforeUpdate(ctx: any) {
   const ok = await ctx.services?.sharing?.canEdit('contract', ctx.input.id, {
     userId: ctx.session?.userId,
     tenantId: ctx.session?.tenantId,
-    roles: ctx.session?.roles,
+    positions: ctx.session?.positions,
   });
 
   if (!ok) {

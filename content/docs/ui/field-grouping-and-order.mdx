@@ -53,7 +53,7 @@ There is **no `field.order`**. The order you declare fields in the object **is**
 
 ## The trap: a table's "group" is a *different thing*
 
-A grid view also has `grouping` / `groupByField` — but that groups **records (rows)** by a field's **value** (all `stage = qualified` rows together), not **fields (columns)** into sections. The word "group" means two unrelated axes:
+A grid view also has `grouping` (and a board/kanban view, `groupByField`) — but that groups **records (rows)** by a field's **value** (all `stage = qualified` rows together), not **fields (columns)** into sections. The word "group" means two unrelated axes:
 
 | Surface | "group" means | Axis |
 |---|---|---|
@@ -68,8 +68,8 @@ Keeping grouping off the field (beyond an optional semantic hint) is what lets *
 
 ## Runnable example
 
-- [`examples/app-showcase/src/objects/contact.object.ts`](https://github.com/objectstack-ai/framework/blob/main/examples/app-showcase/src/objects/contact.object.ts) — fields tagged with `group`.
-- [`examples/app-showcase/src/views/contact.view.ts`](https://github.com/objectstack-ai/framework/blob/main/examples/app-showcase/src/views/contact.view.ts) — sections that materialise those groups.
+- [`examples/app-showcase/src/data/objects/contact.object.ts`](https://github.com/objectstack-ai/framework/blob/main/examples/app-showcase/src/data/objects/contact.object.ts) — fields tagged with `group`.
+- [`examples/app-showcase/src/ui/views/contact.view.ts`](https://github.com/objectstack-ai/framework/blob/main/examples/app-showcase/src/ui/views/contact.view.ts) — sections that materialise those groups.
 
 ## Anti-patterns
 

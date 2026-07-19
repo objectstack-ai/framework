@@ -61,7 +61,7 @@ export interface IMetadataService {
   getOverlay?(type: string, name: string, scope?: 'platform' | 'user'): Promise<MetadataOverlay | undefined>;
   saveOverlay?(overlay: MetadataOverlay): Promise<void>;
   removeOverlay?(type: string, name: string, scope?: 'platform' | 'user'): Promise<void>;
-  getEffective?(type: string, name: string, context?: { userId?: string; tenantId?: string; roles?: string[]; permissions?: string[] }): Promise<unknown | undefined>;
+  getEffective?(type: string, name: string, context?: { userId?: string; tenantId?: string; positions?: string[]; permissions?: string[] }): Promise<unknown | undefined>;
 
   // Watch / subscribe (optional)
   watch?(type: string, callback: MetadataWatchCallback): MetadataWatchHandle;

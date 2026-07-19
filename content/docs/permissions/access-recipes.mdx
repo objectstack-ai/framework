@@ -62,7 +62,7 @@ Keeping capability, assignment and requirement decoupled means resources stay st
 
 ## Runnable example
 
-- Built-in permission sets: [`default-permission-sets.ts`](https://github.com/objectstack-ai/framework/blob/main/packages/plugins/plugin-security/src/objects/default-permission-sets.ts) (`member_default` shows owner-scoped RLS + tenant isolation).
+- Built-in permission sets: [`default-permission-sets.ts`](https://github.com/objectstack-ai/framework/blob/main/packages/plugins/plugin-security/src/objects/default-permission-sets.ts) (`member_default` shows owner-scoped RLS; tenant isolation is now the Layer 0 tenant wall in `tenant-layer.ts`, ADR-0095 D1).
 - Security objects: [`packages/plugins/plugin-security/src/objects`](https://github.com/objectstack-ai/framework/tree/main/packages/plugins/plugin-security/src/objects).
 
 ## Anti-patterns

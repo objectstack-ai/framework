@@ -26,8 +26,8 @@ services.sharing.listShares(object: string, recordId: string, context: SharingEx
 
 ## Typical Errors
 
-- `PERMISSION_DENIED`
-- `SHARE_NOT_FOUND` (implementation-defined)
+- `FORBIDDEN` (403) — a write denied by the `canEdit` gate. Thrown by the sharing engine middleware; `canEdit` itself returns `false` rather than throwing.
+- `VALIDATION_FAILED` — `grant`/`revoke` called without a required field (`object`, `recordId`, `recipientId`, or `shareId`). `revoke` is otherwise a no-op when the share id is not found.
 
 ## Example
 
@@ -35,7 +35,7 @@ services.sharing.listShares(object: string, recordId: string, context: SharingEx
 const allowed = await services.sharing.canEdit('contract', ctx.input.id, {
   userId: ctx.session?.userId,
   tenantId: ctx.session?.tenantId,
-  roles: ctx.session?.roles,
+  positions: ctx.session?.positions,
 });
 if (!allowed) throw new Error('PERMISSION_DENIED');
 ```

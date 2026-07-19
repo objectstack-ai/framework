@@ -49,7 +49,9 @@ Drivers can be selected in two ways:
 
 <Callout type="info">
 Turso / libSQL (`libsql://`, `*.turso.io`) is **not** supported by the
-open-source framework — no bundled driver dispatches `libsql://` URLs.
+open-source framework. The CLI recognizes these URLs (mapping them to a
+`turso` driver kind), but no bundled driver implements it — so they never
+actually connect to Turso.
 </Callout>
 
 ## Supported Drivers

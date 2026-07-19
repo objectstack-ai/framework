@@ -106,14 +106,14 @@ export function createHelloPlugin(): Plugin {
 
       // Hook into the record lifecycle via the data engine.
       // Data hooks receive a single HookContext. The input shape is
-      // `{ doc }` for inserts (`{ id, doc }` for updates) — mutate
-      // `hookCtx.input.doc` in before* hooks to change the operation.
+      // `{ data }` for inserts (`{ id, data }` for updates) — mutate
+      // `hookCtx.input.data` in before* hooks to change the operation.
       const engine = ctx.getService<any>('data');
       engine.registerHook('beforeInsert', async (hookCtx: any) => {
-        const doc = hookCtx.input.doc;
-        if (doc?.first_name) {
+        const data = hookCtx.input.data;
+        if (data?.first_name) {
           // Auto-generate a greeting field
-          doc.welcome_message = greetingService.greet(doc.first_name as string);
+          data.welcome_message = greetingService.greet(data.first_name as string);
         }
       }, { object: 'contact' }); // the engine only runs this hook for 'contact'
     }
@@ -196,9 +196,9 @@ describe('HelloPlugin', () => {
   it('should add welcome message on contact create', async () => {
     const { ctx, hooks } = createFakeContext();
     createHelloPlugin().init(ctx);
-    const hookCtx = { object: 'contact', input: { doc: { first_name: 'Bob' } as Record<string, unknown> } };
+    const hookCtx = { object: 'contact', input: { data: { first_name: 'Bob' } as Record<string, unknown> } };
     await hooks['beforeInsert'](hookCtx);
-    expect(hookCtx.input.doc.welcome_message).toBe('Hello, Bob! Welcome to ObjectStack.');
+    expect(hookCtx.input.data.welcome_message).toBe('Hello, Bob! Welcome to ObjectStack.');
   });
 
   it('should scope the hook to the contact object', () => {
@@ -251,15 +251,15 @@ The kernel loads plugins in dependency order, calling each plugin's `init(ctx)` 
 
 ### Permission Model
 
-Only request the minimum permissions your plugin needs:
+Declare the capabilities your plugin needs in its manifest's `permissions` block
+(the structured `PluginPermissionsSchema`, ADR-0025 §3.2). Request only the minimum:
 
-| Permission | Description |
+| Grant | Description |
 |:---|:---|
-| `object:read` | Read records from objects |
-| `object:write` | Create, update, delete records |
-| `object:admin` | Create/modify object schemas |
-| `system:read` | Read system configuration |
-| `system:admin` | Modify system configuration |
+| `services` | Platform services the plugin may resolve (e.g. `object`, `http`) |
+| `hooks` | Lifecycle hooks the plugin may register (e.g. `record.beforeInsert`) |
+| `network` | Network hosts the plugin may reach (e.g. `api.acme.com`) |
+| `fs` | Filesystem paths the plugin may access |
 
 ### Error Handling
 
@@ -393,7 +393,7 @@ export const manifest = defineStudioPlugin({
       key: 'automation',
       label: 'Automation',
       icon: 'workflow',
-      metadataTypes: ['flow', 'job'], // ADR-0020/0088: 'workflow' and 'trigger' are retired kinds
+      metadataTypes: ['flow', 'job'], // ADR-0088: 'trigger' is a retired kind ('flow' and 'job' are canonical)
       order: 30,
     }],
 
@@ -449,6 +449,7 @@ Metadata viewers declare which modes they support:
 | `design` | Visual drag-and-drop designer |
 | `code` | Raw schema/code editor |
 | `data` | Live data browser |
+| `history` | Version/change history view |
 
 ---
 

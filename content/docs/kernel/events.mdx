@@ -71,7 +71,7 @@ Every data hook is a single-argument handler `(ctx: HookContext) => void | Promi
 | :--- | :--- |
 | `ctx.object` | Target object name (immutable). |
 | `ctx.event` | Current lifecycle event, e.g. `'beforeInsert'` (immutable). |
-| `ctx.input` | **Mutable** input. Shapes: insert `{ doc }`, update `{ id, doc }`, delete `{ id }`. Modify this to change the operation. |
+| `ctx.input` | **Mutable** input. Shapes: insert `{ data }`, update `{ id, data }`, delete `{ id }`. Modify this to change the operation. |
 | `ctx.result` | Operation result, available in `after*` events (mutable). |
 | `ctx.previous` | Record state before the operation (update/delete). |
 | `ctx.session` | Auth/tenancy info (`userId`, `tenantId`, `roles`, …). |
@@ -82,15 +82,14 @@ Every data hook is a single-argument handler `(ctx: HookContext) => void | Promi
 ```typescript
 // Enrich a record before it is created
 engine.registerHook('beforeInsert', async (ctx) => {
-  if (ctx.object === 'order' && ctx.input.amount > 10000) {
-    ctx.logger?.warn?.('Large order detected!');
-    ctx.input.requires_approval = true;
+  if (ctx.object === 'order' && ctx.input.data.amount > 10000) {
+    ctx.input.data.requires_approval = true;
   }
 }, { object: 'order' });
 
-// React after a record is created
+// React after a record is created — the created record is on ctx.result
 engine.registerHook('afterInsert', async (ctx) => {
-  await notifyWebhook(ctx.object, ctx.input.id);
+  await notifyWebhook(ctx.object, ctx.result?.id);
 }, { object: 'order' });
 ```
 
@@ -103,7 +102,7 @@ What happens when a data hook throws is governed by the hook's **`onError`** pol
 
 ```typescript
 engine.registerHook('beforeInsert', async (ctx) => {
-  if (ctx.object === 'invoice' && !ctx.input.customer_id) {
+  if (ctx.object === 'invoice' && !ctx.input.data.customer_id) {
     throw new Error('Invoice must have a customer'); // Aborts the insert (default onError)
   }
 });

@@ -16,7 +16,7 @@ Additional providers should be contributed by product or enterprise packages thr
 the `auth:configure` hook. Those packages can add better-auth `socialProviders`
 or OIDC/generic OAuth providers without forking `@objectstack/plugin-auth`.
 
-The Studio login and registration pages automatically render **Continue with ...**
+The Console login and registration pages automatically render **Continue with ...**
 buttons for every enabled provider returned by `/api/v1/auth/config`.
 
 ---
@@ -270,21 +270,24 @@ Restart the server (`pnpm dev`), then:
 curl http://localhost:3000/api/v1/auth/config
 ```
 
-Expected response (abbreviated — `getPublicConfig()` also returns `disableSignUp`/`requireEmailVerification` on `emailPassword` and additional `features` keys such as `multiOrgEnabled`, `oidcProvider`, `deviceAuthorization`, and `admin`):
+Expected response (the endpoint wraps `getPublicConfig()` in a `{ success, data }` envelope; abbreviated — `getPublicConfig()` also returns `disableSignUp`/`requireEmailVerification` on `emailPassword` and additional `features` keys such as `multiOrgEnabled`, `oidcProvider`, `deviceAuthorization`, and `admin`):
 
 ```json
 {
-  "emailPassword": { "enabled": true },
-  "socialProviders": [
-    { "id": "google", "name": "Google", "enabled": true, "type": "social" },
-    { "id": "github", "name": "GitHub", "enabled": true, "type": "social" },
-    { "id": "okta",   "name": "Okta SSO", "enabled": true, "type": "oidc" }
-  ],
-  "features": { "twoFactor": false, "passkeys": false, "magicLink": false, "organization": true }
+  "success": true,
+  "data": {
+    "emailPassword": { "enabled": true },
+    "socialProviders": [
+      { "id": "google", "name": "Google", "enabled": true, "type": "social" },
+      { "id": "github", "name": "GitHub", "enabled": true, "type": "social" },
+      { "id": "okta",   "name": "Okta SSO", "enabled": true, "type": "oidc" }
+    ],
+    "features": { "twoFactor": false, "passkeys": false, "magicLink": false, "organization": true }
+  }
 }
 ```
 
-The Studio `/login` and `/register` pages will now show a button for each enabled provider.
+The Console `/login` and `/register` pages will now show a button for each enabled provider.
 
 ---
 
@@ -307,7 +310,7 @@ The Studio `/login` and `/register` pages will now show a button for each enable
 
 ## Notes
 
-- `OS_AUTH_SECRET` must be set to a random string in production (a long random value of 32+ characters is recommended). `AUTH_SECRET` and `BETTER_AUTH_SECRET` are accepted as deprecated legacy aliases and emit a deprecation warning. If no secret is set, the auth plugin is skipped in production.
+- `OS_AUTH_SECRET` must be set to a random string in production (a long random value of 32+ characters is recommended). `AUTH_SECRET` and `BETTER_AUTH_SECRET` are accepted as legacy aliases (read silently, without a deprecation warning). If no secret is set, the auth plugin is skipped in production.
 - `OS_AUTH_URL` (or `OS_BASE_URL` as a fallback) must match the domain registered with each provider; it determines the base URL used to build OAuth callback URLs.
 - Never commit client secrets to source control — use a secrets manager in production.
 - The redirect URI registered with each provider must match exactly: `https://<your-domain>/api/v1/auth/callback/<provider-id>`.

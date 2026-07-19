@@ -115,10 +115,10 @@ docker run -p 8080:8080 \
 straight from release storage instead of a mount.)
 
 For a self-contained deployable image, extend it. The Dockerfile below (plus
-the compose stack in the next section and a `.dockerignore`) ships
-ready-to-copy in
-[`docker/`](https://github.com/objectstack-ai/framework/tree/main/docker)
-— drop the files into your scaffolded project.
+the compose stack in the next section and a `.dockerignore`) ships ready-made
+in the project scaffold —
+[`create-objectstack`](https://github.com/objectstack-ai/framework/tree/main/packages/create-objectstack/src/templates/blank)
+(`npm create objectstack`) writes all three into your new project's root.
 
 ```dockerfile title="Dockerfile"
 # ── Build stage: compile TypeScript metadata to the artifact ─────────

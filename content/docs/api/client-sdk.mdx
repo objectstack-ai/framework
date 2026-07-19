@@ -17,7 +17,7 @@ The `@objectstack/client` is the official TypeScript client for ObjectStack. It 
 - **Batch Operations**: Efficient bulk create/update/upsert/delete with transaction support
 - **Query Builder**: Programmatic query construction with `createQuery()` and `createFilter()`
 - **Standardized Errors**: Machine-readable error codes with retry guidance
-- **Protocol Compliant**: Implements the core API namespaces defined in `@objectstack/spec`, plus additional namespaces (approvals, feed, organizations, projects/environments)
+- **Protocol Compliant**: Implements the core API namespaces defined in `@objectstack/spec`, plus additional namespaces (approvals, organizations, projects/environments)
 
 ## Installation
 
@@ -76,7 +76,7 @@ async function main() {
 When you call `client.connect()`, the client:
 
 1. Probes `/api/v1/discovery` first, then falls back to `{origin}/.well-known/objectstack`
-2. Parses the discovery response including `routes`, `features`, and `services`
+2. Parses the discovery response including `routes`, `capabilities`, and `services`
 3. Configures all API route paths dynamically
 
 ```typescript
@@ -104,7 +104,7 @@ if (discovery.services?.auth?.enabled) {
 
 ## Protocol Coverage
 
-The `@objectstack/client` SDK aims to implement the ObjectStack API protocol specification. The core namespaces are listed below; the client also exposes additional namespaces (`approvals`, `feed`, `organizations`, `oauth`, `projects`/environments) — see [`index.ts`](https://github.com/objectstack-ai/framework/blob/main/packages/client/src/index.ts) for the full surface:
+The `@objectstack/client` SDK aims to implement the ObjectStack API protocol specification. The core namespaces are listed below; the client also exposes additional namespaces (`approvals`, `organizations`, `oauth`, `projects`/environments) — see [`index.ts`](https://github.com/objectstack-ai/framework/blob/main/packages/client/src/index.ts) for the full surface:
 
 | Namespace | Status | Methods | Purpose |
 |:----------|:------:|:--------|:--------|

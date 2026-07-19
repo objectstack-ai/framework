@@ -164,7 +164,7 @@ Access control, permissions, and row-level security.
 | Protocol | Source File | Key Schemas | Purpose |
 |:---------|:-----------|:------------|:--------|
 | **[Permission](/docs/references/security/permission)** | `permission.zod.ts` | ObjectPermission | Object-level permissions |
-| **[RLS](/docs/references/security/rls)** | `rls.zod.ts` | RowLevelSecurity | Row-level security filters |
+| **[RLS](/docs/references/security/rls)** | `rls.zod.ts` | RowLevelSecurityPolicy | Row-level security filters |
 | **[Sharing](/docs/references/security/sharing)** | `sharing.zod.ts` | SharingRule | Record sharing rules |
 | **[Territory](/docs/references/security/territory)** | `territory.zod.ts` | Territory | Territory-based access |
 
@@ -236,7 +236,7 @@ Testing and quality assurance.
     {
       maxLength: 100,
       defaultValue: 'example',
-      referenceFilters: ['active = true']
+      inlineHelpText: 'Enter a value'
     }
     ```
   </Tab>
@@ -275,10 +275,11 @@ import { ManifestSchema, PluginSchema } from '@objectstack/spec/kernel';
 import { LoggerConfigSchema, JobSchema } from '@objectstack/spec/system';
 
 // AI protocols
-import { AgentSchema, RAGPipelineConfigSchema } from '@objectstack/spec/ai';
+import { AgentSchema, ModelRegistrySchema } from '@objectstack/spec/ai';
 
-// Types
-import type { Field, Object, Query, View } from '@objectstack/spec';
+// Types (subpath imports — the root package does not export types)
+import type { Field, ServiceObject, QueryAST } from '@objectstack/spec/data';
+import type { View } from '@objectstack/spec/ui';
 ```
 
 ## Search Tips

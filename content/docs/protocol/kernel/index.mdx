@@ -151,8 +151,8 @@ os package publish dist/objectstack.json --env <environment-id> --install
 
 **Kernel Approach:**
 ```yaml
-# plugin.manifest.yml
-name: @mycompany/billing
+# manifest block in objectstack.config.ts (via defineStack)
+id: com.mycompany.billing
 version: 2.0.0
 dependencies:
   '@objectstack/core': '^2.0.0'
@@ -212,7 +212,7 @@ const config = context.config.resolve('stripe.apiKey', {
 **Challenge:** Build a plugin marketplace like Salesforce AppExchange where third-party developers sell integrations.
 
 **Kernel Solution:**
-- **Plugin Manifest:** Standardized `plugin.manifest.yml` declares what plugin provides and needs
+- **Package Manifest:** The `manifest` block in `objectstack.config.ts` (compiled to `objectstack.json`) declares what a package provides and needs
 - **Dependency Resolution:** Automatic validation that plugin versions are compatible with core platform
 - **Lifecycle Hooks:** `onInstall`, `onEnable`, `onDisable` hooks for setup/teardown
 - **Sandboxing:** Plugins can't access each other's data or crash each other
@@ -277,7 +277,7 @@ hooks in order, and exposes the resulting services through DI.
 
 ### 2. Request Handling
 ```typescript
-// Incoming API request: GET /api/accounts/123
+// Incoming API request: GET /api/v1/data/account/123
 async function handleRequest(req) {
   // Kernel provides context
   const context = await Kernel.createContext({
@@ -354,17 +354,19 @@ permissions.grant('admin', 'accounts', 'read');
 
 **Good (Declarative):**
 ```yaml
-# plugin.manifest.yml
+# objectstack.config.ts — declared via defineStack({ ... })
 objects:
   - name: account
     fields:
       - name: name
         type: text
+# PermissionSet grants use allow* flags (not role/object/access)
 permissions:
-  - role: admin
-    object: account
-    access: read
-# Kernel ensures runtime matches manifest
+  - name: account_read
+    objects:
+      account:
+        allowRead: true
+# Kernel ensures runtime matches the declared metadata
 ```
 
 ### Idempotent Operations
@@ -375,8 +377,8 @@ Run `os package publish` 100 times → Same result.
 
 ### Version Control Everything
 All system configuration lives in Git:
-- Plugin manifests: `plugin.manifest.yml`
-- Configuration files: `objectstack.config.yml`
+- Stack definition & manifest: `objectstack.config.ts` (via `defineStack`)
+- Compiled artifact: `dist/objectstack.json`
 - Translation bundles: `i18n/en.json`, `i18n/de.json`
 
 **Business Value:** Rollback a bad deployment by reverting Git commit. No database state to recover, no manual cleanup.
@@ -385,18 +387,15 @@ All system configuration lives in Git:
 
 ### Plugin Development
 ```bash
-# Scaffold new plugin
+# Scaffold new plugin (created under packages/plugins/plugin-<name>/)
 os create plugin slack-integration
 
 # Generated structure:
-slack-integration/
-  plugin.manifest.yml    # Metadata, dependencies, version
+packages/plugins/plugin-slack-integration/
+  package.json     # name, version, dependencies (@objectstack/spec, zod)
+  tsconfig.json
   src/
-    objects/             # ObjectQL schemas
-    views/               # ObjectUI layouts
-    actions/             # Business logic
-    i18n/                # Translations
-  tests/
+    index.ts       # default-export Plugin object (name, version, initialize, destroy)
   README.md
 ```
 

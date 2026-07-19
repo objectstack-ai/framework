@@ -182,7 +182,7 @@ interface Action {
   confirmText?: string;         // Confirmation message before execution
   successMessage?: string;      // Toast shown after success
   errorMessage?: string;        // Toast shown on failure (overrides the raw error)
-  undoable?: boolean;           // Offer an Undo affordance after a single-record update succeeds
+  undoable?: boolean;           // Offer an Undo affordance after a single-record update succeeds (experimental — see note below)
   refreshAfter?: boolean;       // Reload the view after execution (default false)
   resultDialog?: ResultDialog;  // One-shot reveal of API response values
   shortcut?: string;            // Keyboard shortcut, e.g. "Ctrl+S"
@@ -199,7 +199,6 @@ interface Action {
   ai?: ActionAi;                // Opt-in AI tool exposure
 
   // Misc
-  timeout?: number;             // Max execution time (ms)
   aria?: AriaProps;             // Accessibility attributes
 }
 ```
@@ -248,7 +247,7 @@ Semantics:
 
 - **`order` defaults to `0`.** An action with a **negative** `order` is promoted toward the primary slot; a **positive** `order` is demoted toward the overflow menu.
 - **The sort is stable.** Actions that leave `order` unset (or tie on the same value) keep their original registration order, so adding `order` to one action never reshuffles the others. Setting `order` on nobody is a no-op — existing screens are unaffected.
-- **No more fragile registration order.** Previously "who becomes the primary button" depended on the cross-file order in which `defineStack({ actions })` merged its arrays. `order` makes it declarative: a plugin such as [plugin-approvals](/docs/plugins/approvals) can inject an `Approve`/`Reject` decision with a low `order` so it stably outranks app actions, instead of the app having to *hide* its other actions to make room.
+- **No more fragile registration order.** Previously "who becomes the primary button" depended on the cross-file order in which `defineStack({ actions })` merged its arrays. `order` makes it declarative: a plugin such as [plugin-approvals](/docs/automation/approvals) can inject an `Approve`/`Reject` decision with a low `order` so it stably outranks app actions, instead of the app having to *hide* its other actions to make room.
 - When two actions tie on `order`, the record-header renderer MAY additionally prefer the one with `variant: 'primary'` when choosing the primary button.
 
 <Callout type="info">
@@ -290,7 +289,7 @@ disabled: "status == 'converted'"          # bare field — also resolves to the
 
 Prefer the `record.<field>` form: it reads unambiguously and resolves identically on **every** surface an action renders (`record_header`, `record_more`, `list_item`, related lists). The bare-field form is supported for brevity but is easy to confuse with a local variable.
 
-This is a narrower scope than [record-alert](/docs/protocol/objectui/record-alert) conditions (which also expose `os.user` / `os.org` / `os.env`) — action predicates see the record only.
+Beyond `record`, action predicates also expose the authenticated user as `ctx.user` (e.g. `record.id == ctx.user.id`) and public feature flags as `features.*` (see [Capability gates](#capability-gates-requiresfeature)) — they are not limited to the record. [record-alert](/docs/protocol/objectui/record-alert) conditions surface the analogous identity values under the `os.*` namespace (`os.user` / `os.org` / `os.env`) instead.
 
 #### Capability gates: `requiresFeature`
 
@@ -333,9 +332,9 @@ refreshAfter: true
 - `confirmText` — message shown in a confirm dialog before the action runs.
 - `successMessage` — toast shown after a successful run. When omitted the UI shows a generic "Action completed" toast, so set this for any action whose outcome isn't self-evident.
 - `errorMessage` — toast shown when the action fails; overrides the raw server error with author-controlled copy.
-- `undoable` — for a single-record update action, offer an **Undo** affordance in the success toast (and via `Ctrl+Z`). The runtime captures the record's prior values before the write and restores them on undo. Only meaningful for reversible single-record mutations.
+- `undoable` — marks a single-record update action as offering an **Undo** affordance in the success toast to restore the record's prior values. **Experimental:** the flag is declared in the schema but no runtime consumer keys off it yet (objectui ships an `UndoManager` but does not read this field), so setting it currently has no effect.
 - `refreshAfter` — reload the current view after success.
-- `mode` — a semantic hint (`create` / `edit` / `delete` / `custom`) the UI uses to pick confirm copy and default variants.
+- `mode` — a semantic hint (`create` / `edit` / `delete` / `custom`). Pure metadata with no runtime branching: today only the AI confirmation heuristic reads it (a `delete` mode nudges an AI invocation toward requiring approval), while the UI does not branch on it.
 
 ```yaml
 # A reversible owner reassignment: custom success/error copy + Undo

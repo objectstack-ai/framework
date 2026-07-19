@@ -22,7 +22,7 @@ The one thing to internalize before anything else:
 
 | Concept | What it is | Who authors it | You touch it |
 |:--|:--|:--|:--|
-| **Permission set** | The only capability container — object CRUD, field security, access depth, system capabilities | Platform & app developers (in Studio) | Rarely — [Step 5](#step-5--configure-permissions-only-when-the-shipped-positions-dont-fit) |
+| **Permission set** | The only capability container — object CRUD, field security, access depth, system capabilities | Platform & app developers; ships with apps | Rarely — [Step 5](#step-5--configure-permissions-only-when-the-shipped-positions-dont-fit) |
 | **Position** (岗位) | A flat, named job function that binds permission sets; users hold positions | Ships with apps; you assign it | **Daily** |
 | **Business unit** | The *one* hierarchy — org tree that decides visibility depth and delegation boundaries | You, at onboarding and reorgs | Occasionally |
 | **User** | The person signing in | You | Daily |
@@ -144,12 +144,12 @@ report names the exact permission set and layer to fix.
 
 ## Step 5 — Configure permissions (only when the shipped positions don't fit)
 
-One rule of thumb: **permissions are *designed* in Studio, *assigned* in
-Setup.** If you are in this section, you've confirmed no shipped position
-covers the need.
+One rule of thumb: **capability ships with the apps you install — you rarely
+author a permission set by hand.** If you are in this section, you've confirmed
+no shipped position covers the need.
 
-The permission-set **matrix editor** (Studio → Access) is a structured
-spreadsheet — you never hand-write JSON:
+The permission-set **matrix editor** (Setup → Access Control → Permission Sets)
+is a structured spreadsheet — you never hand-write JSON:
 
 - **Object grid** — per object: Create / Read / Update / Delete, lifecycle
   bits (Transfer / Restore / Purge), and View All / Modify All, with per-row
@@ -180,9 +180,9 @@ Full model: [Permission Sets](/docs/permissions/permission-sets).
 
 ## FAQ
 
-**Do I need Studio?** Rarely. Setup is the administrator's home; Studio is
-where permission sets are *designed* — you enter it for Step 5 and for the
-Explain panel.
+**Do I need Studio?** Rarely. Setup is the administrator's home — the
+permission-set matrix editor (Step 5) lives there too. You enter Studio mainly
+for the **Explain** panel.
 
 **A new user sees almost nothing — broken?** No: that's the baseline working.
 Access arrives when you assign a position (Step 3).
@@ -207,7 +207,7 @@ sets can be overlaid (Step 5) or simply left unassigned.
 | Password policy, MFA, lockout, SSO | Setup → Configuration → Authentication |
 | Company info, localization, branding | Setup → Configuration |
 | Sessions, notification events, audit logs | Setup → Diagnostics |
-| Permission matrix editor, Explain access | Studio → Access |
+| Explain access | Studio → Access |
 
 ---
 

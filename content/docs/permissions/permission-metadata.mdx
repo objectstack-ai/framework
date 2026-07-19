@@ -60,14 +60,14 @@ const salesUserPermission = {
 | :--- | :--- | :--- | :--- |
 | `name` | `string` | ✅ | Machine name (`snake_case`) |
 | `label` | `string` | optional | Display label |
-| `isDefault` | `boolean` | optional | [ADR-0090 D5] Install-time suggestion to bind this set to the `everyone` position (admin confirms; never auto-bound) |
+| `isDefault` | `boolean` | optional | [ADR-0090 D5] Baseline for the `everyone` position: an app-level default set is auto-bound at boot (guarded, idempotent); a package-shipped set instead becomes an install-time suggestion an admin confirms |
 | `adminScope` | `AdminScope` | optional | [ADR-0090 D12] Delegated-administration scope (BU subtree + assignable-set allowlist) |
 | `objects` | `Record<string, ObjectPermission>` | ✅ | Object-level permissions |
 | `fields` | `Record<string, FieldPermission>` | optional | Field-level security, keyed by `'object.field'` |
 | `systemPermissions` | `string[]` | optional | System-level capabilities |
 | `tabPermissions` | `Record<string, TabVisibility>` | optional | Tab/app visibility |
 | `rowLevelSecurity` | `RowLevelSecurityPolicy[]` | optional | Row-level security policies |
-| `contextVariables` | `Record<string, any>` | optional | RLS context variables |
+| `contextVariables` | `Record<string, any>` | optional | **Not implemented** — declared but ignored; the RLS engine reads only the `current_user.*` built-ins (see note below) |
 
 ## Object Permissions
 
@@ -129,19 +129,21 @@ Control which apps/tabs are visible to users:
 
 ```typescript
 tabPermissions: {
-  crm: 'visible',         // Always shown
-  admin: 'hidden',         // Never shown
-  reports: 'default_on',   // Shown by default, user can hide
-  analytics: 'default_off', // Hidden by default, user can show
+  crm: 'visible',           // Shown
+  admin: 'hidden',          // Hidden — removed from nav
+  reports: 'default_on',    // Shown today (per-user toggle default not yet implemented)
+  analytics: 'default_off', // Shown today (per-user toggle default not yet implemented)
 }
 ```
 
 | Visibility | Description |
 | :--- | :--- |
-| `visible` | Always visible, user cannot hide |
-| `hidden` | Always hidden, user cannot show |
-| `default_on` | Visible by default, user can toggle off |
-| `default_off` | Hidden by default, user can toggle on |
+| `visible` | Shown (also the effective behavior when a tab is left unset) |
+| `hidden` | Hidden — the app is removed from the user's navigation |
+| `default_on` | Shown today; reserved for a future per-user toggle default |
+| `default_off` | Shown today; reserved for a future per-user toggle default |
+
+**Note:** Only `hidden` currently affects runtime behavior — the app-visibility gate hides an app when its tab is set to `hidden` and treats every other value (including `default_off`) as visible. The per-user toggle / default-off semantics implied by `default_on`/`default_off` are not yet implemented.
 
 ## System Permissions
 
@@ -173,26 +175,21 @@ rowLevelSecurity: [
     using: "owner_id == current_user.id",
   },
   {
-    name: 'same_department',
+    name: 'same_organization',
     object: 'account',
     operation: 'select',
-    using: "department == current_user.department",
+    using: "organization_id == current_user.organization_id",
   },
 ]
 ```
 
 ### Context Variables
 
-Provide custom context values that RLS conditions can reference (in addition to
-the built-in `current_user.*` variables):
-
-```typescript
-contextVariables: {
-  allowed_regions: ['US', 'EU'],
-  access_level: 2,
-  custom_attribute: 'value',
-}
-```
+**Note:** The `contextVariables` field is **not yet implemented** — the RLS
+compiler never reads it, so custom context values are **not** injected into
+row-level conditions. Conditions can only reference the built-in `current_user.*`
+variables described below; authoring `contextVariables` raises a build-time
+liveness warning.
 
 The built-in context variables available in RLS `using`/`check` clauses include
 `current_user.id`, `current_user.organization_id`, and `current_user.positions`
@@ -274,10 +271,10 @@ const salesManagerPermission = {
 
   rowLevelSecurity: [
     {
-      name: 'team_accounts',
+      name: 'org_isolation',
       object: 'account',
       operation: 'select',
-      using: "team == current_user.team",
+      using: "organization_id == current_user.organization_id",
     },
   ],
 };

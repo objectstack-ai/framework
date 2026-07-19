@@ -33,4 +33,4 @@ services.audit.record(entry: {
 
 ## Typical Errors
 
-Implementations should avoid throwing into user paths. Callers should treat audit writes as best-effort unless strict compliance mode is enabled by host code.
+Sink implementations should avoid throwing into user paths: the runtime caller (for example `service-settings`) awaits `record()` without a surrounding `try`/`catch`, so a throwing sink propagates its error and fails the caller's write.

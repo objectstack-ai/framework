@@ -52,9 +52,12 @@ ignored.
   `requireAuth: false` for stacks whose tier set has no `auth` (nothing could
   authenticate against them), with the boot warning.
 
-> Scope note: this gate covers the REST `/data/*` surface. The metadata
-> read/write endpoints and the dispatcher GraphQL route have their own
-> pre-existing anonymous posture, tracked separately.
+> Scope note: the deny posture applies uniformly to every HTTP surface that
+> reaches object data (#2567) — the REST `/data/*` CRUD + batch routes, the
+> `/meta` metadata endpoints, the dispatcher's GraphQL endpoint, and the
+> raw-hono `/data` routes share one decision (`shouldDenyAnonymous` in
+> `@objectstack/core`), so a caller denied on `/data` cannot read the same rows
+> through a sibling door.
 
 ## New in the framework
 
@@ -163,9 +166,10 @@ validation rejects mappings targeting undefined objects at build time.
   blank form, a silently no-op submit). Silent `<object>.<key>_2` rename
   collisions are surfaced as warnings. Shifts objectui's runtime `viewKind`
   guard left to compile time.
-- **`validateListViewMode`** (ADR-0053 phase 4) — `userFilters` on an object
-  list view is now a `tsc` error via `ObjectListViewSchema`, stripped at parse
-  for back-compat, and reported pre-parse with a fix hint.
+- **`validateListViewMode`** (ADR-0047) — a `tabs`-style `userFilters`
+  (`element: 'tabs'`) on an object list view is now a `tsc` error via
+  `ObjectListViewSchema` (dropdown value chips remain allowed), stripped at
+  parse for back-compat, and reported pre-parse with a fix hint.
 - **`transfer` / `restore` / `purge` pre-mapped to RBAC bits** (#1883) — the
   permission evaluator maps the destructive lifecycle operations to
   `allowTransfer` / `allowRestore` / `allowPurge` (with the `modifyAllRecords`

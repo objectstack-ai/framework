@@ -97,13 +97,13 @@ To control exactly which fields are matched, set `searchableFields` on the objec
 ```typescript
 {
   name: 'account',
-  searchable: true,
+  enable: { searchable: true },
   searchableFields: ['name', 'website', 'billing_city'],
 }
 ```
 
-Queries then use the `$search` filter operator to match across `searchableFields`
-(e.g. `{ filters: { $search: 'acme' } }`); a view may narrow the set with
+Queries then pass a top-level `$search` parameter to match across `searchableFields`
+(e.g. `{ $search: 'acme' }`); a request may narrow the set with
 `$searchFields`. When `searchableFields` is unset, search falls back to the
 name/title field plus short-text fields.
 

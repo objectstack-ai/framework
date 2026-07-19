@@ -174,7 +174,7 @@ order: Field.masterDetail('order', {
 | Property | Type | Description |
 | :--- | :--- | :--- |
 | `reference` (1st arg) | `string` | Target object name |
-| `referenceFilters` | `string[]` | Filter conditions for the lookup |
+| `lookupFilters` | `{ field, operator, value }[]` | Base filters restricting which records are selectable (structured, picker-honored) |
 | `deleteBehavior` | `enum` | `'set_null'`, `'cascade'`, `'restrict'` |
 | `inlineEdit` | `boolean \| 'grid' \| 'form'` | Render child records inline on the parent create/edit form (`true` = auto-pick, `'grid'`, or `'form'`) |
 | `inlineColumns` | `array` | Optional explicit columns for the inline grid |
@@ -293,8 +293,9 @@ These properties are available on all field types:
 | Property | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `searchable` | `boolean` | `false` | Include in full-text search |
-| `index` | `boolean` | `false` | Create a database index |
 | `externalId` | `boolean` | `false` | Mark as external system identifier |
+
+Database indexes are declared at the object level in the object's `indexes[]` array — there is no per-field `index` flag. See [Indexing](/docs/data-modeling/indexing).
 
 ### Security
 

@@ -36,11 +36,13 @@ Attachments panel renders only for such objects. Any other target is rejected:
 This is enforced by a `beforeInsert` hook on `sys_attachment` and is
 independent of the record-level checks below.
 
-## Create — read visibility (+ edit-on-parent) & provenance
+## Create — parent-edit access & provenance
 
-Creating a `sys_attachment` requires that the caller can **read** the parent
-record (verified with a caller-scoped `findOne`, so RLS / OWD / sharing of the
-parent object apply), and — for edit-on-parent parity — that they can edit it.
+Creating a `sys_attachment` requires that the caller can **edit** the parent
+record — Salesforce edit-on-parent parity — verified with the sharing service's
+`canEdit`, so RLS / OWD / sharing of the parent object apply (public-model
+parents are editable by any member by design). When no sharing service is
+wired, the gate degrades to caller-scoped read visibility (a `findOne`).
 `uploaded_by` is **server-stamped** from the session; a client-supplied value
 is ignored.
 
@@ -117,7 +119,7 @@ can be shared across records). Reclamation is handled by the platform LifecycleS
 | Operation | Requirement | Deny code |
 | --- | --- | --- |
 | Attach (create) | parent object opts in (`enable.files`) | `FILES_DISABLED` (403) |
-| Attach (create) | can read + edit the parent record | `ATTACHMENT_PARENT_ACCESS` (403) |
+| Attach (create) | can edit the parent record | `ATTACHMENT_PARENT_ACCESS` (403) |
 | List / read | inherits parent read visibility | *(filtered out)* |
 | Delete | uploader or parent editor (+ RBAC delete grant) | `ATTACHMENT_DELETE_DENIED` / `PERMISSION_DENIED` (403) |
 | Download | session + owner-or-parent-read (attachments scope) | `AUTH_REQUIRED` (401) / `ATTACHMENT_DOWNLOAD_DENIED` (403) |

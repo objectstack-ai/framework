@@ -44,7 +44,7 @@ Infrastructure services including Event Bus, Job Scheduling, Translation (i18n),
 Plugin system and runtime management. Includes Plugin lifecycle, Manifest definition, Logger configuration, and Runtime Context. The core of the control layer.
 
 ### AI Protocol
-Artificial intelligence capabilities including AI Agents, RAG pipelines, Natural Language Query (NLQ), Predictive models, Cost tracking, and Orchestration.
+Platform AI primitives: AI Agents, Skills, Tools, Conversations, a multi-provider Model Registry, Embedding and vector-store references, Knowledge sources, and MCP server bindings, plus Usage (token accounting and per-call cost). Scope is deliberately narrow — higher-level concerns such as NLQ services, RAG pipeline orchestration, and predictive pipelines were removed in v1 and are meant to be built on top of these primitives.
 
 ### API Protocol
 External communication layer including REST contracts, API discovery, Realtime subscriptions (WebSocket/SSE), and Routing configuration.

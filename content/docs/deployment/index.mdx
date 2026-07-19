@@ -129,9 +129,9 @@ requests and do not run through a target environment kernel.
 
 Third-party provider variables such as `OPENAI_API_KEY`, `TURSO_*`,
 `RESEND_API_KEY`, and OAuth client secrets keep their provider names. Mail
-settings are the exception — they route through the settings env-override
-convention as `OS_MAIL_<KEY>` (e.g. `OS_MAIL_SMTP_HOST`, `OS_MAIL_SMTP_PORT`),
-not a raw `SMTP_*` name.
+settings are the exception — they route through the email service's
+env-override convention as `OS_EMAIL_<KEY>` (e.g. `OS_EMAIL_PROVIDER`,
+`OS_EMAIL_API_KEY`, `OS_EMAIL_FROM`), not a raw `SMTP_*` name.
 
 <Callout type="tip">
 **Every deployed app is AI-operable by default:** an MCP server is served at

@@ -54,14 +54,14 @@ names in `details.forbiddenFields`:
 
 ```json
 {
-  "error": {
-    "code": "PERMISSION_DENIED",
-    "message": "[Security] Field write denied: not permitted to edit [salary, ssn] on 'employee'",
-    "details": {
-      "operation": "insert",
-      "object": "employee",
-      "forbiddenFields": ["salary", "ssn"]
-    }
+  "name": "PermissionDeniedError",
+  "code": "PERMISSION_DENIED",
+  "statusCode": 403,
+  "message": "[Security] Field write denied: not permitted to edit [salary, ssn] on 'employee'",
+  "details": {
+    "operation": "insert",
+    "object": "employee",
+    "forbiddenFields": ["salary", "ssn"]
   }
 }
 ```
@@ -99,5 +99,4 @@ writes.
 ## See also
 
 - [Permissions & Identity overview](/docs/permissions)
-- [Permission Sets](/docs/permissions/permission-sets)
 - [Permission Sets](/docs/permissions/permission-sets)

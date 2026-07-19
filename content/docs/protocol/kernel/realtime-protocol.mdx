@@ -648,6 +648,10 @@ Each connection consumes server resources.
 
 ### Load Balancing
 
+<Callout type="warn">
+  **Planned (post-GA) — not in v1.** This section and *Horizontal Scaling with Redis* below describe the future multi-node architecture. The shipping realtime service is **single-instance only**: `RealtimeServicePlugin` accepts just `adapter: 'memory'` (the in-memory `InMemoryRealtimeAdapter`), there is **no WebSocket transport** to load-balance, and **no Redis-backed realtime adapter exists yet**. Multi-node HA — a Redis adapter over the existing `RedisPubSub` in `@objectstack/service-cluster-redis` — is a post-GA fast-follow.
+</Callout>
+
 WebSocket connections are sticky sessions:
 
 ```mermaid

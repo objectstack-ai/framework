@@ -323,7 +323,7 @@ functions available include:
 |----------|-------------|---------|
 | `isBlank(x)` | True if null/empty/whitespace | `isBlank(record.phone)` |
 | `isEmpty(x)` | True if empty collection/string | `isEmpty(record.tags)` |
-| `coalesce(a, b, …)` | First non-blank value | `coalesce(record.nickname, record.name)` |
+| `coalesce(a, b)` | `a` if non-null, else `b` | `coalesce(record.nickname, record.name)` |
 | `today()` | Current date | `record.close_date <= today()` |
 | `now()` | Current datetime | `record.due_at < now()` |
 | `daysBetween(a, b)` | Whole days between two dates | `daysBetween(record.end_date, today())` |

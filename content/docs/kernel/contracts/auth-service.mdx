@@ -82,8 +82,8 @@ export interface AuthUser {
   email: string;
   /** Display name */
   name: string;
-  /** Assigned role identifiers */
-  roles?: string[];
+  /** Assigned position identifiers */
+  positions?: string[];
   /** Current tenant identifier (multi-tenant) */
   tenantId?: string;
 }
@@ -94,7 +94,7 @@ export interface AuthUser {
 | `id` | `string` | Unique user identifier |
 | `email` | `string` | User's email address |
 | `name` | `string` | Display name |
-| `roles` | `string[]?` | Assigned role identifiers |
+| `positions` | `string[]?` | Assigned position identifiers |
 | `tenantId` | `string?` | Current tenant identifier (multi-tenant) |
 
 ---

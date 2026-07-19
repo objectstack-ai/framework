@@ -23,5 +23,5 @@ services.queue.purgeFailed?(messageId: string): Promise<void>
 
 ## Typical Errors
 
-- `MESSAGE_NOT_FOUND` — `replay`/`purgeFailed` called with an unknown message id.
+- `MESSAGE_NOT_FOUND` — `replay` called with an unknown message id. (`purgeFailed` is idempotent — an unknown id is a silent no-op.)
 - `INVALID_STATE` — `replay`/`purgeFailed` called on a message that is not in the `dlq` or `failed` state.

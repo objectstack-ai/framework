@@ -55,7 +55,7 @@ spec shape.
 If you relied on the implicit public default, declare it explicitly:
 
 ```ts
-defineObject({
+ObjectSchema.create({
   name: 'crm_lead',
   sharingModel: 'public_read_write', // make the previous behavior explicit
   // …
@@ -200,8 +200,9 @@ read by no runtime path and are removed:
   reads the per-policy `RowLevelSecurityPolicySchema`, never the global config.
 
 Kept `[EXPERIMENTAL]`: `EncryptionConfigSchema` (at-rest field encryption).
-Marked `[EXPERIMENTAL — NOT ENFORCED]`: `AgentSchema.visibility` — it does not
-hide an agent; use `access` / `permissions` for real gating.
+**Removed** (not merely marked): `AgentSchema.visibility` — no runtime consumer
+ever read it, so `private` never hid an agent (#1901); use `access` /
+`permissions` for real gating, both enforced at the chat route.
 
 ## Notable fixes
 

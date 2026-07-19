@@ -292,29 +292,22 @@ Define user interfaces using ObjectUI layout DSL:
 // src/views/account_list.view.ts
 import { defineView } from '@objectstack/spec';
 
+// `defineView` takes a view *container* keyed by slot (`list`, `form`,
+// `listViews`, `formViews`). A flat `{ name, object, type, layout }` object is
+// rejected at build time. The target object goes under `data` (provider
+// `object`), and `type` is one of grid | kanban | gallery | calendar |
+// timeline | gantt | map | chart | tree — a data table is `grid` (there is no
+// `list` type).
 export default defineView({
-  name: 'account_list',
-  object: 'account',
-  type: 'list',
-  
-  layout: {
+  list: {
     type: 'grid',
+    data: { provider: 'object', object: 'account' },
     columns: [
       { field: 'name', width: 200 },
       { field: 'industry', width: 150 },
       { field: 'annual_revenue', width: 150 },
       { field: 'primary_contact', width: 200 },
       { field: 'created_at', width: 150 },
-    ],
-    
-    filters: [
-      { field: 'industry', operator: 'equals' },
-      { field: 'annual_revenue', operator: 'greaterThan' },
-    ],
-    
-    actions: [
-      { type: 'create', label: 'New Account' },
-      { type: 'export', label: 'Export to CSV' },
     ],
   },
 });
@@ -721,8 +714,8 @@ npm run build
 # Build the plugin artifact (validates manifest, bundles entry)
 os plugin build
 
-# Sign the artifact (separate step; emits a publisher signature)
-os plugin sign crm-1.5.0.osplugin
+# Sign the artifact (separate step; emits a detached .sig publisher signature)
+os plugin sign crm-1.5.0.osplugin --key ./publisher.key.pem
 
 # Publish to the ObjectStack package registry
 os plugin publish
@@ -736,15 +729,17 @@ For air-gapped environments or marketplaces, plugins are packaged as **.osplugin
 # Create the .osplugin artifact (defaults to <id>-<version>.osplugin)
 os plugin build --out crm-1.5.0.osplugin
 
-# Install from a local artifact into a running runtime (air-gapped)
-os package install ./crm-1.5.0.osplugin
+# Air-gapped install: `os package install` reads a compiled JSON artifact
+# (e.g. ./dist/objectstack.json) into a running runtime — it does not ingest the
+# .osplugin tarball, which is uploaded to the marketplace via `os plugin publish`.
+os package install ./dist/objectstack.json
 ```
 
 **.osplugin format:** Reproducible ustar+gzip tarball containing:
 - Compiled entry (dist/index.mjs) and bundled assets
 - Manifest (objectstack.plugin.json)
 - Per-file content digests (`sha256-<base64>` integrity map)
-- Signature (`SIGNATURE`, added by `os plugin sign`)
+- Signature placeholder (`SIGNATURE`, written by `os plugin build`); the real publisher signature is a **detached** `<id>-<version>.osplugin.sig` sidecar produced by `os plugin sign` (signing never modifies the artifact bytes)
 
 ## Plugin Testing
 
@@ -880,7 +875,7 @@ npm run build
 
 # Build + sign the .osplugin artifact
 os plugin build
-os plugin sign crm-1.5.0.osplugin
+os plugin sign crm-1.5.0.osplugin --key ./publisher.key.pem
 
 # Publish to the ObjectStack package registry
 os plugin publish

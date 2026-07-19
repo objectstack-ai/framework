@@ -28,6 +28,10 @@ The following endpoints become available when the corresponding plugin is instal
 
 ### Workflow (`/workflow`) — Plugin Required
 
+<Callout type="warn">
+Not yet mounted. These routes are declared in the API protocol but the core dispatcher registers no `/workflow` handler and no bundled plugin provides a `workflow` service (only an in-memory dev stub), so they return **404** today. `discovery.services.workflow` reports `unavailable` in a standard install.
+</Callout>
+
 | Method | Endpoint | Description |
 |:-------|:---------|:------------|
 | GET | `/workflow/:object/config` | Get workflow configuration |
@@ -46,6 +50,10 @@ The automation dispatcher also exposes flow CRUD (`GET`/`POST /automation`, `GET
 
 ### Views (`/ui`) — Plugin Required
 
+<Callout type="warn">
+Not yet mounted. The `/ui/views` CRUD routes are declared in the API protocol but no handler is registered for them, so they return **404** today (and the `/api/v1/ui` prefix is itself deprecated in favour of `/api/v1/meta/view`). The always-available view **resolver** is a separate route — see the note below.
+</Callout>
+
 | Method | Endpoint | Description |
 |:-------|:---------|:------------|
 | GET | `/ui/views/:object` | List views for an object |
@@ -59,6 +67,10 @@ The auto-generated (non-CRUD) view resolver `GET /ui/view/:object/:type` is alwa
 </Callout>
 
 ### Realtime (`/realtime`) — Plugin Required
+
+<Callout type="warn">
+Not implemented. There is no realtime HTTP or WebSocket surface: `@objectstack/service-realtime` is an in-process pub/sub bus consumed via `kernel.getService('realtime')`, not over HTTP. The dispatcher has no `/realtime` branch, discovery deliberately omits the route (`features.websockets` is `false`), and the routes below would return **404** (ADR-0076 D12). They document the planned protocol shape only.
+</Callout>
 
 | Method | Endpoint | Description |
 |:-------|:---------|:------------|
