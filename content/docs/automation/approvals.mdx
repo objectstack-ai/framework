@@ -117,6 +117,35 @@ export const opportunityApproval: Flow = {
 For multi-step approvals, chain multiple `approval` nodes. For parallel
 approvals, see the aggregating-node pattern in [Flow Metadata](/docs/automation/flows).
 
+### Combining multiple approvers (#3266)
+
+When a node has several approvers, `behavior` decides what "approved" means —
+one node, no parallel branches needed:
+
+| `behavior` | Advances when… | Use for |
+|:---|:---|:---|
+| `first_response` (default) | any one approves | single reviewer / "any manager" |
+| `unanimous` | every resolved approver approves | small fixed panels |
+| `quorum` | `minApprovals` of N approve (M-of-N) | "2 of 3 directors" |
+| `per_group` | each `group` reaches `minApprovals` (default 1) | "legal **and** finance" sign-off (会签) |
+
+```ts
+// One legal AND one finance approver must sign off; either rejection vetoes.
+{ type: 'approval', config: {
+    approvers: [
+      { type: 'position', value: 'legal_counsel', group: 'legal' },
+      { type: 'position', value: 'controller',    group: 'finance' },
+    ],
+    behavior: 'per_group',   // or 'quorum' with minApprovals: 2
+} }
+```
+
+A single **rejection** always finalizes the node as `rejected` (one veto), in
+every mode. `minApprovals` is clamped to the resolvable approver count / group
+size, so it can never deadlock. A decision may also carry `attachments` (file
+references) recorded on its audit row — e.g. a signed contract. Weighted voting
+and approval-matrix governance are enterprise, not here.
+
 ## The full lifecycle — submit to field change
 
 What actually happens between "the flow hits the approval node" and "the record

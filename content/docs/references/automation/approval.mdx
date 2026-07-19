@@ -56,6 +56,7 @@ const result = ApprovalDecision.parse(data);
 | :--- | :--- | :--- | :--- |
 | **type** | `Enum<'user' \| 'org_membership_level' \| 'role' \| 'position' \| 'team' \| 'department' \| 'manager' \| 'field' \| 'queue'>` | ✅ |  |
 | **value** | `string` | optional | User id / membership tier / position / team / department / field / queue — per `type` |
+| **group** | `string` | optional | Group label for per_group sign-off (e.g. "legal", "finance") |
 
 
 ---
@@ -66,8 +67,9 @@ const result = ApprovalDecision.parse(data);
 
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
-| **approvers** | `{ type: Enum<'user' \| 'org_membership_level' \| 'role' \| 'position' \| 'team' \| 'department' \| 'manager' \| 'field' \| 'queue'>; value?: string }[]` | ✅ | Allowed approvers for this node |
-| **behavior** | `Enum<'first_response' \| 'unanimous'>` | ✅ | How to combine multiple approvers |
+| **approvers** | `{ type: Enum<'user' \| 'org_membership_level' \| 'role' \| 'position' \| 'team' \| 'department' \| 'manager' \| 'field' \| 'queue'>; value?: string; group?: string }[]` | ✅ | Allowed approvers for this node |
+| **behavior** | `Enum<'first_response' \| 'unanimous' \| 'quorum' \| 'per_group'>` | ✅ | How to combine multiple approvers |
+| **minApprovals** | `integer` | optional | Approvals required — total (quorum) or per group (per_group). Default 1 |
 | **lockRecord** | `boolean` | ✅ | Lock the record from editing while pending |
 | **approvalStatusField** | `string` | optional | Business-object field to mirror request status onto |
 | **escalation** | `{ enabled: boolean; timeoutHours: number; action: Enum<'reassign' \| 'auto_approve' \| 'auto_reject' \| 'notify'>; escalateTo?: string; … }` | optional | Per-node SLA escalation |

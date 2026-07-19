@@ -133,7 +133,22 @@ describe('ApprovalNodeConfigSchema', () => {
   });
 
   it('rejects an unknown behavior', () => {
-    expect(() => ApprovalNodeConfigSchema.parse({ ...minimal, behavior: 'quorum' })).toThrow();
+    expect(() => ApprovalNodeConfigSchema.parse({ ...minimal, behavior: 'weighted' })).toThrow();
+  });
+
+  it('accepts quorum / per_group behaviors with minApprovals and grouped approvers (#3266)', () => {
+    const quorum = ApprovalNodeConfigSchema.parse({ ...minimal, behavior: 'quorum', minApprovals: 2 });
+    expect(quorum.behavior).toBe('quorum');
+    expect(quorum.minApprovals).toBe(2);
+    const perGroup = ApprovalNodeConfigSchema.parse({
+      approvers: [
+        { type: 'position', value: 'legal_counsel', group: 'legal' },
+        { type: 'position', value: 'controller', group: 'finance' },
+      ],
+      behavior: 'per_group',
+    });
+    expect(perGroup.behavior).toBe('per_group');
+    expect(perGroup.approvers[0].group).toBe('legal');
   });
 });
 
