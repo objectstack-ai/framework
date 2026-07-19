@@ -273,6 +273,11 @@ describe('QuickJSScriptRunner — async host APIs', () => {
 // The old asyncify host-call model crashed here ("memory access out of bounds"
 // — the stack cannot be unwound twice). The deferred-promise + pump model must
 // compose any depth of nesting safely.
+//
+// Every run in this block declares a generous timeoutMs: these tests verify
+// nesting COMPOSES, not the deadline — and on a loaded CI runner the nested
+// pump loop legitimately needs >250ms (#3259). Deadline semantics are covered
+// by the dedicated timeout-resolution describe below.
 // ---------------------------------------------------------------------------
 describe('QuickJSScriptRunner — nested sandbox re-entrancy (#1867)', () => {
   it('a host write that re-invokes the runner (parent hook) does not crash and returns correctly', async () => {
@@ -290,7 +295,7 @@ describe('QuickJSScriptRunner — nested sandbox re-entrancy (#1867)', () => {
           const nested = await runner.run(
             parentBody,
             { input: { n: 21 } } as ScriptContext,
-            { origin: { kind: 'hook', name: 'parent_hook' } },
+            { origin: { kind: 'hook', name: 'parent_hook' }, timeoutMs: 10000 },
           );
           return { updated: patch, nested: nested.value };
         },
@@ -303,7 +308,7 @@ describe('QuickJSScriptRunner — nested sandbox re-entrancy (#1867)', () => {
         capabilities: ['api.write'],
       },
       ctx({ input: { amount: 100 }, api }),
-      { origin: { kind: 'hook', name: 'child_hook' } },
+      { origin: { kind: 'hook', name: 'child_hook' }, timeoutMs: 10000 },
     );
     expect(r.value).toEqual({
       updated: { total: 100 },
@@ -319,7 +324,7 @@ describe('QuickJSScriptRunner — nested sandbox re-entrancy (#1867)', () => {
           const nested = await runner.run(
             { language: 'js', source: "return await ctx.api.object('x').update({});", capabilities: ['api.write'] },
             { input: {}, api: makeApi(depth - 1) } as ScriptContext,
-            { origin: { kind: 'hook', name: `lvl${depth}` } },
+            { origin: { kind: 'hook', name: `lvl${depth}` }, timeoutMs: 10000 },
           );
           return { depth, nested: nested.value };
         },
@@ -340,9 +345,9 @@ describe('QuickJSScriptRunner — nested sandbox re-entrancy (#1867)', () => {
       object: () => ({
         update: async () => {
           const [a, b, c] = await Promise.all([
-            runner.run(leaf, { input: {} } as ScriptContext, { origin: { kind: 'hook', name: 'p1' } }),
-            runner.run(leaf, { input: {} } as ScriptContext, { origin: { kind: 'hook', name: 'p2' } }),
-            runner.run(leaf, { input: {} } as ScriptContext, { origin: { kind: 'hook', name: 'p3' } }),
+            runner.run(leaf, { input: {} } as ScriptContext, { origin: { kind: 'hook', name: 'p1' }, timeoutMs: 10000 }),
+            runner.run(leaf, { input: {} } as ScriptContext, { origin: { kind: 'hook', name: 'p2' }, timeoutMs: 10000 }),
+            runner.run(leaf, { input: {} } as ScriptContext, { origin: { kind: 'hook', name: 'p3' }, timeoutMs: 10000 }),
           ]);
           return { a: a.value, b: b.value, c: c.value };
         },

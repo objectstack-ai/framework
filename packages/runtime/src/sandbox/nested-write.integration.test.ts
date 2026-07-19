@@ -114,6 +114,9 @@ describe('#1867 nested cross-object write from a hook (real engine + sandbox)', 
               await ctx.api.object('parent').update({ id: pid, total_amount: total, child_count: rows.length });
             `,
             capabilities: ['api.read', 'api.write'],
+            // Room for the nested VM to settle on a loaded CI runner (#3259);
+            // this test verifies the rollup lands, not the 250ms hook default.
+            timeoutMs: 5000,
           },
         } as any,
         {
@@ -122,7 +125,7 @@ describe('#1867 nested cross-object write from a hook (real engine + sandbox)', 
           events: ['afterUpdate'],
           // Trivial body — its mere presence forces a second sandbox VM to run
           // (re-entrant) while the child's hook VM is still suspended.
-          body: { language: 'js', source: "return { seen: ctx.input.id };", capabilities: [] },
+          body: { language: 'js', source: "return { seen: ctx.input.id };", capabilities: [], timeoutMs: 5000 },
         } as any,
       ],
       { packageId: 'test' },
@@ -156,6 +159,8 @@ describe('#1867 nested cross-object write from a hook (real engine + sandbox)', 
               await ctx.api.object('parent').update({ id: pid, total_amount: total, child_count: rows.length });
             `,
             capabilities: ['api.read', 'api.write'],
+            // Room for the nested VM to settle on a loaded CI runner (#3259).
+            timeoutMs: 5000,
           },
         } as any,
       ],
