@@ -86,6 +86,36 @@ OAuth requires TLS — plain-HTTP deployments (except `localhost`) fall back to
 run insecurely.
 </Callout>
 
+## Local stdio transport (opt-in)
+
+Alongside the HTTP endpoint, the runtime can also speak MCP over a long-lived
+**stdio** transport — a local pipe for a client on the same host rather than a
+network surface. It is **off by default** and deliberately stricter than HTTP;
+turn it on at boot with two environment variables:
+
+```bash
+OS_MCP_STDIO_ENABLED=true OS_MCP_STDIO_API_KEY=osk_... os start
+```
+
+The HTTP surface authenticates **each caller** (OAuth as a person, or their own
+API key). A stdio pipe has no per-request identity to resolve, so it runs as a
+**single principal you pin up front** — the identity of `OS_MCP_STDIO_API_KEY`.
+That key is resolved through the **same** verify + authorization chain as an
+HTTP/REST request and **re-checked on every call**, so RBAC, row-level
+security, field-level security, and tenant isolation apply to the stdio session
+exactly as they would to that identity in the Console — and revoking the key
+stops the session on its next call.
+
+The transport is **fail-closed**: a missing, unknown, revoked, expired, or
+owner-less key makes stdio **refuse to start** rather than fall back to an
+unscoped or `system` session — there is deliberately no bypass. For a
+full-authority local agent, mint the key on a platform-admin or dedicated
+**service** identity; for a scoped one, mint it on a user with exactly the
+access it should have. See
+[environment variables](/docs/deployment/environment-variables#mcp-server) for
+the switches and [ADR-0101](/adr/0101-mcp-stdio-principal-admission) for the
+decision.
+
 ## What the agent gets
 
 Eleven tools, generated from your metadata:
@@ -159,8 +189,9 @@ skill and a guided `/objectstack:connect` command.
 
 | Symptom | Cause → fix |
 |:---|:---|
-| `404` on `/api/v1/mcp` | The surface is disabled — unset `OS_MCP_SERVER_ENABLED` (default is on) |
+| `404` on `/api/v1/mcp` | The HTTP surface is disabled — unset `OS_MCP_SERVER_ENABLED` (default is on) |
 | `501 Not Implemented` | The MCP plugin isn't part of this build — check your stack's plugins |
+| stdio won't start / boot fails closed | `OS_MCP_STDIO_ENABLED=true` but `OS_MCP_STDIO_API_KEY` is missing, unknown, revoked, or expired — fail-closed by design (ADR-0101). Set a valid `osk_` key; there is no unscoped or `system` fallback |
 | `401` on every call | Anonymous or invalid credentials. Interactive clients: complete the browser login (the `WWW-Authenticate` header advertises the OAuth metadata). Headless: check the `osk_` key and header spelling |
 | `403 insufficient_scope` | The OAuth token lacks the scope for that tool family (e.g. writes without `data:write`) — reconnect and grant the scope |
 | An action is missing from `list_actions` | `ai.exposed` is not `true`, `ai.description` is shorter than 40 characters, the type isn't headless-callable here (only `script` with a body/handler and `flow` with an automation service are — `url`, `modal`, `form`, and `api` never appear), it targets a `sys_*` object, or the caller fails its `requiredPermissions` |

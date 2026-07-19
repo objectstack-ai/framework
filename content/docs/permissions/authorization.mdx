@@ -66,6 +66,33 @@ strict containment for scope grants), and everyone else is denied. The
 `everyone`/`guest` audience-anchor bindings reject high-privilege sets at the
 data layer for every caller.
 
+### The MCP execution surface (ADR-0096 / ADR-0101)
+
+The serve-side MCP server (`@objectstack/mcp`) is a first-class **execution
+surface**, not a side door around the chain above. Whatever an agent does over
+MCP reaches object data only through the **same** gates 3–6 as a REST request:
+a per-request, **principal-bound bridge** runs every tool through `callData`
+with the caller's `ExecutionContext`, so object CRUD, OWD/sharing, RLS, and FLS
+apply identically. Identity is admitted **fail-closed at each transport
+boundary**, and both transports hold an `enforced` row in the conformance
+matrix (`mcp-http-identity`, `mcp-stdio-authority`), so a fail-open regression
+breaks CI like any other surface.
+
+- **HTTP** (`/api/v1/mcp`, default-on — ADR-0096). The dispatcher resolves the
+  same `ExecutionContext` a REST call would; **no `userId` and not `isSystem` ⇒
+  401** (advertising RFC 9728 OAuth metadata in `WWW-Authenticate` when the
+  OAuth track is live, else a plain 401). An OAuth token additionally narrows
+  the exposed tool families to its granted scopes (`403` on none). Enforcement:
+  `packages/runtime/src/http-dispatcher.ts` `handleMcp` +
+  `buildMcpBridge(context)`.
+- **stdio** (opt-in — ADR-0101). The long-lived local transport has no ambient
+  identity: it mints its principal solely from `OS_MCP_STDIO_API_KEY`, resolved
+  through the **same** `resolveAuthzContext` chain and re-resolved per call
+  (revocation takes effect live). It is **fail-closed** — a missing / unknown /
+  revoked / expired / owner-less key refuses to start the transport — with **no
+  `system` bypass** (full authority means minting an admin or service key).
+  Enforcement: `packages/mcp/src/plugin.ts` `start()`.
+
 ## Combination semantics (the fixed order)
 
 From ADR-0066 *Precedence / combination semantics* — the contract, not an
@@ -393,3 +420,5 @@ The complete, prioritized gap map lives in issue **#2561** (the production
 | [0086](/adr/0086-authz-metadata-config-boundary-and-cross-package-composition) | Metadata↔config boundary, package provenance, cross-package composition |
 | 0090 | Permission Model v2: position rename + vocabulary freeze, profile removal, fail-closed OWD default + external dial, audience anchors, principal taxonomy, publish linter, delegated administration, explain engine + access matrix |
 | 0091 | Grant lifecycle: validity windows + resolution-time filtering (L1, landed), delegation, break-glass, recertification substrate |
+| [0096](/adr/0096-execution-surface-identity-admission) | Execution-surface identity admission — no data-engine call without an explicit principal (the MCP HTTP surface admits identity here) |
+| [0101](/adr/0101-mcp-stdio-principal-admission) | MCP stdio principal admission — env-supplied API-key identity, fail-closed, no `system` bypass |
