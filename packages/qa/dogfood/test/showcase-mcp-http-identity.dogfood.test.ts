@@ -30,6 +30,8 @@ describe('showcase: MCP HTTP surface is identity-admitted (ADR-0096 / #3167)', (
   let stack: VerifyStack;
   let aliceToken: string;
   let bobToken: string;
+  let aliceNoteId: string;
+  let bobNoteId: string;
 
   /** POST /api/v1/mcp with the Streamable-HTTP Accept header; `token` null = anonymous. */
   const mcp = (token: string | null, body: unknown) =>
@@ -70,9 +72,12 @@ describe('showcase: MCP HTTP surface is identity-admitted (ADR-0096 / #3167)', (
 
     const a = await stack.apiAs(aliceToken, 'POST', OBJ, { title: 'Alice MCP note' });
     expect(a.status, 'alice creates note').toBeLessThan(300);
-    expect(idOf(await a.json()), 'alice note id').toBeTruthy();
+    aliceNoteId = idOf(await a.json());
+    expect(aliceNoteId, 'alice note id').toBeTruthy();
     const b = await stack.apiAs(bobToken, 'POST', OBJ, { title: 'Bob MCP note' });
     expect(b.status, 'bob creates note').toBeLessThan(300);
+    bobNoteId = idOf(await b.json());
+    expect(bobNoteId, 'bob note id').toBeTruthy();
   }, 60_000);
 
   afterAll(async () => {
@@ -107,5 +112,45 @@ describe('showcase: MCP HTTP surface is identity-admitted (ADR-0096 / #3167)', (
     const names: string[] = (rpc.result?.tools ?? []).map((t: any) => t.name);
     expect(names).toContain('query_records');
     expect(names).toContain('describe_object');
+  });
+
+  // #3167 — MCP and REST are ONE admission, not two independently-scoped ones.
+  it('MCP query_records scopes IDENTICALLY to REST /data for the same principal', async () => {
+    const idsOf = (r: any): Set<string> =>
+      new Set((r.records ?? r.data ?? r.rows ?? []).map((x: any) => String(x.id)));
+
+    const mcpIds = idsOf(await callTool(aliceToken, 'query_records', { objectName: 'showcase_private_note' }));
+    const restRes = await stack.apiAs(aliceToken, 'GET', OBJ);
+    expect(restRes.status).toBe(200);
+    const restIds = idsOf(await restRes.json());
+
+    expect(mcpIds, 'MCP and REST must return the same rows for the same caller').toEqual(restIds);
+    // Non-vacuous: the shared set is exactly alice's own row, never bob's.
+    expect(mcpIds.has(String(aliceNoteId))).toBe(true);
+    expect(mcpIds.has(String(bobNoteId))).toBe(false);
+  });
+
+  // The by-id read path (bridge.get → callData('get', …, ec)) is RLS-scoped too,
+  // not just the list query.
+  it('by-id get_record is RLS-scoped — a member cannot fetch another owner\'s row', async () => {
+    // Alice fetches Bob's private note by id → denied (not-found under owner RLS),
+    // surfaced as an MCP tool error, not a leaked row.
+    const denied: any = await (
+      await mcp(aliceToken, mcpBody('tools/call', {
+        name: 'get_record',
+        arguments: { objectName: 'showcase_private_note', recordId: bobNoteId },
+      }))
+    ).json();
+    expect(
+      denied.result?.isError,
+      `alice get_record on bob's row must be denied: ${JSON.stringify(denied.result)}`,
+    ).toBe(true);
+
+    // ...but she reads her own by id.
+    const own = await callTool(aliceToken, 'get_record', {
+      objectName: 'showcase_private_note',
+      recordId: aliceNoteId,
+    });
+    expect(String(own.id)).toBe(String(aliceNoteId));
   });
 });
