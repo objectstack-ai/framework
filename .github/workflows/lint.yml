@@ -75,13 +75,13 @@ jobs:
       - name: Reserved-word ("role") docs ratchet
         run: pnpm check:role-word
 
-      # #3280 org-identifier guard: `organizationId` is the blessed developer-facing
-      # name for the caller's active org in hook/action bodies; `session.tenantId`
-      # is a deprecated alias. Keeps our own reference apps (examples/, apps/) —
-      # which authors and AIs copy from — off the deprecated name. Hard-fail
-      # (authoring surfaces carry zero occurrences today); skills/ and docs/ are
-      # excluded since they teach the deprecated form, and driver-layer
-      # `execCtx.tenantId` is never matched.
+      # #3280/#3290 org-identifier guard: `organizationId` is the blessed
+      # developer-facing name for the caller's active org in hook/action bodies;
+      # the `session.tenantId` alias was REMOVED in v11 (#3290). Keeps our own
+      # reference code (examples/, apps/, AND packages/) — which authors and AIs
+      # copy from — off the removed name. Hard-fail (surfaces carry zero
+      # occurrences today); tests, comments, skills/ and docs/ are excluded, and
+      # driver-layer `execCtx.tenantId` is never matched.
       - name: Org-identifier authoring guard
         run: pnpm check:org-identifier
 

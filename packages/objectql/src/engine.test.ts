@@ -496,10 +496,10 @@ describe('ObjectQL Engine', () => {
 
             await engine.insert('task', { title: 'x' }, { context: { userId: 'u1', tenantId: 'org_1' } as any });
 
-            // Blessed name and the deprecated alias carry the identical value.
+            // Blessed name carries the org; the deprecated `tenantId` alias was
+            // removed in v11 (#3290) and must no longer be emitted.
             expect(session.organizationId).toBe('org_1');
-            expect(session.tenantId).toBe('org_1');
-            expect(session.organizationId).toBe(session.tenantId);
+            expect(session.tenantId).toBeUndefined();
             // `ctx.user` shortcut carries the same org for zero-relearning filtering.
             expect(user).toMatchObject({ id: 'u1', organizationId: 'org_1' });
         });

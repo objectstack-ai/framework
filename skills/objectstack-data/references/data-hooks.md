@@ -288,10 +288,11 @@ predicates, and in seed rows. Read it as **`organizationId`**:
 ```typescript
 // ✅ Blessed — matches columns, RLS `current_user`, and seed data
 const org = ctx.user?.organizationId ?? ctx.session?.organizationId;
-
-// ⚠️ Deprecated alias — still works, carries the identical value
-const org = ctx.session?.tenantId;
 ```
+
+> The former `ctx.session.tenantId` alias was removed in v11 (#3290) — read the
+> org under `organizationId`. (The generic driver-layer `execCtx.tenantId` /
+> `DriverOptions.tenantId` isolation knob is a separate axis and is unaffected.)
 
 `ctx.user` is the ergonomic shortcut for an authenticated caller; it is
 `undefined` for system / unauthenticated writes, so read `ctx.session?.organizationId`

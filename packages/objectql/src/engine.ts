@@ -745,11 +745,11 @@ export class ObjectQL implements IDataEngine {
       userId: execCtx.userId,
       // `organizationId` is the blessed developer-facing name for the caller's
       // active org (matches the `organization_id` column, `current_user`
-      // RLS shape, and seed rows). `tenantId` is kept as a deprecated alias
-      // carrying the IDENTICAL value — both come from `execCtx.tenantId`, which
-      // the kernel resolves from `session.activeOrganizationId` (#3280).
+      // RLS shape, and seed rows). It comes from `execCtx.tenantId`, which the
+      // kernel resolves from `session.activeOrganizationId`. The deprecated
+      // `session.tenantId` alias (#3280) was removed here in v11 (#3290) — the
+      // driver-layer `execCtx.tenantId` knob is a separate axis and stays.
       organizationId: execCtx.tenantId,
-      tenantId: execCtx.tenantId,
       positions: execCtx.positions,
       accessToken: execCtx.accessToken,
       // Propagate system-elevated flag so hooks can distinguish engine

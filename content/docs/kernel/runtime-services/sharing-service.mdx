@@ -34,7 +34,9 @@ services.sharing.listShares(object: string, recordId: string, context: SharingEx
 ```ts
 const allowed = await services.sharing.canEdit('contract', ctx.input.id, {
   userId: ctx.session?.userId,
-  tenantId: ctx.session?.tenantId,
+  // The hook exposes the caller's org as `organizationId` (the `session.tenantId`
+  // alias was removed in v11, #3290); it feeds the sharing context's `tenantId`.
+  tenantId: ctx.session?.organizationId,
   positions: ctx.session?.positions,
 });
 if (!allowed) throw new Error('PERMISSION_DENIED');

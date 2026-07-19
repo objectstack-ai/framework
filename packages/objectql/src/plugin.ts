@@ -731,8 +731,11 @@ export class ObjectQLPlugin implements Plugin {
           record.updated_by = session.userId;
         }
       }
-      if (isInsert && session?.tenantId && hasField(objectName, 'tenant_id')) {
-        record.tenant_id = record.tenant_id ?? session.tenantId;
+      // Stamp the driver-layer `tenant_id` column from the caller's active org.
+      // The hook session exposes it as `organizationId` (the `session.tenantId`
+      // alias was removed in v11, #3290); the column name is a separate axis.
+      if (isInsert && session?.organizationId && hasField(objectName, 'tenant_id')) {
+        record.tenant_id = record.tenant_id ?? session.organizationId;
       }
     };
 

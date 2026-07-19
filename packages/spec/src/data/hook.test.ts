@@ -541,14 +541,14 @@ describe('HookContextSchema', () => {
         input: {},
         session: {
           userId: 'user_123',
-          tenantId: 'tenant_456',
+          organizationId: 'org_456',
           roles: ['user', 'admin'],
         },
         ql: {},
       });
 
       expect(context.session?.userId).toBe('user_123');
-      expect(context.session?.tenantId).toBe('tenant_456');
+      expect(context.session?.organizationId).toBe('org_456');
       expect(context.session?.roles).toContain('admin');
     });
 
@@ -567,9 +567,10 @@ describe('HookContextSchema', () => {
       expect(context.session?.accessToken).toBe('token_abc123');
     });
 
-    // #3280 — `organizationId` is the blessed developer-facing name; `tenantId`
-    // stays as a deprecated alias carrying the identical value.
-    it('should accept session.organizationId (blessed) alongside tenantId (deprecated alias)', () => {
+    // #3280 made `organizationId` the blessed developer-facing name; the
+    // `tenantId` alias was removed from this surface in v11 (#3290). A stray
+    // `tenantId` key is now stripped by the schema rather than surfaced.
+    it('exposes session.organizationId and no longer carries the removed tenantId alias (#3290)', () => {
       const context = HookContextSchema.parse({
         object: 'account',
         event: 'beforeInsert',
@@ -577,13 +578,14 @@ describe('HookContextSchema', () => {
         session: {
           userId: 'user_123',
           organizationId: 'org_456',
+          // No longer part of the schema — Zod strips this unknown key.
           tenantId: 'org_456',
-        },
+        } as any,
         ql: {},
       });
 
       expect(context.session?.organizationId).toBe('org_456');
-      expect(context.session?.tenantId).toBe('org_456');
+      expect((context.session as any)?.tenantId).toBeUndefined();
     });
 
     it('should accept user.organizationId shortcut', () => {

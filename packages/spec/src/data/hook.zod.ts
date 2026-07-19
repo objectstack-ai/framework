@@ -213,21 +213,18 @@ export const HookContextSchema = lazySchema(() => z.object({
   session: z.object({
     userId: z.string().optional(),
     /**
-     * Active organization ID — the blessed, developer-facing name for the
-     * caller's current org. Same value everywhere a developer reads the org:
-     * the `organization_id` column, `current_user.organizationId` (RLS/sharing),
-     * and seed rows. Prefer this in hooks; it always equals `tenantId`.
-     * `null`/`undefined` on unscoped (platform/community) calls.
+     * Active organization ID — the developer-facing name for the caller's
+     * current org. Same value everywhere a developer reads the org: the
+     * `organization_id` column, `current_user.organizationId` (RLS/sharing),
+     * and seed rows. `null`/`undefined` on unscoped (platform/community) calls.
+     *
+     * The former `session.tenantId` alias (#3280) was removed in the v11 major
+     * (#3290): read the org under this single blessed name. The generic
+     * driver-layer isolation knob (`ExecutionContext.tenantId`,
+     * `DriverOptions.tenantId`) is a distinct, configurable axis and is
+     * deliberately untouched.
      */
-    organizationId: z.string().optional().describe('Active organization ID (blessed name; equals tenantId)'),
-    /**
-     * @deprecated Prefer `organizationId` — the two carry the identical value
-     * (the caller's active org). `tenantId` remains for back-compat; it names
-     * the generic driver-layer isolation column, whereas everything else on the
-     * developer surface (columns, RLS `current_user`, seed) says `organization`.
-     * New docs/examples teach only `organizationId`.
-     */
-    tenantId: z.string().optional().describe('Deprecated alias of organizationId'),
+    organizationId: z.string().optional().describe('Active organization ID (blessed developer-facing name)'),
     roles: z.array(z.string()).optional(),
     accessToken: z.string().optional(),
     isSystem: z.boolean().optional().describe('True when the call was made with an elevated system context (engine self-writes)'),

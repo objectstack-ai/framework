@@ -2451,12 +2451,13 @@ describe('HttpDispatcher — action body ctx.user identity (#2701)', () => {
     expect(user.positions).toEqual(['sales_rep', 'org_member']);
     expect(user.permissions).toEqual(['convert_lead']);
     expect(user.email).toBe('rep@acme.test');
-    // #3280 — `organizationId` is the blessed name; `tenantId` is the alias.
+    // #3280 made `organizationId` the blessed name; the `tenantId` alias was
+    // removed in v11 (#3290) and must no longer be emitted on ctx.user.
     expect(user.organizationId).toBe('org_acme');
-    expect(user.tenantId).toBe('org_acme');
+    expect(user.tenantId).toBeUndefined();
   });
 
-  it('exposes ctx.session.organizationId (blessed) + tenantId (deprecated alias) to the action body (#3280)', async () => {
+  it('exposes ctx.session.organizationId and no longer emits the removed tenantId alias to the action body (#3290)', async () => {
     const { dispatcher, executeAction, ctx } = captureCtx({
       userId: 'user_42',
       positions: ['sales_rep'],
@@ -2467,8 +2468,7 @@ describe('HttpDispatcher — action body ctx.user identity (#2701)', () => {
     expect(session).toBeDefined();
     expect(session.userId).toBe('user_42');
     expect(session.organizationId).toBe('org_acme');
-    expect(session.tenantId).toBe('org_acme');
-    expect(session.organizationId).toBe(session.tenantId);
+    expect(session.tenantId).toBeUndefined();
   });
 
   it('falls back to a `system` principal only when the request is anonymous', async () => {

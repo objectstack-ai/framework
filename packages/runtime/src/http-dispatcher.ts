@@ -1033,17 +1033,17 @@ export class HttpDispatcher {
      *
      * `organizationId` is the blessed name for the caller's active org — the
      * same value as the `organization_id` column and `current_user.organizationId`
-     * (RLS). `tenantId` is a deprecated alias carrying the identical value.
-     * Returns undefined for a genuinely context-less / self-invoked call so a
-     * body can distinguish "no session" the same way hooks do.
+     * (RLS). The deprecated `session.tenantId` alias (#3280) was removed in v11
+     * (#3290); the driver-layer `ExecutionContext.tenantId` it is sourced from is
+     * a distinct, configurable axis and stays. Returns undefined for a genuinely
+     * context-less / self-invoked call so a body can distinguish "no session" the
+     * same way hooks do.
      */
     private buildActionSession(ec: any): any | undefined {
         if (!ec || (ec.userId == null && ec.tenantId == null)) return undefined;
         return {
             ...(ec.userId != null ? { userId: String(ec.userId) } : {}),
-            ...(ec.tenantId != null
-                ? { organizationId: String(ec.tenantId), tenantId: String(ec.tenantId) }
-                : {}),
+            ...(ec.tenantId != null ? { organizationId: String(ec.tenantId) } : {}),
             ...(Array.isArray(ec.positions) && ec.positions.length ? { roles: ec.positions } : {}),
         };
     }
@@ -3932,11 +3932,9 @@ export class HttpDispatcher {
                 positions: Array.isArray(ec.positions) ? ec.positions : [],
                 permissions: Array.isArray(ec.permissions) ? ec.permissions : [],
                 // `organizationId` is the blessed developer-facing name for the
-                // caller's active org (matches columns + `current_user.organizationId`);
-                // `tenantId` is kept as a deprecated alias with the identical
-                // value (#3280).
+                // caller's active org (matches columns + `current_user.organizationId`).
+                // The deprecated `tenantId` alias (#3280) was removed in v11 (#3290).
                 organizationId: ec.tenantId,
-                tenantId: ec.tenantId,
               }
             : { id: 'system', name: 'system', roles: [], positions: [], permissions: [] };
 

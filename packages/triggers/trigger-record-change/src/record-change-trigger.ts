@@ -225,7 +225,7 @@ export class RecordChangeTrigger implements FlowTrigger {
                   { ...(inputDoc ?? {}), ...after }
                 : inputDoc ?? (previous && typeof previous === 'object' ? previous : {});
 
-        const session = (ctx.session ?? {}) as { userId?: string; tenantId?: string; positions?: string[] };
+        const session = (ctx.session ?? {}) as { userId?: string; organizationId?: string; positions?: string[] };
 
         return {
             record,
@@ -233,11 +233,14 @@ export class RecordChangeTrigger implements FlowTrigger {
             object: binding.object ?? ctx.object,
             event: binding.event,
             userId: session.userId,
-            // Forward the writer's roles/tenant so a `runAs:'user'` flow enforces
+            // Forward the writer's roles/org so a `runAs:'user'` flow enforces
             // RLS exactly as the user who made the change, not a member fallback
-            // (#1888). The engine elevates only for `runAs:'system'`.
+            // (#1888). The engine elevates only for `runAs:'system'`. The hook
+            // session exposes the active org as `organizationId` (the deprecated
+            // `session.tenantId` alias was removed in v11, #3290); it feeds the
+            // automation context's driver-layer `tenantId` field unchanged.
             ...(Array.isArray(session.positions) && session.positions.length ? { positions: session.positions } : {}),
-            ...(session.tenantId ? { tenantId: session.tenantId } : {}),
+            ...(session.organizationId ? { tenantId: session.organizationId } : {}),
             // Expose the record as params too, so flows with named `isInput`
             // variables matching record fields get them seeded.
             params: record,

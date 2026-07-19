@@ -1674,10 +1674,10 @@ zero relearning:
 ```typescript
 // ✅ Blessed — identical to the hook surface (ctx.user / ctx.session)
 const org = ctx.user?.organizationId ?? ctx.session?.organizationId;
-
-// ⚠️ Deprecated alias — still works, carries the identical value
-const org = ctx.session?.tenantId;
 ```
+
+> The former `ctx.session.tenantId` alias was removed in v11 (#3290); read the
+> caller's active org under `organizationId`.
 
 Action bodies execute **trusted** (the `ctx.engine` / `ctx.api` facade bypasses
 RLS/FLS), so a body that must scope by org reads it from `ctx` explicitly.

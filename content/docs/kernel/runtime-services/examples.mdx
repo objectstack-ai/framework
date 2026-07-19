@@ -29,7 +29,9 @@ export async function run(ctx: any) {
 export async function beforeUpdate(ctx: any) {
   const ok = await ctx.services?.sharing?.canEdit('contract', ctx.input.id, {
     userId: ctx.session?.userId,
-    tenantId: ctx.session?.tenantId,
+    // Read the caller's org under `organizationId` (the `session.tenantId` alias
+    // was removed in v11, #3290); it feeds the sharing context's `tenantId`.
+    tenantId: ctx.session?.organizationId,
     positions: ctx.session?.positions,
   });
 
