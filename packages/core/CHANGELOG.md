@@ -1,5 +1,128 @@
 # @objectstack/core
 
+## 16.0.0-rc.0
+
+### Minor Changes
+
+- dd9f223: feat(analytics): scope a datetime date-bucket drill to the reference-tz midnight instants (#1752 follow-up)
+
+  Closes the one gap left by the initial #1752 change: a `datetime` date dimension
+  bucketed under a **non-UTC reference timezone** previously fell back to a superset
+  drill (its bucket boundary is that tz's midnight _instant_, which `YYYY-MM-DD`
+  calendar bounds can't express).
+
+  - **`@objectstack/core`** adds `zonedDateStartToUtcMs(ymd, tz)` — the UTC instant
+    at which a calendar day begins in a reference timezone (the inverse of
+    `calendarPartsInTz`). DST-safe: the offset is read from the platform tz
+    database via `Intl`, with a two-pass resolution for the rare offset-boundary
+    case; an unset/`'UTC'`/invalid zone returns plain UTC midnight.
+  - **`@objectstack/service-analytics`** now emits `drillRanges` bounds per the
+    field's temporal type (ADR-0053): a `datetime` field → ISO **instant** bounds
+    at the reference tz's midnight (works under any tz, incl. DST); a `date` field
+    → `YYYY-MM-DD` calendar bounds (tz-naive, exact under any tz). An unknown field
+    type is still emitted only under UTC and omitted (superset) under a non-UTC tz.
+
+  No objectui change is needed — the client already forwards whatever bound values
+  the server sends into the drill filter and the `filter[field][gte|lt]` URL.
+
+- 290e2f0: feat(analytics): emit a half-open date-range drill scope for granularity-bucketed date dimensions (#1752)
+
+  A report/dashboard cell grouped by a `dateGranularity` date dimension ("2026-Q2")
+  covers a SPAN of records, so drilling it needs a range (`>= start AND < nextStart`),
+  which the equality drill contract (`drillRawRows`) can't express — date dims were
+  therefore excluded from drill metadata and a drill landed on an unscoped superset.
+
+  - **`@objectstack/core`** adds `bucketKeyToCalendarRange(key, granularity)`, the
+    inverse of `bucketDateValue`: it turns a canonical bucket key into its half-open
+    `[start, end)` calendar span (`YYYY-MM-DD`, `end` exclusive). Pure, timezone-naive
+    calendar arithmetic; returns `null` for unbucketable / out-of-range keys so the
+    caller falls back to an unscoped (superset) drill rather than emit a wrong bound.
+  - **`@objectstack/service-analytics`** emits a `drillRanges` sidecar (aligned to
+    `rows` by index — the range companion to `drillRawRows`) for `date` +
+    `dateGranularity` dimensions, computed from the canonical bucket key in the
+    pre-label-resolution snapshot pass. A `datetime` field under a non-UTC reference
+    timezone is omitted (host drills a superset) until instant-boundary support
+    lands; a tz-naive `date` field is exact under any timezone (ADR-0053).
+
+  Consumed by objectui's report drill-through to scope the drilled record list to the
+  clicked time bucket.
+
+### Patch Changes
+
+- e057f42: fix: harden the bulk-write path — retries, idempotency, contracts, and summary visibility (#3147–#3152)
+
+  Six reliability fixes to the batched seed/import + `engine.insert(array)` path
+  introduced by the #2678 bulk-write rework:
+
+  - **#3151** `bulkWrite` validates that `writeBatch` returns one record per input
+    row (a short/long/non-array return is degraded per-row, not backfilled as
+    phantom success); `engine.insert(array)` likewise rejects a short driver
+    `bulkCreate` return instead of padding afterInsert with `undefined`.
+  - **#3150** wraps the two remaining un-retried write points (seed
+    `writeRecord`/`resolveDeferredUpdates`, import's no-`createManyData`
+    fallback) in `withTransientRetry`; `defaultIsTransientError` short-circuits
+    definitive logical errors to non-transient.
+  - **#3148** import `resolveRef` flushes pending creates on a same-object miss so
+    a later row can reference an earlier same-file CREATE, and no longer
+    negatively caches a miss.
+  - **#3149** threads an `attempt` counter through `bulkWrite`; seed rechecks by
+    `externalId` and import by `matchFields` before re-writing, so a
+    commit-then-lost-response retry cannot duplicate a batch.
+  - **#3147** `recomputeSummaries` retries transient failures and, on exhaustion,
+    surfaces `SummaryRecomputeError` (`ERR_SUMMARY_RECOMPUTE`) instead of a
+    silent warn; seed/import recover it to a warning without re-writing.
+  - **#3152** autonumbers are assigned after validation, so a batch that dies in
+    validation consumes no sequence value (no number-range gaps).
+
+- 5f05de2: **`createLogger({ file })` now actually writes the file under ESM.** `openFileStream` loaded `fs` with a lazy `require()` to keep the browser-safe logger entry out of the `fs` bundle graph; esbuild rewrites that to its `__require` shim in the ESM output, which throws `Dynamic require of "fs" is not supported`, and a bare `catch {}` swallowed it. Since the workspace is `type: module`, every Node ESM consumer — `os serve`, `os dev` — silently got no file logging at all, while the CJS build kept working. The builtin now loads via `process.getBuiltinModule` (opaque to bundlers, works in both module systems, with a `require` fallback for Node < 20.16), and a `file` destination that cannot be opened reports itself on stderr instead of disappearing.
+
+  Turning the destination back on also fixed three faults that were unreachable while it never opened: `child()` opened a second stream per child and orphaned it, destroying a child logger closed the stream its parent and siblings were still writing to, and an async open failure (e.g. an unwritable path) hit an `'error'` event with no listener and took the process down.
+
+- 021ba4c: fix(core): ObjectLogger honors NO_COLOR and TTY detection before emitting ANSI colors
+
+  The kernel/plugin logger (`ctx.logger`, wired by `os serve` / `os dev`) colorized its
+  `pretty`-format level tags unconditionally, so `NO_COLOR=1` runs and piped/CI output
+  still carried ANSI escapes (e.g. `\x1b[31m…ERROR\x1b[0m`), breaking plain-text log
+  scanners (see scripts/publish-smoke.sh, which had to strip ANSI before grepping).
+
+  Per the no-color.org convention, color is now emitted only when the destination stream
+  (stdout, or stderr for error/fatal) is an interactive TTY **and** `NO_COLOR` is unset or
+  empty — any non-empty `NO_COLOR` value disables color. Interactive terminals keep the
+  existing colorized output. The optional file destination now always receives plain text.
+
+- Updated dependencies [f972574]
+- Updated dependencies [22013aa]
+- Updated dependencies [3ad3dd5]
+- Updated dependencies [3a18b60]
+- Updated dependencies [a8aa34c]
+- Updated dependencies [a3823b2]
+- Updated dependencies [43a3efb]
+- Updated dependencies [524696a]
+- Updated dependencies [5e3301d]
+- Updated dependencies [46e876c]
+- Updated dependencies [158aa14]
+- Updated dependencies [d2723e2]
+- Updated dependencies [fefcd54]
+- Updated dependencies [beaf2de]
+- Updated dependencies [369eb6e]
+- Updated dependencies [b659111]
+- Updated dependencies [5754a23]
+- Updated dependencies [6c270a6]
+- Updated dependencies [668dd17]
+- Updated dependencies [8abf133]
+- Updated dependencies [e0859b1]
+- Updated dependencies [04ecd4e]
+- Updated dependencies [4d5a892]
+- Updated dependencies [16cebeb]
+- Updated dependencies [86d30af]
+- Updated dependencies [8923843]
+- Updated dependencies [a2795f6]
+- Updated dependencies [f16b492]
+- Updated dependencies [4b6fde8]
+- Updated dependencies [2018df9]
+- Updated dependencies [fc5a3a2]
+  - @objectstack/spec@16.0.0-rc.0
+
 ## 15.1.1
 
 ### Patch Changes

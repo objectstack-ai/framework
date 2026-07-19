@@ -1,5 +1,104 @@
 # Changelog
 
+## 16.0.0-rc.0
+
+### Minor Changes
+
+- 616e839: **Bulk user import defaults to `auto` — prefer invite per row, temporary only for undeliverable rows (#3236).** The identity import endpoint (`POST /api/v1/auth/admin/import-users`) gains a fourth `passwordPolicy`, **`auto`**, and it is now the **default** (was `none`).
+
+  `auto` decides **per row** instead of forcing one policy on the whole batch:
+
+  - a row with a deliverable channel — a **real email + a wired email service**, or a **phone + a wired SMS-invite path** — is **invited** (a set-your-password email, or an invitation SMS for phone-only rows), so no shared secret ever leaves the server;
+  - a row with **no** deliverable channel (placeholder email, phone-only without SMS, or an email row when no email service is wired) falls back to a **temporary password**, returned once in the response with `must_change_password` stamped.
+
+  This shrinks the temporary-password blast radius from "the whole batch" to "only the rows that genuinely can't be reached", and — unlike `invite` — `auto` **never rejects the request for missing infrastructure**: with nothing wired, every row simply degrades to temporary. The per-row outcome is surfaced on `rows[].delivery` (`email` / `sms` / `temporary`) with a batch breakdown on `summary.delivery` (also recorded in the run audit).
+
+  The three existing policies are unchanged and still selectable explicitly:
+
+  - `invite` — force the invite path for every row; unreachable rows are **failed** per-row (never downgraded). Pick this when a temporary-password fallback is unacceptable.
+  - `temporary` — force a generated temporary password for every row.
+  - `none` — identity only, no password and no invitation.
+
+  **Behavior change to note:** callers that **omit** `passwordPolicy` previously got `none` (no credential, no outbound message); they now get `auto`, which proactively sends invitations to deliverable rows (and returns temporary passwords for the rest). Callers that want the old identity-only behavior must pass `passwordPolicy: 'none'` explicitly. Every call that already passes an explicit policy is unaffected, and the response is a strict superset (adds the `delivery` fields).
+
+### Patch Changes
+
+- deb7e7e: fix(plugin-auth): run better-auth adapter WRITES as system context so #2948 doesn't strip readonly identity columns (#3164)
+
+  The better-auth ObjectQL adapter wrapped the engine so its READS carried
+  `isSystem` (to bypass the control-plane org-scope read hook), but its WRITES
+  passed through with no context. The static-`readonly` UPDATE strip (#2948) runs
+  on any non-system update — and since the adapter carries no caller context,
+  `!ctx?.isSystem` was `true`, so the strip silently DROPPED better-auth's own
+  writes to readonly `sys_user` columns: `email` (change-email), `banned` /
+  `ban_reason` / `ban_expires` (admin ban). Those operations returned success but
+  never persisted.
+
+  `withSystemReadContext` is renamed to `withSystemContext` (a deprecated alias is
+  kept for one release) and now injects `isSystem` on `insert` / `update` /
+  `delete` as well as reads. This is correct because these are the identity
+  authority's own writes — user-context writes to `managedBy: 'better-auth'` tables
+  are already rejected upstream by the ADR-0092 identity write guard, so the
+  adapter path only ever carries better-auth's internal writes.
+
+  Found while implementing #3043 (the INSERT-side readonly strip). This is its
+  UPDATE-side dual: #3043 relocated the insert strip to the external ingress
+  precisely because internal writers (this adapter included) don't declare
+  `isSystem`; the pre-existing engine-level UPDATE strip has no such relocation, so
+  the adapter had to declare its writes system.
+
+- fdc244e: Dev-loop DX fixes from the 15.1 third-party evaluation (P2 batch):
+
+  - **Hot-added objects are now queryable without a restart.** Adding a `*.object.ts` under `os dev` used to recompile "green" while every query answered `no such table` (or `not registered`) until a manual restart: the artifact reload never notified the ObjectQL registry, tables were only created at boot, and seeds only loaded from the boot-time bundle. The `metadata:reloaded` payload now carries the parsed artifact; ObjectQL ingests the object definitions and re-runs the idempotent schema sync (same `skipSchemaSync` opt-out as boot), and the runtime loads seeds for first-seen objects (dev, single-tenant). `os dev` also prints `✚ new object(s): …` on recompile.
+  - **Dev admin credentials stay visible.** The `os dev` startup banner only showed `admin@objectos.ai / admin123` on the boot that actually seeded it; with the persistent default DB every later boot hid it, and the Console login page never knew it existed. The hint now re-arms on every dev boot for as long as the account still verifies against the default password, and `GET /api/v1/auth/config` exposes a dev-gated `devSeedAdmin` field (never present outside `NODE_ENV=development`) so the login page can show it.
+  - **`os doctor` reference analysis understands current metadata shapes.** Objects bound through `defineView` containers (`list`/`listViews`/`form`/`formViews` → `data.object`, subform `childObject`, lookup form fields) and app navigation (`objectName`, nested `children`, `areas`) were reported as "defined but not referenced". The collector now walks the canonical shapes (plus flow node `config.object`/`objectName`) and the orphan-view check descends into containers.
+
+- Updated dependencies [f972574]
+- Updated dependencies [22013aa]
+- Updated dependencies [3ad3dd5]
+- Updated dependencies [3a18b60]
+- Updated dependencies [a8aa34c]
+- Updated dependencies [e057f42]
+- Updated dependencies [a3823b2]
+- Updated dependencies [bc65105]
+- Updated dependencies [43a3efb]
+- Updated dependencies [524696a]
+- Updated dependencies [5e3301d]
+- Updated dependencies [dd9f223]
+- Updated dependencies [46e876c]
+- Updated dependencies [5f05de2]
+- Updated dependencies [021ba4c]
+- Updated dependencies [158aa14]
+- Updated dependencies [83e8f7d]
+- Updated dependencies [d2723e2]
+- Updated dependencies [fefcd54]
+- Updated dependencies [beaf2de]
+- Updated dependencies [369eb6e]
+- Updated dependencies [b659111]
+- Updated dependencies [5754a23]
+- Updated dependencies [6c270a6]
+- Updated dependencies [290e2f0]
+- Updated dependencies [668dd17]
+- Updated dependencies [8abf133]
+- Updated dependencies [e0859b1]
+- Updated dependencies [92f5f19]
+- Updated dependencies [32899e6]
+- Updated dependencies [04ecd4e]
+- Updated dependencies [4d5a892]
+- Updated dependencies [16cebeb]
+- Updated dependencies [86d30af]
+- Updated dependencies [8923843]
+- Updated dependencies [a2795f6]
+- Updated dependencies [f16b492]
+- Updated dependencies [4b6fde8]
+- Updated dependencies [2018df9]
+- Updated dependencies [fc5a3a2]
+  - @objectstack/spec@16.0.0-rc.0
+  - @objectstack/platform-objects@16.0.0-rc.0
+  - @objectstack/rest@16.0.0-rc.0
+  - @objectstack/core@16.0.0-rc.0
+  - @objectstack/types@16.0.0-rc.0
+
 ## 15.1.1
 
 ### Patch Changes

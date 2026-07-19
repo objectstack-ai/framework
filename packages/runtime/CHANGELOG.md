@@ -1,5 +1,333 @@
 # @objectstack/runtime
 
+## 16.0.0-rc.0
+
+### Major Changes
+
+- 6c270a6: **BREAKING: remove the deprecated `ctx.session.tenantId` / `ctx.user.tenantId` alias from the hook & action authoring surface — converge on `organizationId` (#3290).**
+
+  #3280 made `organizationId` the blessed developer-facing name for the caller's active org across the JS authoring surface and kept `tenantId` as a `@deprecated` alias carrying the identical value. That alias is now **removed** from the hook `ctx.session`, the action-body `ctx.session`, and the action-body `ctx.user`. Read the caller's active org under the single blessed name:
+
+  ```diff
+  - const org = ctx.session.tenantId;   // hook or action body
+  + const org = ctx.user?.organizationId ?? ctx.session?.organizationId;
+  ```
+
+  **FROM → TO migration** (in any `*.hook.ts` / `*.action.ts` body):
+
+  - `ctx.session.tenantId` → `ctx.session.organizationId`
+  - `ctx.user.tenantId` (action body) → `ctx.user.organizationId`
+
+  The value is unchanged — `organizationId` is the same active-org id, matching the `organization_id` column and `current_user.organizationId` in RLS/sharing. `ctx.user` is `undefined` for system / unauthenticated writes, so read `ctx.session?.organizationId` when a hook or action must work regardless of a resolved user.
+
+  What changed internally:
+
+  - **`@objectstack/spec`** — `HookContextSchema.session` drops the `tenantId` field (only `organizationId` remains). A stray `tenantId` on a constructed session is now stripped by the schema.
+  - **`@objectstack/objectql`** — the engine's `buildSession()` no longer emits `session.tenantId`; the audit-stamp plugin sources the `tenant_id` column from `session.organizationId`.
+  - **`@objectstack/runtime`** — `buildActionSession()` and the REST action `ctx.user` no longer emit `tenantId`.
+  - **`@objectstack/trigger-record-change`** — reads `session.organizationId` (was `session.tenantId`) when forwarding the writer's org to a `runAs:'user'` flow; behavior is identical.
+
+  **Explicit non-goal (unchanged):** the generic **driver-layer** tenancy abstraction is _not_ touched — `ExecutionContext.tenantId`, `DriverOptions.tenantId`, `SqlDriver.applyTenantScope` / `TenancyConfig.tenantField`, and `ExecutionLog.tenantId`. That isolation column is configurable and legitimately carries an _environment_ id in database-per-tenant kernels; it is a distinct axis from the developer-facing org. The build-time `check:org-identifier` guard now also covers `packages/**` to keep reference bodies off the removed name.
+
+### Minor Changes
+
+- 2049b6a: feat(observability): admin-gated per-request `Server-Timing` via `X-OS-Debug-Timing` (#2408)
+
+  Perf-tuning mode was previously global-only (`serverTiming` option /
+  `OS_SERVER_TIMING`), which discloses internal phase durations — a mild
+  backend-fingerprinting surface — to every caller. This adds the per-request
+  gating path from the design so an operator can pull a single request's
+  `Server-Timing` breakdown on a live environment without turning the header on
+  for everyone.
+
+  - **observability**: a request-scoped disclosure gate (`runWithPerfDisclosure`,
+    `allowPerfDisclosure`, `isPerfDisclosureAllowed`, `PerfDisclosureGate`) kept
+    separate from the pure `PerfTiming` collector and pinned to its own
+    `Symbol.for` store so the middleware and dispatcher share it across module
+    copies.
+  - **plugin-hono-server**: the Server-Timing middleware is registered by default
+    (unless `serverTiming: false`). It runs the collector when timing is global
+    **or** the request sends `X-OS-Debug-Timing: 1`, and emits the header only
+    when the gate is open. `OS_PERF_TIMING=1` now also enables global mode.
+  - **runtime**: after resolving the execution context, the dispatcher opens the
+    gate for admin/service/system principals, so ordinary callers never receive
+    the header even if they send the debug header.
+
+  Existing global-mode behavior is unchanged.
+
+- 92f5f19: feat(runtime): sandbox budget is script CPU-time, not wall clock (ADR-0102 D1, #3295)
+
+  The QuickJS sandbox now meters each hook/action invocation against how much
+  **VM-active (CPU) time** the body burns, not wall clock. Idle host-await time and
+  a nested hook's own execution (which runs host-side while the caller's VM is
+  parked) are no longer charged to the caller — so a slow/loaded host or a deep
+  nested-write chain can't trip the budget while a script is merely waiting (the
+  root cause of the #3259 CI flake). A separate, generous **wall-clock ceiling**
+  (default 30s, `max(ceiling, cpuBudget)`) remains as the backstop for a body stuck
+  on a host call that never settles.
+
+  What changes for consumers (behaviour, not API signatures):
+
+  - **Meaning of the timeout knobs.** `body.timeoutMs`, the `hookTimeoutMs` /
+    `actionTimeoutMs` runner options, and `OS_SANDBOX_HOOK_TIMEOUT_MS` /
+    `OS_SANDBOX_ACTION_TIMEOUT_MS` keep their **names, defaults (250ms / 5000ms),
+    and precedence** — but now bound CPU-time instead of wall-clock. In practice
+    this only _loosens_ legitimate slow/nested work; a runaway synchronous script
+    is still cut at the same budget.
+  - **Error messages.** `exceeded timeout of Nms` → either `exceeded CPU budget of
+Nms` (script burned its CPU budget) or `exceeded wall-clock ceiling of Nms
+while awaiting host calls` (stuck on a never-settling host call). Update any
+    code/tests matching the old string.
+
+  New knobs (additive):
+
+  - `QuickJSScriptRunner` option `wallCeilingMs` and env `OS_SANDBOX_WALL_CEILING_MS`
+    — tune the wall ceiling (explicit option › env › 30s).
+  - `resolveSandboxTimeoutMs` (`@objectstack/types`) gains a `'wallCeiling'` kind.
+
+  Also fixes a latent init bug in the new accounting where the interrupt handler
+  could fire during `installCtx` and corrupt ctx marshalling. The nested-write
+  integration suites now run at the stock 250ms budget (previously forced to 10s),
+  which is itself the regression guard for the nested-charging fix.
+
+- 32899e6: feat(runtime): env-overridable sandbox hook/action timeout default (#3259)
+
+  The QuickJS sandbox enforces a wall-clock deadline on every hook/action
+  invocation (250ms hooks / 5000ms actions). Each invocation compiles a fresh
+  WASM module, and a nested hook compiles ANOTHER one inside the parent's budget,
+  so on a heavily loaded or slow host — an oversubscribed CI runner, constrained
+  production hardware — that fixed VM-creation cost alone can trip the hook
+  default even while the VM is still making progress. On CI this surfaced as an
+  intermittent `hook '…' exceeded timeout of 250ms` flake on PRs that never
+  touched the sandbox path.
+
+  The per-invocation timeout DEFAULT is now resolvable from the environment via
+  `resolveSandboxTimeoutMs` (`@objectstack/types`), which `QuickJSScriptRunner`
+  consults, so an operator can raise the floor once, deployment-wide, instead of
+  re-tuning every call site:
+
+  - `OS_SANDBOX_HOOK_TIMEOUT_MS` — default hook budget (ms)
+  - `OS_SANDBOX_ACTION_TIMEOUT_MS` — default action budget (ms)
+
+  Precedence is unchanged: an explicit `hookTimeoutMs` / `actionTimeoutMs` passed
+  to the runner still wins over the env var, and a body's own declared `timeoutMs`
+  still wins over the resolved default (the smaller of the explicit values). Only
+  a positive integer is honored; unset / empty / non-numeric / non-positive keeps
+  the built-in 250ms / 5000ms defaults, so behaviour is byte-for-byte unchanged
+  when the vars are absent — production is unaffected unless it opts in.
+
+  CI's Test Core now sets `OS_SANDBOX_HOOK_TIMEOUT_MS=10000` so the shared-runner
+  load flake can't recur; genuine hangs stay bounded by each test's own timeout.
+
+### Patch Changes
+
+- b39c65d: **Extend the blessed `organizationId` org name to the action-body surface (follow-up to #3280).** Hooks now teach `ctx.user.organizationId` / `ctx.session.organizationId` as the blessed name for the caller's active org; action bodies — the sibling authoring surface that shares the same sandbox runner — were left behind: the REST dispatch path exposed only `ctx.user.tenantId` (the deprecated name) and no `ctx.session` at all, and the MCP `run_action` path exposed neither.
+
+  Both action-dispatch sites (`handleActions`, MCP `runAction`) now populate:
+
+  - **`ctx.user.organizationId`** — the blessed name (matches the `organization_id` column and `current_user.organizationId` in RLS); `ctx.user.tenantId` is kept as a deprecated alias with the identical value on the REST path.
+  - **`ctx.session`** (`{ userId, organizationId, tenantId, roles? }`) — mirrors the hook `ctx.session` shape, `undefined` for a context-less / self-invoked call.
+
+  Action bodies execute trusted (the `ctx.engine` / `ctx.api` facade bypasses RLS/FLS), so a body that must scope by org has to read it from `ctx` — now under the same name a hook author uses. Additive and behavior-preserving; the objectstack-ui skill documents the action-body `ctx` and the `organizationId` read.
+
+- fdc244e: Dev-loop DX fixes from the 15.1 third-party evaluation (P2 batch):
+
+  - **Hot-added objects are now queryable without a restart.** Adding a `*.object.ts` under `os dev` used to recompile "green" while every query answered `no such table` (or `not registered`) until a manual restart: the artifact reload never notified the ObjectQL registry, tables were only created at boot, and seeds only loaded from the boot-time bundle. The `metadata:reloaded` payload now carries the parsed artifact; ObjectQL ingests the object definitions and re-runs the idempotent schema sync (same `skipSchemaSync` opt-out as boot), and the runtime loads seeds for first-seen objects (dev, single-tenant). `os dev` also prints `✚ new object(s): …` on recompile.
+  - **Dev admin credentials stay visible.** The `os dev` startup banner only showed `admin@objectos.ai / admin123` on the boot that actually seeded it; with the persistent default DB every later boot hid it, and the Console login page never knew it existed. The hint now re-arms on every dev boot for as long as the account still verifies against the default password, and `GET /api/v1/auth/config` exposes a dev-gated `devSeedAdmin` field (never present outside `NODE_ENV=development`) so the login page can show it.
+  - **`os doctor` reference analysis understands current metadata shapes.** Objects bound through `defineView` containers (`list`/`listViews`/`form`/`formViews` → `data.object`, subform `childObject`, lookup form fields) and app navigation (`objectName`, nested `children`, `areas`) were reported as "defined but not referenced". The collector now walks the canonical shapes (plus flow node `config.object`/`objectName`) and the orphan-view check descends into containers.
+
+- 2ea08ee: Flow trigger observability — kill the four-layer silence around record-change flows that never fire (2026-07-17 third-party eval).
+
+  A misauthored auto-launched flow (wrong `objectName`, missing `requires: ['automation','triggers']`, failing start condition) produced ZERO output at every layer: the engine's own registration/binding logs land inside the CLI's boot-quiet stdout window (which swallows debug/info/warn — only error/fatal reach stderr), and each "didn't happen" path was itself silent. Fixes:
+
+  - **Startup banner `Flows:` section** (`os serve`/`os dev`/`os start`): flow count, bound-to-trigger count, registered trigger types, draft count — plus loud `⚠` lines for flows declared with no automation engine enabled (`requires` missing), flows whose trigger type has no registered trigger, and bound record-change flows targeting an unknown object (dead binding). Printed after stdout is restored, so it is immune to the boot-quiet window.
+  - **Trigger-fired run failures now log at ERROR** (stderr — always visible): the automation engine no longer drops the AutomationResult of a trigger-fired execution; condition-evaluation faults and node failures surface with the flow name. Condition-not-met skips stay at debug (high-frequency, intentional).
+  - **`RecordChangeTrigger` probes object existence at bind time** and warns when a flow's `objectName` matches no registered object (exact-name matching), instead of silently arming a hook that can never fire.
+  - **`kernel:bootstrapped` binding audit** in the automation plugin: warns per enabled-but-unbound triggered flow with the reason, and reports registered/bound/draft counts (`AutomationEngine.getTriggerBindingAudit()`, extended `getFlowRuntimeStates()` with `status`/`triggerType`/`object`).
+  - **`os validate` flow-wiring advisories** (`@objectstack/lint` `validateFlowTriggerReadiness`): warns when a record-triggered flow targets an object the stack does not define, and when an auto-triggered flow's status is `draft` (authored or defaulted — draft flows still fire; declare `active` or `obsolete`).
+  - Removed leftover boot-debug writes (`registerApp`/`AppPlugin`/`StandaloneStack`/`AuditPlugin` stderr noise) that previous debugging of this same silence had left behind.
+
+- d1d1c40: fix(runtime): honor a hook body's declared `timeoutMs` so nested cross-object writes aren't clamped to 250ms (#1867)
+
+  Hook bodies run in the QuickJS sandbox with a default 250ms timeout. The runner
+  folded that engine default straight into `Math.min(...)` when resolving the
+  effective timeout, so it _always_ dominated for hooks: a body that declared a
+  larger `timeoutMs` (the spec permits up to 30_000ms — `ScriptBody.timeoutMs`) to
+  give a legitimate nested write — "when a child changes, update the parent" —
+  room to settle was silently clamped back to 250ms and killed mid-flight. The
+  declared knob was never enforced.
+
+  The engine default is now a FALLBACK used only when no explicit timeout is
+  supplied, not a hard ceiling. An explicit `body.timeoutMs` (and/or an enclosing
+  hook/action timeout) is honored; when both are present the smaller wins. Bodies
+  that declare nothing still get the 250ms hook / 5000ms action default, and a
+  body may still LOWER its own timeout below the default.
+
+  This clears the last reliability blocker for nested cross-object writes from
+  hooks — the sandbox crash itself (`memory access out of bounds`) was already
+  fixed by the deferred-promise host-call model — so header/rollup fields no
+  longer need denormalized, hand-maintained workarounds.
+
+- a2d6555: perf(runtime): drop asyncify — sandbox runs on the sync QuickJS variant (ADR-0102 D2, #3296)
+
+  Phase 2 of #3275. The QuickJS sandbox switches from the asyncify build
+  (`newAsyncContext`) to the already-installed sync release variant
+  (`newQuickJSWASMModule().newContext()`), keeping one physically isolated WASM
+  module per invocation (ADR-0102 D2/D4). Asyncify's only justification — suspending
+  the WASM stack across a host call — disappeared with the #1867 deferred-promise +
+  pump redesign, so nothing depended on it. Wins: smaller binary, faster
+  compile/instantiate, faster per-instruction, and removal of an entire class of
+  suspended-stack failure modes.
+
+  Also fixes a latent resource leak surfaced by the stricter sync teardown: host
+  `ctx.api` calls hand the VM a `vm.newPromise()` deferred that was never
+  `dispose()`d (the newPromise contract requires it). The asyncify build tolerated
+  the leak; the sync build's `JS_FreeRuntime` aborted (`Assertion failed:
+list_empty`) when a context was torn down with a pending, never-settled host call
+  (the timeout path). Deferreds are now tracked and disposed before context
+  teardown.
+
+  Memory: the sync `QuickJSWASMModule` has no `dispose()`; its WebAssembly instance
+
+  - linear memory are GC-reclaimed when the reference is dropped. A new RSS soak
+    test guards that per-invocation modules don't ratchet RSS.
+
+- 3a6310c: perf(runtime): stop the sandbox pump loop from idle-spinning while awaiting a host call (#3233)
+
+  The QuickJS hook/action runner drives a script's async continuations with a
+  pump loop that, on every iteration, yielded via `setImmediate` and then drained
+  the VM job queue. While the body was only _waiting_ on an in-flight host promise
+  (a slow `ctx.api` read/write, or one call that settles after many event-loop
+  turns), that queue was empty every iteration, so the loop woke ~200k times/sec
+  doing nothing — a ~50,000-iteration burn for a 250ms wait.
+
+  The yield is now adaptive: it stays on `setImmediate` (near-zero latency) while
+  the script is making progress, and once a pump executes zero VM jobs it ramps up
+  to a small capped `setTimeout` (≤8ms). Any executed job — a settled host call, a
+  resumed continuation — resets it to the fast path, so sequential host calls and
+  multi-turn work keep their low latency; only a genuinely idle wait backs off.
+  Deadline enforcement and every existing pump-budget/timeout/transaction
+  guarantee are unchanged.
+
+- 515f11a: fix(seed): replaying seeds no longer corrupts lookup natural keys on the upsert update path
+
+  Every dev-server restart replayed package seeds in upsert mode, and any record whose
+  lookup/master_detail was authored as a natural key could have that reference overwritten
+  with NULL on the update path (`NOT NULL constraint failed` on required columns; silent
+  link loss on nullable ones). Four fixes:
+
+  - An unresolved reference now leaves the column untouched (deferred to pass 2) or drops
+    the record loudly — it is never written as NULL over an existing row.
+  - DB-side reference resolution probes the target dataset's declared `externalId` (e.g.
+    `email`) before falling back to `name` and `id`, matching how in-memory resolution
+    already keyed records.
+  - A rejected update (e.g. a `state_machine` rule vetoing the replay) no longer severs
+    natural-key resolution for downstream child datasets.
+  - Replays are idempotent: an upsert/update whose declared fields already match the
+    existing row is skipped instead of rewritten (no more `updated_at` churn or lifecycle
+    re-validation on every boot).
+
+- 4174a07: feat(runtime): seed-replayer reports `skipped` so hosts can stamp seed-once on progress
+
+  The `seed-replayer` kernel service returned `{ inserted, updated, errors }` but
+  not `skipped`. A cloud host therefore could not tell an **all-skip replay**
+  (the env's seed data is already present — a no-op) apart from the
+  zero-summary early-returns that never ran the loader (no organization, no
+  metadata service, no datasets). Both looked like `inserted = updated = 0`, so
+  the host could not safely stamp its seed-once record for the all-skip case and
+  re-ran the full remote replay on every cold boot.
+
+  Add `skipped: result.summary.totalSkipped` to the replayer's return; the
+  early-returns report `skipped: 0`. This lets a host (cloud#853's
+  `decideSeedStamp`) stamp on progress — including an all-skip replay — while
+  still declining to stamp a genuine no-loader zero-summary. Additive and
+  backward compatible; existing consumers ignore the new field.
+
+- ce468c8: feat(observability): decompose `Server-Timing` into auth / db / hooks / serialize spans (perf-tuning mode)
+
+  The opt-in `Server-Timing` header now breaks a request's server time into the phases that actually explain it, so an operator can open DevTools → Network → Timing and see where the time went without standing up an external tracing backend:
+
+  - **`db`** — total SQL time with a **query count**. The SQL driver wires knex's `query` / `query-response` events (keyed by `__knexQueryUid`) and folds each query into one aggregate member (`db;dur=210;desc="6 queries"`) — the query count is the number most useful for spotting N sequential round-trips. Timing is attributed to the originating request via `AsyncLocalStorage`, so it is correct under concurrency and never cross-attributes. SQL text is never emitted, only durations and a count.
+  - **`auth`** — identity / session resolution in the dispatcher, the prime suspect for unexplained data-API overhead.
+  - **`hooks`** — total business-hook execution time with a hook count, fed through the engine's existing `HookMetricsRecorder` seam (wired from the runtime, so `@objectstack/objectql`'s lean `core` tier stays observability-free).
+  - **`serialize`** — response JSON encoding in the HTTP adapter.
+
+  Adds `countServerTiming(name, dur, unit)` (and `PerfTiming.count`) to fold high-frequency phases into a single aggregate member instead of flooding the header. Every phase is a no-op when perf-tuning is off (`serverTiming: true` / `OS_SERVER_TIMING=true`), so there is zero measurable overhead on the normal path.
+
+  Closes #2408.
+
+- Updated dependencies [f972574]
+- Updated dependencies [2f3c641]
+- Updated dependencies [e38da5b]
+- Updated dependencies [f9b118d]
+- Updated dependencies [22013aa]
+- Updated dependencies [3ad3dd5]
+- Updated dependencies [3a18b60]
+- Updated dependencies [deb7e7e]
+- Updated dependencies [a8aa34c]
+- Updated dependencies [e057f42]
+- Updated dependencies [a3823b2]
+- Updated dependencies [43a3efb]
+- Updated dependencies [524696a]
+- Updated dependencies [6b51346]
+- Updated dependencies [80273c8]
+- Updated dependencies [fdc244e]
+- Updated dependencies [5e3301d]
+- Updated dependencies [dd9f223]
+- Updated dependencies [47d923c]
+- Updated dependencies [46e876c]
+- Updated dependencies [2ea08ee]
+- Updated dependencies [616e839]
+- Updated dependencies [5f05de2]
+- Updated dependencies [021ba4c]
+- Updated dependencies [158aa14]
+- Updated dependencies [83e8f7d]
+- Updated dependencies [d2723e2]
+- Updated dependencies [fefcd54]
+- Updated dependencies [efbcfe1]
+- Updated dependencies [2049b6a]
+- Updated dependencies [beaf2de]
+- Updated dependencies [06cb319]
+- Updated dependencies [369eb6e]
+- Updated dependencies [b659111]
+- Updated dependencies [5754a23]
+- Updated dependencies [6c270a6]
+- Updated dependencies [290e2f0]
+- Updated dependencies [668dd17]
+- Updated dependencies [8abf133]
+- Updated dependencies [e0859b1]
+- Updated dependencies [92f5f19]
+- Updated dependencies [32899e6]
+- Updated dependencies [ce468c8]
+- Updated dependencies [04ecd4e]
+- Updated dependencies [4d5a892]
+- Updated dependencies [16cebeb]
+- Updated dependencies [86d30af]
+- Updated dependencies [8923843]
+- Updated dependencies [ea32ec7]
+- Updated dependencies [a2795f6]
+- Updated dependencies [f16b492]
+- Updated dependencies [4b6fde8]
+- Updated dependencies [2018df9]
+- Updated dependencies [fc5a3a2]
+  - @objectstack/spec@16.0.0-rc.0
+  - @objectstack/plugin-security@16.0.0-rc.0
+  - @objectstack/objectql@16.0.0-rc.0
+  - @objectstack/rest@16.0.0-rc.0
+  - @objectstack/plugin-auth@16.0.0-rc.0
+  - @objectstack/core@16.0.0-rc.0
+  - @objectstack/formula@16.0.0-rc.0
+  - @objectstack/metadata@16.0.0-rc.0
+  - @objectstack/driver-sql@16.0.0-rc.0
+  - @objectstack/types@16.0.0-rc.0
+  - @objectstack/observability@16.0.0-rc.0
+  - @objectstack/metadata-core@16.0.0-rc.0
+  - @objectstack/driver-memory@16.0.0-rc.0
+  - @objectstack/driver-sqlite-wasm@16.0.0-rc.0
+  - @objectstack/service-cluster@16.0.0-rc.0
+  - @objectstack/service-datasource@16.0.0-rc.0
+  - @objectstack/service-i18n@16.0.0-rc.0
+
 ## 15.1.1
 
 ### Patch Changes

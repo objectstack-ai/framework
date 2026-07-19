@@ -1,5 +1,345 @@
 # @objectstack/cli
 
+## 16.0.0-rc.0
+
+### Minor Changes
+
+- 2ea08ee: Flow trigger observability — kill the four-layer silence around record-change flows that never fire (2026-07-17 third-party eval).
+
+  A misauthored auto-launched flow (wrong `objectName`, missing `requires: ['automation','triggers']`, failing start condition) produced ZERO output at every layer: the engine's own registration/binding logs land inside the CLI's boot-quiet stdout window (which swallows debug/info/warn — only error/fatal reach stderr), and each "didn't happen" path was itself silent. Fixes:
+
+  - **Startup banner `Flows:` section** (`os serve`/`os dev`/`os start`): flow count, bound-to-trigger count, registered trigger types, draft count — plus loud `⚠` lines for flows declared with no automation engine enabled (`requires` missing), flows whose trigger type has no registered trigger, and bound record-change flows targeting an unknown object (dead binding). Printed after stdout is restored, so it is immune to the boot-quiet window.
+  - **Trigger-fired run failures now log at ERROR** (stderr — always visible): the automation engine no longer drops the AutomationResult of a trigger-fired execution; condition-evaluation faults and node failures surface with the flow name. Condition-not-met skips stay at debug (high-frequency, intentional).
+  - **`RecordChangeTrigger` probes object existence at bind time** and warns when a flow's `objectName` matches no registered object (exact-name matching), instead of silently arming a hook that can never fire.
+  - **`kernel:bootstrapped` binding audit** in the automation plugin: warns per enabled-but-unbound triggered flow with the reason, and reports registered/bound/draft counts (`AutomationEngine.getTriggerBindingAudit()`, extended `getFlowRuntimeStates()` with `status`/`triggerType`/`object`).
+  - **`os validate` flow-wiring advisories** (`@objectstack/lint` `validateFlowTriggerReadiness`): warns when a record-triggered flow targets an object the stack does not define, and when an auto-triggered flow's status is `draft` (authored or defaulted — draft flows still fire; declare `active` or `obsolete`).
+  - Removed leftover boot-debug writes (`registerApp`/`AppPlugin`/`StandaloneStack`/`AuditPlugin` stderr noise) that previous debugging of this same silence had left behind.
+
+- 83e8f7d: feat(mcp): decouple the stdio auto-start switch from the HTTP surface + surface the MCP endpoint on `os dev` boot (#3167)
+
+  The MCP HTTP surface (`/api/v1/mcp`) and the long-lived stdio transport used to
+  share one env var: `OS_MCP_SERVER_ENABLED=true` turned the HTTP surface on **and**
+  silently auto-started the stdio transport — which bridges the raw metadata service
+
+  - data engine with no per-request principal (unscoped). An operator setting it to
+    "make sure MCP is on" got an unscoped transport as a side effect.
+
+  * **`@objectstack/types`** — new `resolveMcpStdioAutoStart()`. Stdio auto-start is
+    now its own switch, `OS_MCP_STDIO_ENABLED` (default off); `OS_MCP_SERVER_ENABLED`
+    governs only the HTTP surface. The legacy `OS_MCP_SERVER_ENABLED=true` trigger
+    still starts stdio for one release, flagged as deprecated. `=false` is unchanged
+    (it only ever gated HTTP).
+  * **`@objectstack/mcp`** — `MCPServerPlugin.start()` gates stdio on the new switch
+    and logs a one-time deprecation warning when started via the legacy alias.
+  * **`@objectstack/cli`** — `os dev` now prints the MCP endpoint, the agent-skill
+    URL, and a ready-to-paste `claude mcp add` command on boot (gated on the HTTP
+    surface being on), so the "an agent operates the app it's building" loop is
+    discoverable at dev time.
+  * **`create-objectstack`** — the blank scaffold README documents that the app is
+    itself an MCP server (the serve side), distinct from the consume-side connector.
+
+### Patch Changes
+
+- da58467: fix(cli): honor `OS_DATABASE_DRIVER=memory` (mingo InMemoryDriver) (#3276)
+
+  `os dev` / `os start` / `os serve` advertised a `memory` database driver
+  (`--database-driver memory`, `OS_DATABASE_DRIVER=memory`, and a `memory://`
+  URL scheme), but `serve.ts`'s driver dispatch had no `memory` branch — so it
+  silently fell through to the dev SQLite `:memory:` default (SQLite-in-memory,
+  a _different_ engine) or, in production, registered no driver at all.
+
+  The driver kind-resolution + construction is now extracted into
+  `utils/storage-driver.ts` (unit-testable in isolation) with the missing
+  `memory` branch: selecting it yields the mingo `InMemoryDriver` in dev AND
+  production. The `memory://` / `mingo://` URL scheme is now recognized too,
+  kept distinct from sqlite's `:memory:` pseudo-file. Telemetry-datasource
+  provisioning behavior is unchanged.
+
+- fb107b8: fix(cli): tolerate the `--` separator pnpm injects when forwarding script args (#3114)
+
+  The AGENTS.md-documented backend-debug flow `pnpm dev -- --fresh -p <port>` failed at
+  the repo root with an opaque `Unexpected arguments: -p, 44637` (exit 2 + a help dump).
+
+  pnpm appends forwarded args to a script **verbatim, including the `--`**, and each
+  nested `pnpm --filter` hop preserves it, so the showcase's `objectstack dev
+--seed-admin` ran as `objectstack dev --seed-admin -- --fresh -p 44637`. oclif reads
+  `--` as POSIX end-of-flags, so everything after it became positional: `--fresh` was
+  silently swallowed as the `package` arg and `-p 44637` overflowed the arg list. Every
+  flag the user asked for was dropped — the failure was opaque precisely because the
+  `--` looks inert.
+
+  A `preparse` hook now drops `--` separators before oclif parses argv, so the
+  npm-style `-- <flags>` form and the bare form behave identically, for every command
+  and both bins (`run.js`, `run-dev.js`). No `os` command takes passthrough args (none
+  sets `strict = false`, none reads raw argv), so a `--` carries no meaning here and is
+  always a package-manager artifact.
+
+  Note this is not fixable via oclif's `'--': false` parser option: that keeps
+  flag-parsing on past the separator but re-appends the `--` into argv, so strict
+  commands fail with `Unexpected argument: --` instead.
+
+  Tradeoff: a `-`-prefixed token can no longer be forced to parse as a positional
+  value. Every `os` positional is a config path, a metadata / datasource / package
+  name, or an id — none start with `-`.
+
+- 216c2db: fix(cli): fail loudly when `turso`/libSQL is selected in the open-core CLI (#3276 follow-up)
+
+  Same "declared ≠ enforced" class as the `memory` fix: the CLI advertised `turso`
+  (`--database-driver turso`, `OS_DATABASE_DRIVER=turso`, `libsql://` URLs) but the
+  driver dispatch had no `turso` branch, so it silently fell through to the SQLite
+  default and ignored the requested engine.
+
+  `turso`/libSQL ships in the cloud / enterprise distribution
+  (`@objectstack/driver-turso`, composed by the cloud runtime's own kernel factory —
+  open-core's standalone stack deliberately does not consume it). Rather than pull an
+  EE driver into open-core, `createStorageDriver` now throws a typed
+  `UnsupportedDriverError` for `turso`/`libsql`, and `serve.ts` surfaces it as a
+  fatal, actionable boot error (naming the cloud/EE package and the open-core
+  alternatives) instead of silently degrading to SQLite. `libsql://` / `*.turso.*`
+  URLs stay classified as `turso` so they hit the same loud failure.
+
+- fdc244e: Dev-loop DX fixes from the 15.1 third-party evaluation (P2 batch):
+
+  - **Hot-added objects are now queryable without a restart.** Adding a `*.object.ts` under `os dev` used to recompile "green" while every query answered `no such table` (or `not registered`) until a manual restart: the artifact reload never notified the ObjectQL registry, tables were only created at boot, and seeds only loaded from the boot-time bundle. The `metadata:reloaded` payload now carries the parsed artifact; ObjectQL ingests the object definitions and re-runs the idempotent schema sync (same `skipSchemaSync` opt-out as boot), and the runtime loads seeds for first-seen objects (dev, single-tenant). `os dev` also prints `✚ new object(s): …` on recompile.
+  - **Dev admin credentials stay visible.** The `os dev` startup banner only showed `admin@objectos.ai / admin123` on the boot that actually seeded it; with the persistent default DB every later boot hid it, and the Console login page never knew it existed. The hint now re-arms on every dev boot for as long as the account still verifies against the default password, and `GET /api/v1/auth/config` exposes a dev-gated `devSeedAdmin` field (never present outside `NODE_ENV=development`) so the login page can show it.
+  - **`os doctor` reference analysis understands current metadata shapes.** Objects bound through `defineView` containers (`list`/`listViews`/`form`/`formViews` → `data.object`, subform `childObject`, lookup form fields) and app navigation (`objectName`, nested `children`, `areas`) were reported as "defined but not referenced". The collector now walks the canonical shapes (plus flow node `config.object`/`objectName`) and the orphan-view check descends into containers.
+
+- 546a0d6: fix(cli): `os explain object` documented `ownership` with the wrong allowed values (#3244)
+
+  The schema catalog described the object `ownership` field as the package
+  _contribution_ kind (`"own" | "extend"`, the `ObjectOwnershipEnum` set via
+  `registerObject`). But `ObjectSchema.ownership` is the **record-ownership
+  model** — `z.enum(['user', 'org', 'none'])` — a distinct concept the spec
+  explicitly warns not to conflate despite the shared word.
+
+  `os explain object` now prints:
+
+      ownership   'user' | 'org' | 'none'   Record-ownership model: user (default,
+      injects a reassignable owner_id) | org | none (no per-record owner).
+      Distinct from the package own/extend contribution kind.
+
+  A regression test (`packages/cli/test/commands.test.ts`) pins the documented
+  values to the record-ownership enum so the two concepts can't drift back
+  together. Found during the #1880 docs implementation-accuracy audit.
+
+- f58db35: fix(cli): treat an inline `label:` as the default-locale source in i18n coverage
+
+  A fresh `npm create objectstack` scaffold reported 4 `i18n/missing-object` /
+  `i18n/missing-field` errors for its own `<ns>_note` object, even though the
+  template authors `label: 'Note'`, `pluralLabel: 'Notes'`, `label: 'Title'` and
+  `label: 'Body'` inline. The only way to silence them was to commit an `en`
+  bundle restating strings the metadata already carries.
+
+  The inline `label:` _is_ the default-locale text: the runtime resolver falls
+  back to it when a bundle has no entry (`translateObject`), and `os i18n
+extract` seeds bundles from it. Coverage now honours that contract — an inline
+  label satisfies the default locale, and a bundle is what _other_ locales need.
+  Keys with no source string anywhere are no longer reported as i18n gaps; a
+  missing label is already `required/label`'s finding.
+
+  Non-default locales are unaffected: they still warn for every untranslated key
+  (`os lint` on `examples/app-todo` reports the same 79 warnings as before, with
+  its 39 default-locale errors gone). `os lint --include-platform` drops the
+  platform baseline's default-locale errors for the same reason — the platform
+  ships English labels inline — while keeping its non-default-locale warnings.
+
+- 878c1ed: `os lint` no longer buries the user's own signal under the platform i18n baseline. A fresh scaffold reported 800+ `i18n/missing-metadataForm` errors — translation keys for platform built-in metadata forms (email_template, …) that the platform packages already ship at runtime. Those are now hidden by default and folded into one summary line (`platform built-ins: N i18n issue(s) hidden`); pass `--include-platform` to audit them, and read `hiddenPlatform` in `--json` output. User-authored metadata coverage is reported unchanged.
+- 9760844: feat(cli): surface the MCP endpoint in the server-ready banner (#3167)
+
+  The MCP server (`/api/v1/mcp`) is a default-on core capability, but nothing in
+  the `os dev` / `os serve` boot output pointed to it — a developer had to already
+  know it was there to connect an AI client. The server-ready banner now prints
+  the MCP URL and the `SKILL.md` pointer whenever the surface is enabled
+  (`isMcpServerEnabled()`, the same switch that auto-loads the plugin and gates
+  the route), so an agent can operate the running app straight from the dev loop.
+  Hidden when `OS_MCP_SERVER_ENABLED=false`.
+
+- fefcd54: fix(spec): declare `ownership` as a first-class ObjectSchema field (#3175)
+
+  The object-level record-ownership model — `ownership: 'user' | 'org' | 'none'`,
+  which drives the registry's `owner_id` auto-provisioning (`applySystemFields`) —
+  was read by the engine via `(schema as any).ownership` while `ObjectSchema.create()`
+  **rejected** it as an unknown top-level key (ADR-0032 / #1535). So a tested engine
+  opt-out (`ownership: 'org' | 'none'` on catalog / junction tables) could not be
+  set through the sanctioned authoring path, and the same `ownership` word was read
+  elsewhere as the unrelated package-contribution kind (`own` / `extend`).
+
+  - **spec**: `ObjectSchema` now declares `ownership: z.enum(['user','org','none']).optional()`.
+    Authoring the record-ownership opt-out validates cleanly; the registry reads it
+    off the typed schema (no `as any`). A retired `ownership: 'own'` / `'extend'`
+    value fails with guidance pointing at the record-ownership model and noting that
+    `own`/`extend` is the contribution kind (`registerObject`), not an object-schema value.
+  - **cli**: the `object` scaffold no longer emits the now-invalid `ownership: 'own'`
+    (owner injection is the default), and `objectstack info` labels the record model
+    with the correct `user` default.
+
+  No runtime behavior change: `applySystemFields` and its `owner_id` injection logic
+  are unchanged — this makes the property the engine already honors legally authorable
+  and consistently typed.
+
+- 8923843: Reject view containers that define no views. A flat list-view object (`{ name, label, type, columns, ... }`) parses to an empty `ViewSchema` container because Zod strips unknown keys — zero views register and the Console silently renders nothing. `defineView()` now throws on a zero-view container, and `os validate` gains a `view-container-shape` check (`validateViewContainers` in `@objectstack/lint`) that reports flat or empty `views: []` entries pre-parse with a wrap-it fix hint.
+- a2795f6: feat(triggers): declarative time-relative trigger — daily sweep instead of fragile date-equality (#1874)
+
+  Time-relative business rules ("alert 60 days before a contract's `end_date`")
+  could only be expressed as a `record_change` flow gated on a date-equality
+  condition like `end_date == daysFromNow(60)`. That predicate is only evaluated
+  when the record _happens to change_, so it fires only if a record is edited on
+  exactly the threshold day — i.e. almost never, unattended. The robust
+  alternative was a hand-written cron + range query that every author
+  re-implemented (contracts `renewal_alert`, hr `document_expiring_soon`,
+  procurement `po_overdue`, …).
+
+  A flow's start node can now declare a `timeRelative` descriptor instead:
+
+  ```ts
+  config: {
+    timeRelative: {
+      object: 'contracts',
+      dateField: 'end_date',
+      offsetDays: [60, 30, 7],      // T-minus reminders — fires on each threshold day
+      // — or — withinDays: 30      // "expiring soon" range; negative = overdue lookback
+      filter: { status: 'active' }, // optional, ANDed with the date window
+    },
+    schedule: { type: 'cron', expression: '0 8 * * *' }, // optional; defaults to daily 08:00 UTC
+  }
+  ```
+
+  The new `time_relative` trigger (shipped in `@objectstack/trigger-schedule` as
+  `TimeRelativeTriggerPlugin`) sweeps the object on that schedule and launches the
+  flow **once per matching record**, with the record on the automation context —
+  so the start-node `condition` gate and `{record.<field>}` interpolation work
+  exactly as for a record-change flow. Because the window is evaluated every day,
+  a threshold is never missed regardless of when the record last changed. The
+  discovery query runs as a system operation (RLS-bypassing) and is capped
+  (`maxRecords`, default 1000) so a mis-scoped window can't fan out unboundedly;
+  per-record failures are isolated so one bad row never aborts the sweep.
+
+  The automation engine routes a start node carrying `config.timeRelative` to the
+  `time_relative` trigger (ahead of the plain `schedule` trigger, whose behavior is
+  unchanged), and `os validate` gains readiness checks for the new descriptor
+  (unknown swept object, ambiguous draft status). New authorable spec key:
+  `TimeRelativeTriggerSchema` (`@objectstack/spec/automation`).
+
+- Updated dependencies [b39c65d]
+- Updated dependencies [f972574]
+- Updated dependencies [2f3c641]
+- Updated dependencies [e38da5b]
+- Updated dependencies [f9b118d]
+- Updated dependencies [22013aa]
+- Updated dependencies [a9459e6]
+- Updated dependencies [3ad3dd5]
+- Updated dependencies [3a18b60]
+- Updated dependencies [02eafa5]
+- Updated dependencies [deb7e7e]
+- Updated dependencies [a8aa34c]
+- Updated dependencies [e057f42]
+- Updated dependencies [9ccd1e9]
+- Updated dependencies [a3823b2]
+- Updated dependencies [47d923c]
+- Updated dependencies [39b56d0]
+- Updated dependencies [447465a]
+- Updated dependencies [a140ff0]
+- Updated dependencies [bc65105]
+- Updated dependencies [43a3efb]
+- Updated dependencies [524696a]
+- Updated dependencies [6b51346]
+- Updated dependencies [80273c8]
+- Updated dependencies [fdc244e]
+- Updated dependencies [5e3301d]
+- Updated dependencies [dd9f223]
+- Updated dependencies [47d923c]
+- Updated dependencies [46e876c]
+- Updated dependencies [780b4b5]
+- Updated dependencies [2ea08ee]
+- Updated dependencies [d1d1c40]
+- Updated dependencies [616e839]
+- Updated dependencies [5f05de2]
+- Updated dependencies [021ba4c]
+- Updated dependencies [158aa14]
+- Updated dependencies [15dbe18]
+- Updated dependencies [83e8f7d]
+- Updated dependencies [230358c]
+- Updated dependencies [d2723e2]
+- Updated dependencies [fefcd54]
+- Updated dependencies [efbcfe1]
+- Updated dependencies [2049b6a]
+- Updated dependencies [beaf2de]
+- Updated dependencies [06cb319]
+- Updated dependencies [1e145eb]
+- Updated dependencies [369eb6e]
+- Updated dependencies [b659111]
+- Updated dependencies [5754a23]
+- Updated dependencies [6c270a6]
+- Updated dependencies [290e2f0]
+- Updated dependencies [668dd17]
+- Updated dependencies [8abf133]
+- Updated dependencies [e0859b1]
+- Updated dependencies [92f5f19]
+- Updated dependencies [a2d6555]
+- Updated dependencies [3a6310c]
+- Updated dependencies [32899e6]
+- Updated dependencies [515f11a]
+- Updated dependencies [4174a07]
+- Updated dependencies [ce468c8]
+- Updated dependencies [04ecd4e]
+- Updated dependencies [4d5a892]
+- Updated dependencies [16cebeb]
+- Updated dependencies [86d30af]
+- Updated dependencies [8923843]
+- Updated dependencies [ea32ec7]
+- Updated dependencies [a2795f6]
+- Updated dependencies [f16b492]
+- Updated dependencies [4b6fde8]
+- Updated dependencies [2018df9]
+- Updated dependencies [fc5a3a2]
+  - @objectstack/runtime@16.0.0-rc.0
+  - @objectstack/spec@16.0.0-rc.0
+  - @objectstack/plugin-security@16.0.0-rc.0
+  - @objectstack/objectql@16.0.0-rc.0
+  - @objectstack/plugin-hono-server@16.0.0-rc.0
+  - @objectstack/platform-objects@16.0.0-rc.0
+  - @objectstack/plugin-approvals@16.0.0-rc.0
+  - @objectstack/service-automation@16.0.0-rc.0
+  - @objectstack/service-messaging@16.0.0-rc.0
+  - @objectstack/plugin-sharing@16.0.0-rc.0
+  - @objectstack/rest@16.0.0-rc.0
+  - @objectstack/service-analytics@16.0.0-rc.0
+  - @objectstack/lint@16.0.0-rc.0
+  - @objectstack/plugin-auth@16.0.0-rc.0
+  - @objectstack/core@16.0.0-rc.0
+  - @objectstack/client@16.0.0-rc.0
+  - @objectstack/console@16.0.0-rc.0
+  - @objectstack/formula@16.0.0-rc.0
+  - @objectstack/metadata@16.0.0-rc.0
+  - @objectstack/driver-sql@16.0.0-rc.0
+  - @objectstack/trigger-record-change@16.0.0-rc.0
+  - @objectstack/plugin-audit@16.0.0-rc.0
+  - @objectstack/mcp@16.0.0-rc.0
+  - @objectstack/types@16.0.0-rc.0
+  - @objectstack/observability@16.0.0-rc.0
+  - @objectstack/service-realtime@16.0.0-rc.0
+  - @objectstack/trigger-schedule@16.0.0-rc.0
+  - @objectstack/plugin-webhooks@16.0.0-rc.0
+  - @objectstack/cloud-connection@16.0.0-rc.0
+  - @objectstack/verify@16.0.0-rc.0
+  - @objectstack/account@16.0.0-rc.0
+  - @objectstack/setup@16.0.0-rc.0
+  - @objectstack/driver-memory@16.0.0-rc.0
+  - @objectstack/driver-mongodb@16.0.0-rc.0
+  - @objectstack/driver-sqlite-wasm@16.0.0-rc.0
+  - @objectstack/plugin-email@16.0.0-rc.0
+  - @objectstack/plugin-reports@16.0.0-rc.0
+  - @objectstack/service-cache@16.0.0-rc.0
+  - @objectstack/service-datasource@16.0.0-rc.0
+  - @objectstack/service-job@16.0.0-rc.0
+  - @objectstack/service-package@16.0.0-rc.0
+  - @objectstack/service-queue@16.0.0-rc.0
+  - @objectstack/service-settings@16.0.0-rc.0
+  - @objectstack/service-sms@16.0.0-rc.0
+  - @objectstack/service-storage@16.0.0-rc.0
+  - @objectstack/trigger-api@16.0.0-rc.0
+  - @objectstack/plugin-pinyin-search@16.0.0-rc.0
+
 ## 15.1.1
 
 ### Patch Changes

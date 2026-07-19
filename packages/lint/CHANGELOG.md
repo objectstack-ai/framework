@@ -1,5 +1,206 @@
 # @objectstack/lint
 
+## 16.0.0-rc.0
+
+### Minor Changes
+
+- 3a18b60: feat(approvals): rename the `role` approver type to `org_membership_level` (#3133)
+
+  `ApproverType.role` was the last platform surface projecting the reserved word
+  "role" (ADR-0090 D3). It is not covered by D3's better-auth exception: that
+  exception protects better-auth's own `sys_member.role` **column**, which we do
+  not own — `ApproverType` is our own enum, an authoring surface, and D3 mandates
+  that the projection of that concept is spelled `org_membership_level` and
+  labelled "organization membership", **never "role"**.
+
+  The sentence licensing the leak was also false: ADR-0090 D3 claims
+  `sys_member.role` is "already relabelled `org_membership_level` in the platform
+  projection", but `org_membership_level` existed nowhere in the codebase and
+  ADR-0057 D7 lists that relabel under "Deferred (evidence-gated, P4)". The
+  projection never landed, so the word reached authors.
+
+  The name manufactured a real, silent failure — "hotcrm class": every other
+  surface renamed to `position` (`sys_role`, `ShareRecipientType.role`,
+  `ctx.roles[]`), so `{ type: 'role', value: 'sales_manager' }` reads as the
+  legacy spelling of a position. It resolves against the membership tier, finds
+  no member row, falls back to an inert `role:sales_manager` literal, and the
+  request waits forever on an approver that cannot exist.
+
+  - **spec**: `ApproverType` gains `org_membership_level`; `role` stays as a
+    deprecated alias for one window (a published 15.x flow keeps loading) with
+    `DEPRECATED_APPROVER_TYPES` + `canonicalApproverType()` as the single source
+    for the mapping. Removed in the next major.
+  - **plugin-approvals**: resolves on the canonical type and warns on the
+    deprecated spelling. The `type:value` fallback literal keeps the **authored**
+    spelling — stored `sys_approval_approver` rows and `pending_approvers` slots
+    from 15.x carry `role:<v>`, and rewriting it would orphan them.
+  - **lint**: `approval-role-not-membership-tier` → `approval-approver-not-membership-tier`
+    (the rule id carried the reserved word too), plus a new
+    `approval-approver-type-deprecated`. The two are mutually exclusive: a bad
+    _value_ wins, because prescribing `org_membership_level` for a position name
+    would be wrong advice — the fix there is `position`.
+
+  Authoring `type: 'role'` keeps working and now says so out loud. Rewrite it as
+  `org_membership_level`; if the value is an org position, the fix is `position`.
+
+- 2ea08ee: Flow trigger observability — kill the four-layer silence around record-change flows that never fire (2026-07-17 third-party eval).
+
+  A misauthored auto-launched flow (wrong `objectName`, missing `requires: ['automation','triggers']`, failing start condition) produced ZERO output at every layer: the engine's own registration/binding logs land inside the CLI's boot-quiet stdout window (which swallows debug/info/warn — only error/fatal reach stderr), and each "didn't happen" path was itself silent. Fixes:
+
+  - **Startup banner `Flows:` section** (`os serve`/`os dev`/`os start`): flow count, bound-to-trigger count, registered trigger types, draft count — plus loud `⚠` lines for flows declared with no automation engine enabled (`requires` missing), flows whose trigger type has no registered trigger, and bound record-change flows targeting an unknown object (dead binding). Printed after stdout is restored, so it is immune to the boot-quiet window.
+  - **Trigger-fired run failures now log at ERROR** (stderr — always visible): the automation engine no longer drops the AutomationResult of a trigger-fired execution; condition-evaluation faults and node failures surface with the flow name. Condition-not-met skips stay at debug (high-frequency, intentional).
+  - **`RecordChangeTrigger` probes object existence at bind time** and warns when a flow's `objectName` matches no registered object (exact-name matching), instead of silently arming a hook that can never fire.
+  - **`kernel:bootstrapped` binding audit** in the automation plugin: warns per enabled-but-unbound triggered flow with the reason, and reports registered/bound/draft counts (`AutomationEngine.getTriggerBindingAudit()`, extended `getFlowRuntimeStates()` with `status`/`triggerType`/`object`).
+  - **`os validate` flow-wiring advisories** (`@objectstack/lint` `validateFlowTriggerReadiness`): warns when a record-triggered flow targets an object the stack does not define, and when an auto-triggered flow's status is `draft` (authored or defaulted — draft flows still fire; declare `active` or `obsolete`).
+  - Removed leftover boot-debug writes (`registerApp`/`AppPlugin`/`StandaloneStack`/`AuditPlugin` stderr noise) that previous debugging of this same silence had left behind.
+
+- ea32ec7: feat(formula,lint): advisory type-soundness warnings for formula/predicate expressions (#1928 tier 4)
+
+  Closes the last open guardrail from #1928. A `Field.formula` or record-scoped
+  predicate that uses a **text or boolean field with an arithmetic (`+ - * / %`)
+  or ordering (`< > <= >=`) operator against a number** faults the runtime
+  overload and silently evaluates to `null` (e.g. `record.title * 2`,
+  `record.is_active + 1`). The build now surfaces this as a **non-blocking
+  warning** with the offending field and a corrective message.
+
+  Honours the ADR-0032 design law — the checker only flags what the runtime
+  would also fail:
+
+  - Number / currency / percent / date / datetime fields are declared `dyn`, so
+    the cases the runtime rescues never warn — `record.amount / 100` (the #1930
+    `registerOperator` fix), `record.due == today()` and numeric-string / ISO-date
+    values (the string-hydration retry), and numeric-coded `select` option values.
+  - Equality (`==` / `!=`) is excluded: a heterogeneous equality is runtime-safe
+    (evaluates to `false`), never a fault.
+
+  New `firstTypeMismatch(source, fieldCelTypes, scope)` export in
+  `@objectstack/formula` (and an optional `fieldTypes` hint on
+  `validateExpression`); `@objectstack/lint`'s `validateStackExpressions` threads
+  each object's field types into every checked site:
+
+  - **record-scoped** sites (`record.<field>`) — formula fields, validation rules,
+    action / hook / sharing predicates;
+  - **flattened** flow / automation conditions (bare `field`) — where flow
+    variables stay `dyn` and are never flagged, and equality stays runtime-safe.
+
+  Warnings are advisory in `objectstack build` / `validate` (fatal only under
+  `--strict`), matching the tier-3 channel.
+
+- a2795f6: feat(triggers): declarative time-relative trigger — daily sweep instead of fragile date-equality (#1874)
+
+  Time-relative business rules ("alert 60 days before a contract's `end_date`")
+  could only be expressed as a `record_change` flow gated on a date-equality
+  condition like `end_date == daysFromNow(60)`. That predicate is only evaluated
+  when the record _happens to change_, so it fires only if a record is edited on
+  exactly the threshold day — i.e. almost never, unattended. The robust
+  alternative was a hand-written cron + range query that every author
+  re-implemented (contracts `renewal_alert`, hr `document_expiring_soon`,
+  procurement `po_overdue`, …).
+
+  A flow's start node can now declare a `timeRelative` descriptor instead:
+
+  ```ts
+  config: {
+    timeRelative: {
+      object: 'contracts',
+      dateField: 'end_date',
+      offsetDays: [60, 30, 7],      // T-minus reminders — fires on each threshold day
+      // — or — withinDays: 30      // "expiring soon" range; negative = overdue lookback
+      filter: { status: 'active' }, // optional, ANDed with the date window
+    },
+    schedule: { type: 'cron', expression: '0 8 * * *' }, // optional; defaults to daily 08:00 UTC
+  }
+  ```
+
+  The new `time_relative` trigger (shipped in `@objectstack/trigger-schedule` as
+  `TimeRelativeTriggerPlugin`) sweeps the object on that schedule and launches the
+  flow **once per matching record**, with the record on the automation context —
+  so the start-node `condition` gate and `{record.<field>}` interpolation work
+  exactly as for a record-change flow. Because the window is evaluated every day,
+  a threshold is never missed regardless of when the record last changed. The
+  discovery query runs as a system operation (RLS-bypassing) and is capped
+  (`maxRecords`, default 1000) so a mis-scoped window can't fan out unboundedly;
+  per-record failures are isolated so one bad row never aborts the sweep.
+
+  The automation engine routes a start node carrying `config.timeRelative` to the
+  `time_relative` trigger (ahead of the plain `schedule` trigger, whose behavior is
+  unchanged), and `os validate` gains readiness checks for the new descriptor
+  (unknown swept object, ambiguous draft status). New authorable spec key:
+  `TimeRelativeTriggerSchema` (`@objectstack/spec/automation`).
+
+### Patch Changes
+
+- 524696a: feat(spec)!: `DashboardWidgetSchema.strict()` — reject undeclared widget keys (framework#3251)
+
+  The ADR-0021 analytics endpoint. `DashboardWidgetSchema` now rejects any
+  undeclared top-level key instead of silently stripping it, moving a whole class
+  of author error (a hallucinated or legacy key that renders as a silent no-op)
+  from fallible human review to deterministic CI. `options: z.unknown()` remains
+  the escape hatch for renderer-specific extras.
+
+  A custom error map names the offending key(s) and, when a key is a removed
+  pre-ADR-0021 inline-analytics key (`object` / `categoryField` / `valueField` /
+  `aggregate`, pivot `rowField` / `columnField`) or an objectui-internal prop
+  (`component`, inline `data`), points the author at the dataset shape
+  (`dataset` + `dimensions` + `values`).
+
+  Recorded as protocol-16 migration `step16`
+  (`dashboard-widget-strict-unknown-keys`), mirroring protocol-15's `step15`
+  strict flip on the form/page schemas (ADR-0089 D3a). The inline-analytics shape
+  itself was already removed at protocol 9 (single-form cutover), so there is no
+  mechanical rewrite — the residue is the strictness, delegated to the author.
+
+  **Breaking:** shipped as `minor` per the launch-window policy (a breaking change
+  does not burn a major while the stack is in lockstep), riding the already-pending
+  16.0.0 train. The release train's Version-Packages PR must set
+  `PROTOCOL_VERSION = '16.0.0'`; until then `step16` is inert
+  (`composeMigrationChain` caps at `PROTOCOL_MAJOR`).
+
+  `@objectstack/lint` — the `widget-legacy-analytics-shape` /
+  `widget-legacy-analytics-unrenderable` rules are retained as the friendly,
+  suppressible bridge on the raw-config lint/doctor paths (strict preempts them on
+  the schema-parsed compile/validate paths); doc comment updated to explain the
+  interplay.
+
+- 8923843: Reject view containers that define no views. A flat list-view object (`{ name, label, type, columns, ... }`) parses to an empty `ViewSchema` container because Zod strips unknown keys — zero views register and the Console silently renders nothing. `defineView()` now throws on a zero-view container, and `os validate` gains a `view-container-shape` check (`validateViewContainers` in `@objectstack/lint`) that reports flat or empty `views: []` entries pre-parse with a wrap-it fix hint.
+- Updated dependencies [f972574]
+- Updated dependencies [22013aa]
+- Updated dependencies [3ad3dd5]
+- Updated dependencies [3a18b60]
+- Updated dependencies [a8aa34c]
+- Updated dependencies [a3823b2]
+- Updated dependencies [43a3efb]
+- Updated dependencies [524696a]
+- Updated dependencies [6b51346]
+- Updated dependencies [80273c8]
+- Updated dependencies [5e3301d]
+- Updated dependencies [46e876c]
+- Updated dependencies [158aa14]
+- Updated dependencies [d2723e2]
+- Updated dependencies [fefcd54]
+- Updated dependencies [beaf2de]
+- Updated dependencies [369eb6e]
+- Updated dependencies [b659111]
+- Updated dependencies [5754a23]
+- Updated dependencies [6c270a6]
+- Updated dependencies [668dd17]
+- Updated dependencies [8abf133]
+- Updated dependencies [e0859b1]
+- Updated dependencies [04ecd4e]
+- Updated dependencies [4d5a892]
+- Updated dependencies [16cebeb]
+- Updated dependencies [86d30af]
+- Updated dependencies [8923843]
+- Updated dependencies [ea32ec7]
+- Updated dependencies [a2795f6]
+- Updated dependencies [f16b492]
+- Updated dependencies [4b6fde8]
+- Updated dependencies [2018df9]
+- Updated dependencies [fc5a3a2]
+  - @objectstack/spec@16.0.0-rc.0
+  - @objectstack/formula@16.0.0-rc.0
+  - @objectstack/sdui-parser@16.0.0-rc.0
+
 ## 15.1.1
 
 ### Patch Changes

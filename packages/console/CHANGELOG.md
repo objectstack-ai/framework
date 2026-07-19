@@ -1,5 +1,79 @@
 # @objectstack/console
 
+## 16.0.0-rc.0
+
+### Major Changes
+
+- 39b56d0: Console (objectui) refreshed to `94d4876df090`. Frontend changes in this range:
+
+  - feat(dashboard): Studio authors the ADR-0021 dataset shape only (framework#3251) (#2703)
+  - feat(app-shell): render ActionParamDialog params through the shared form field-widget renderer (#2700, ADR-0059) (#2704)
+  - feat(app-shell): distinguish writable system objects from engine-owned in badge + empty-state (ADR-0103 / #3220) (#2705)
+  - fix(list): keep injected owner_id out of leading auto-derived list columns (#2702)
+  - feat(flow-designer): #2670 Phase 3 — nested container node selection + schema-driven editing (#2699)
+  - feat(approvals-inbox): retire hardcoded secondary buttons for server-declared actions (#2697)
+
+  objectui range: `fd45313b4d00...94d4876df090`
+
+### Minor Changes
+
+- 447465a: Console (objectui) refreshed to `e164196801bd`. Frontend changes in this range:
+
+  - fix(app-shell,plugin-detail): record History tab renders display values, not raw audit payloads (#2691)
+  - fix(plugin-gantt): mirror the row 「→」 slot in the task-list header (#2690)
+  - fix(plugin-detail): #2688 header Record-#id floor + raw audit user id in meta footer (#2689)
+  - feat(plugin-gantt)!: remove the mobile QR share (移动端二维码) context-menu feature (#2687)
+  - feat(plugin-gantt): dependencyTypes switch — hide the type switcher for id-only dependency stores (#2686)
+  - feat(approvals): decision attachments + progress display + deep link + designer sync (#2681)
+  - feat(studio): inline push-down expansion of loop/parallel/try_catch regions on the flow canvas (#2680)
+  - feat(plugin-gantt): ownership-aware reschedule + confirm-first auto-schedule, export fixes, business time zone (#2683)
+  - fix(app-shell): skip resultDialog fields whose path does not resolve (#2674)
+  - feat(studio): visualize loop/parallel/try_catch nested regions on the flow canvas (#2670) (#2675)
+  - feat(plugin-gantt): manual-scheduling summary bars, interaction switches, beforeTaskUpdate veto + tooltip/scrollbar/cursor fixes (#2677)
+  - fix(flow-designer): author the canonical config.schedule the runtime reads (#2671)
+  - feat(report): drill a date-bucket cell into its time range, not a superset (#1752) (#2672)
+  - feat(studio): filter editor for roll-up summary fields (framework#1868) (#2669)
+  - feat(flow-designer): first-class panel for the time-relative trigger (#1874) (#2668)
+  - feat(studio): nest per-iteration / per-region step logs in the flow Runs panel (#2667)
+  - fix(metadata-admin): dashboard label fallback + skill activation editors (#1878) (#2666)
+
+  objectui range: `2e7d7f0f7ee7...e164196801bd`
+
+- a140ff0: Console (objectui) refreshed to `fd45313b4d00`. Frontend changes in this range:
+
+  - feat(app-shell): DeclaredActionsBar — render server-declared object actions on bespoke pages (#2678 P2-4) (#2692)
+  - feat(data): unify master-detail saves behind DataSource.batchTransaction; isolate non-atomic fallback in the adapter (#2679) (#2684)
+
+  objectui range: `e164196801bd...fd45313b4d00`
+
+### Patch Changes
+
+- 47d923c: Console (objectui) refreshed to `2e7d7f0f7ee7`. Frontend changes in this range:
+
+  - feat(evaluator): route CEL-dialect component/action predicates to the canonical engine (#2664)
+  - fix(grid): explain the import wizard's disabled Next and silent downgrade (#2640, #2639) (#2646)
+  - fix(form+detail): single-file children stay inline grids; drop non-spec `attachment` (#2654, #2655) (#2656)
+  - feat(access): localize curated capability labels client-side (#2600 B5 follow-up) (#2657)
+  - feat(access): localize capability picker group headers (#2600 B5, objectui side) (#2653)
+  - fix(access): Studio permission matrix — stop clipping the Bulk column at narrow widths (#2600 B3) (#2652)
+  - feat(access): Studio permission matrix — field-level bulk + filter for wide objects (#2600 B4) (#2651)
+  - feat(access): Studio Explain panel — package-scoped object dropdown instead of free-text api-name (#2600 B2) (#2650)
+  - feat(access): Studio permission matrix — collapse identity + zero-grant capabilities so the matrix hits the first screen (#2600 B1) (#2649)
+  - feat(plugin-list): 列表工具栏增加手动刷新按钮 (#2634) (#2645)
+  - fix(studio): approver Type dropdown drops deprecated `role`, membership-tier picker (#2643)
+  - fix(components): route internal html-page links through the SPA navigation handler (#2642)
+  - feat(discovery): trust only handlerReady/available services (ADR-0076 D12) (#2637)
+  - feat(types)!: adopt @objectstack/spec 15.1.1; drop value-erased spec/ui `…Schema` re-exports (#2589)
+  - feat(console): dev-seeded admin credentials hint on the login page (#2635)
+  - fix(auth): 注册页去掉重复的「or」分隔线(与 #2629 登录页修复对齐) (#2633)
+  - feat(app-shell/react): adapt to framework 15.1 — atomic publish rendering + honest discovery (#2630)
+  - fix(chatbot): plan approval flips the card to a Building… badge immediately (#2632)
+  - fix(app-shell,components): welcome CTA deep-links into the environment create dialog (#2631)
+  - fix(auth): login-page config race + sign-in watchdog — never strand SSO-only users on a password wall (#2629)
+  - feat(types): derive ListViewSchema from @objectstack/spec/ui (#2231) (#2622)
+
+  objectui range: `077e45b4bc55...2e7d7f0f7ee7`
+
 ## 15.1.1
 
 ## 15.1.0

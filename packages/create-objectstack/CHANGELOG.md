@@ -1,5 +1,103 @@
 # create-objectstack
 
+## 16.0.0-rc.0
+
+### Minor Changes
+
+- 3f218e4: feat(create-objectstack): the blank scaffold ships the three generic connector executors by default
+
+  `npm create objectstack` now generates an `objectstack.config.ts` that wires the
+  `rest`, `openapi`, and `mcp` connector executor plugins (ADR-0022/0023/0024 +
+  ADR-0097) into `plugins:`, alongside `requires: ['automation']`. This closes the
+  last authoring gap in the ADR-0097 promise that integrations are expressible
+  **and executable** as pure metadata: an author (human or AI) can now add a
+  declarative `connectors:` entry naming `provider: 'rest' | 'openapi' | 'mcp'`
+  and have it materialize into a live, dispatchable connector at boot — with no
+  host-code edit.
+
+  - `plugins:` — `new ConnectorRestPlugin()`, `new ConnectorOpenApiPlugin()`,
+    `new ConnectorMcpPlugin()` (zero-arg = contribute the provider factory only).
+  - `requires: ['automation']` — the automation service performs the
+    materialization and owns the registry the executors register into. It is also
+    a hard dependency of the connector plugins, so a scaffold that lists them in
+    `plugins:` without it fails boot; automation ships transitively via
+    `@objectstack/cli`.
+  - deps — `@objectstack/connector-rest`, `@objectstack/connector-openapi`,
+    `@objectstack/connector-mcp`.
+  - Security (#3055): declarative `mcp` stdio transports stay denied by default —
+    opt in per host with `new ConnectorMcpPlugin({ declarativeStdio: ['node'] })`.
+
+  Brand connectors (Slack, …) remain marketplace/opt-in.
+
+### Patch Changes
+
+- 83e8f7d: feat(mcp): decouple the stdio auto-start switch from the HTTP surface + surface the MCP endpoint on `os dev` boot (#3167)
+
+  The MCP HTTP surface (`/api/v1/mcp`) and the long-lived stdio transport used to
+  share one env var: `OS_MCP_SERVER_ENABLED=true` turned the HTTP surface on **and**
+  silently auto-started the stdio transport — which bridges the raw metadata service
+
+  - data engine with no per-request principal (unscoped). An operator setting it to
+    "make sure MCP is on" got an unscoped transport as a side effect.
+
+  * **`@objectstack/types`** — new `resolveMcpStdioAutoStart()`. Stdio auto-start is
+    now its own switch, `OS_MCP_STDIO_ENABLED` (default off); `OS_MCP_SERVER_ENABLED`
+    governs only the HTTP surface. The legacy `OS_MCP_SERVER_ENABLED=true` trigger
+    still starts stdio for one release, flagged as deprecated. `=false` is unchanged
+    (it only ever gated HTTP).
+  * **`@objectstack/mcp`** — `MCPServerPlugin.start()` gates stdio on the new switch
+    and logs a one-time deprecation warning when started via the legacy alias.
+  * **`@objectstack/cli`** — `os dev` now prints the MCP endpoint, the agent-skill
+    URL, and a ready-to-paste `claude mcp add` command on boot (gated on the HTTP
+    surface being on), so the "an agent operates the app it's building" loop is
+    discoverable at dev time.
+  * **`create-objectstack`** — the blank scaffold README documents that the app is
+    itself an MCP server (the serve side), distinct from the consume-side connector.
+
+- 3b6ef8a: Scaffolded projects ship with a `.gitignore` again — `npx create-objectstack` produced none, leaving `node_modules/` and `.env` un-ignored for every new user.
+
+  `npm pack` / `pnpm pack` strip `.gitignore` from a tarball unconditionally, at every depth. The blank template committed one at `src/templates/blank/.gitignore` and the build faithfully copied it to `dist/templates/blank/.gitignore`, but `files: ["dist"]` publishing dropped it on the way to the registry — so the file was present in the repo, present in every local build, and absent from all 11 files of a real scaffold. Verified against the published 15.1.1 tarball, which ships `dist/templates/blank/.dockerignore` and no `.gitignore`.
+
+  The template is now committed as `_gitignore` (a name npm does not strip) and restored to `.gitignore` when the template is copied, via a `TEMPLATE_FILE_ALIASES` map in the new `template-copy.ts`. Only `.gitignore` is aliased: the strip list is `.gitignore` and `.npmrc`, not "every dotfile" — `.dockerignore` packs fine and stays literal.
+
+  The restored ignore rules also cover `.env` / `.env.*`, which they never did. The template README has users write `OS_AUTH_SECRET` and `OS_SECRET_KEY` into a `.env`, and `docker-compose.yml` calls that file "never committed" — but only the prose said so, and `.dockerignore` was the only file that listed it.
+
+  A packing ratchet in `template-consistency.test.ts` guards both halves: it packs the real package, scaffolds from the extracted tarball with the real copy logic, and asserts every template file lands under its intended name. Source-level assertions cannot see this class of bug — the file only vanishes at publish.
+
+- 3a8ce9d: fix(create-objectstack): the blank scaffold declares pnpm build approvals, so a fresh `pnpm install` no longer exits 1 on pnpm 11
+
+  pnpm 11 turned an unapproved dependency build script from a warning into a hard
+  error. The blank template declared no build approvals, so the very first command
+  a new user runs failed on any current pnpm:
+
+  ```
+  npx create-objectstack myapp && cd myapp && pnpm install
+  # [ERR_PNPM_IGNORED_BUILDS] Ignored build scripts: better-sqlite3@12.11.1, esbuild@0.28.1
+  # exit 1
+  ```
+
+  The scaffold now ships a `pnpm-workspace.yaml` approving the two packages it
+  actually depends on building — `better-sqlite3` (the native sqlite driver behind
+  `@objectstack/driver-sql`) and `esbuild` (compiles `objectstack.config.ts`).
+
+  Both approval keys are present because pnpm reads them by version, and neither
+  alone covers the supported range:
+
+  - `allowBuilds` (a package → boolean map) — the only key pnpm 11 honors, and
+    understood back to pnpm 10.31. `onlyBuiltDependencies` alone still errors.
+  - `onlyBuiltDependencies` (a list) — pnpm 10.0–10.30, which ignore `allowBuilds`.
+
+  npm and yarn ignore the file, so the npm install path is unaffected. Both
+  packages ship prebuilt binaries, so this was an install-time hard stop rather
+  than a runtime defect — the project ran fine once installed.
+
+  This is the #3091 failure class (in-repo settings masking what users resolve)
+  and was caught by the publish smoke gate added in #3100, which installs the
+  release candidate the way a user does — on whatever pnpm corepack hands a fresh
+  machine.
+
+- 809214f: Stop leaking repo-internal skills into scaffolded projects. The scaffolder (and the docs) advertised `npx skills add objectstack-ai/framework --all`, and the skills CLI's `--all` implies `--skill '*'` — which includes even `metadata.internal` skills — so repo-internal tooling like `.claude/skills/dogfood-verification` landed in every new project's `.agents/skills/`. All install commands are now scoped to the published catalog via the `/skills` subpath (`npx skills add objectstack-ai/framework/skills --all`), the internal skill is additionally marked `metadata.internal: true` to hide it from interactive discovery, and a template-consistency ratchet plus a scaffold-e2e assertion keep the boundary from regressing.
+
 ## 15.1.1
 
 ## 15.1.0

@@ -1,5 +1,77 @@
 # @objectstack/plugin-security
 
+## 16.0.0-rc.0
+
+### Minor Changes
+
+- 22013aa: **Split the overloaded `managedBy: 'system'` bucket into engine-owned vs. admin-writable, and enforce engine-owned writes (ADR-0103, #3220).** The `system` bucket conflated two incompatible write policies: rows a platform service owns end to end (never user-written), and platform-defined schema whose rows are legitimately admin/user-writable. It carried the same all-false affordance row as `better-auth`/`append-only` but, unlike `better-auth`, had no engine enforcement — a wildcard admin could raw-write these rows through the generic data API (ADR-0049 gap).
+
+  Rather than add a new `managedBy` enum value (which would fall through to fully-editable `platform` defaults on already-deployed Console clients), the write policy is now the **resolved affordance** (`resolveCrudAffordances` = bucket default + `userActions`), and _engine-owned_ is defined as a `system`/`append-only` object that grants no write:
+
+  - **Writable set declares `userActions`** — the RBAC link tables (`sys_user_position`, `sys_user_permission_set`, `sys_position_permission_set`), `sys_user_preference`, `sys_approval_delegation`, and the messaging config grids (`sys_notification_preference` / `…_subscription` / `…_template`) now declare `userActions: { create, edit, delete: true }`. The affordance is a declaration only — the `DelegatedAdminGate` / RLS / permission sets remain the authz.
+  - **Engine-owned objects locked to reads** — `apiMethods: ['get','list']` added where absent (jobs, notifications, approval request/approver/token/action, `sys_record_share`, `sys_automation_run`, mail/settings/secret audit, the messaging delivery pipeline). `sys_secret` is explicitly read-locked (an empty `apiMethods` array fails open).
+  - **`sys_import_job`** stays engine-owned: the REST import route now writes its job rows `isSystem`-elevated (attribution preserved via the explicit `created_by` stamp) and the object is locked to `['get','list']`.
+  - **New engine write guard** (`assertEngineOwnedWriteAllowed`, plugin-security) fail-closed rejects user-context generic writes to engine-owned `system`/`append-only` objects, keyed off the resolved affordance; `isSystem` and context-less engine/service writes bypass by construction. Wired into the security middleware alongside the other data-layer gates.
+  - **`reconcileManagedApiMethods`** (objectql registry) now runs for **every** managed bucket, not just `better-auth`: any advertised write verb an object's resolved affordances forbid is stripped at registration with a warning (the drift backstop, ADR-0049).
+  - **`/me/permissions` clamp** (plugin-hono-server) now clamps `system`/`append-only` as well as `better-auth`, so the client hint reflects `permission ∩ guard`.
+
+  **Potentially breaking:** a downstream/third-party `system` object that advertised generic write verbs relying on today's fail-open behaviour will have those verbs stripped (with a warning) and user-context generic writes to it rejected. Declare `userActions` opening the verbs the object legitimately takes from a user context. `better-auth` keeps plugin-auth's identity write guard unchanged; the row-level `managed_by` provenance vocabulary (ADR-0066) is a different axis and is untouched.
+
+### Patch Changes
+
+- 2f3c641: ADR-0099 P0: land the probe-vs-carried-rung equivalence gate in the authz matrix (`authz-matrix-gate.test.ts`) — seeded-shape equivalence cells, two adversarial `KNOWN DIVERGENCE` pins (scoped `admin_full_access` grant; piecemeal platform-exclusive capability), the I2 nesting and I3 narrowing invariant cells, posture-blindness staging pins for the P1 flip, and the EXTERNAL dead-branch cell. Extracts the platform-admin capability probe as the exported pure `hasPlatformAdminCapability` (mechanical, behavior unchanged). Test-only gate; the ADR-0099 P1 flip lands behind it (#3211).
+- e38da5b: ADR-0099 P1 (#3211 M2): the Layer 0 cross-tenant exemption gate now reads the carried `ctx.posture` rung (#2956) as authoritative, with the platform-admin capability probe demoted to a fallback for resolver-less contexts (delegated-admin bridge, sharing service, `getReadFilter`). The read and write (insert/update post-image) tenant checks share one decision (`computeLayeredRlsFilter`), so they cannot drift. A probe↔rung disagreement logs a defect breadcrumb and enforces the narrower rung verdict.
+
+  **Behavior change (security narrowing, multi-org / `@objectstack/organizations` only):** a principal whose carried rung is not `PLATFORM_ADMIN` no longer crosses the tenant wall on private / platform-global / better-auth-managed objects, even when its resolved permission sets carry a platform-exclusive capability. Two shapes are affected: (a) a **scoped** `admin_full_access` grant (`sys_user_permission_set.organization_id` non-null), and (b) a custom set granting a platform capability (e.g. `studio.access`) piecemeal alongside a superuser bit. Both are now walled to their own org — the fail-safe direction (the carried rung is a strict subset of the probe). Single-org / env-per-database deployments are unaffected (Layer 0 is inert).
+
+  **Upgrade check:** before upgrading, scan `sys_user_permission_set` for `admin_full_access` rows with a non-null `organization_id`, and custom permission sets whose `systemPermissions` intersect `{manage_metadata, manage_platform_settings, studio.access, manage_users}`. To restore cross-tenant operator access for such a principal, grant the **unscoped** `admin_full_access` instead. The `[authz/ADR-0099]` warn log names any principal hitting the divergence at runtime.
+
+- f9b118d: ADR-0099 P2′ (#3211 M3′): pin the two-axis Amendment in the authz matrix. The original P2 (collapse the Layer 1 tier onto posture) was rejected — Layer 1's tier input is the per-object super-bit, a per-principal × per-object delegation primitive posture cannot represent. New cells pin: seeded-face agreement (seeded super-bit holders are already ≥ TENANT_ADMIN), the load-bearing delegation cell (a MEMBER with a delegated per-object `viewAllRecords`/`modifyAllRecords` short-circuits Layer 1 yet stays walled by Layer 0 — the auditor pattern), invariant I7 (the scope axis never crosses a boundary posture has not opened), and the contrast that the bit is a real grantable capability, not conditionally inert. Test-only; zero behavior change.
+- Updated dependencies [f972574]
+- Updated dependencies [22013aa]
+- Updated dependencies [3ad3dd5]
+- Updated dependencies [3a18b60]
+- Updated dependencies [a8aa34c]
+- Updated dependencies [e057f42]
+- Updated dependencies [a3823b2]
+- Updated dependencies [bc65105]
+- Updated dependencies [43a3efb]
+- Updated dependencies [524696a]
+- Updated dependencies [6b51346]
+- Updated dependencies [80273c8]
+- Updated dependencies [5e3301d]
+- Updated dependencies [dd9f223]
+- Updated dependencies [46e876c]
+- Updated dependencies [5f05de2]
+- Updated dependencies [021ba4c]
+- Updated dependencies [158aa14]
+- Updated dependencies [d2723e2]
+- Updated dependencies [fefcd54]
+- Updated dependencies [beaf2de]
+- Updated dependencies [369eb6e]
+- Updated dependencies [b659111]
+- Updated dependencies [5754a23]
+- Updated dependencies [6c270a6]
+- Updated dependencies [290e2f0]
+- Updated dependencies [668dd17]
+- Updated dependencies [8abf133]
+- Updated dependencies [e0859b1]
+- Updated dependencies [04ecd4e]
+- Updated dependencies [4d5a892]
+- Updated dependencies [16cebeb]
+- Updated dependencies [86d30af]
+- Updated dependencies [8923843]
+- Updated dependencies [ea32ec7]
+- Updated dependencies [a2795f6]
+- Updated dependencies [f16b492]
+- Updated dependencies [4b6fde8]
+- Updated dependencies [2018df9]
+- Updated dependencies [fc5a3a2]
+  - @objectstack/spec@16.0.0-rc.0
+  - @objectstack/platform-objects@16.0.0-rc.0
+  - @objectstack/core@16.0.0-rc.0
+  - @objectstack/formula@16.0.0-rc.0
+
 ## 15.1.1
 
 ### Patch Changes

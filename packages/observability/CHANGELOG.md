@@ -1,5 +1,105 @@
 # @objectstack/observability
 
+## 16.0.0-rc.0
+
+### Minor Changes
+
+- efbcfe1: feat(observability): admin-only richer per-request timing detail via `X-OS-Debug-Timing: json` (#2408)
+
+  Completes the optional "richer JSON" diagnostic from #2408. In addition to the
+  basic `Server-Timing` header, an admin/service caller can now request a
+  per-query breakdown — the slowest SQL statements and a query count — by sending
+  `X-OS-Debug-Timing: json`. The detail is returned in a separate
+  `X-OS-Debug-Timing-Detail` response header (compact JSON) and is **admin-only,
+  even under global mode**: an ordinary caller never sees SQL shapes.
+
+  - **observability**: `PerfTiming` gains opt-in per-event detail capture
+    (`enableDetail` / `recordDetail` / `details`) plus the ambient
+    `recordServerTimingDetail`. The disclosure gate gains a `privileged` level
+    (set by `allowPerfDisclosure`, read via `isPerfDisclosurePrivileged`) so the
+    richer detail can be gated independently of the basic header.
+  - **driver-sql**: when detail capture is on, the query listener additionally
+    records each query's **parametrized** statement (knex's `q.sql`, `?`
+    placeholders) — never the bindings, so no literal row value ever enters the
+    collector. Zero overhead when detail is off.
+  - **plugin-hono-server**: `X-OS-Debug-Timing: json` enables detail capture; the
+    middleware emits `X-OS-Debug-Timing-Detail` (slowest queries, capped and
+    sanitized to header-safe ASCII) only when the principal is a proven admin.
+
+  Basic and global behavior are unchanged; `json` is purely additive.
+
+- 2049b6a: feat(observability): admin-gated per-request `Server-Timing` via `X-OS-Debug-Timing` (#2408)
+
+  Perf-tuning mode was previously global-only (`serverTiming` option /
+  `OS_SERVER_TIMING`), which discloses internal phase durations — a mild
+  backend-fingerprinting surface — to every caller. This adds the per-request
+  gating path from the design so an operator can pull a single request's
+  `Server-Timing` breakdown on a live environment without turning the header on
+  for everyone.
+
+  - **observability**: a request-scoped disclosure gate (`runWithPerfDisclosure`,
+    `allowPerfDisclosure`, `isPerfDisclosureAllowed`, `PerfDisclosureGate`) kept
+    separate from the pure `PerfTiming` collector and pinned to its own
+    `Symbol.for` store so the middleware and dispatcher share it across module
+    copies.
+  - **plugin-hono-server**: the Server-Timing middleware is registered by default
+    (unless `serverTiming: false`). It runs the collector when timing is global
+    **or** the request sends `X-OS-Debug-Timing: 1`, and emits the header only
+    when the gate is open. `OS_PERF_TIMING=1` now also enables global mode.
+  - **runtime**: after resolving the execution context, the dispatcher opens the
+    gate for admin/service/system principals, so ordinary callers never receive
+    the header even if they send the debug header.
+
+  Existing global-mode behavior is unchanged.
+
+### Patch Changes
+
+- ce468c8: feat(observability): decompose `Server-Timing` into auth / db / hooks / serialize spans (perf-tuning mode)
+
+  The opt-in `Server-Timing` header now breaks a request's server time into the phases that actually explain it, so an operator can open DevTools → Network → Timing and see where the time went without standing up an external tracing backend:
+
+  - **`db`** — total SQL time with a **query count**. The SQL driver wires knex's `query` / `query-response` events (keyed by `__knexQueryUid`) and folds each query into one aggregate member (`db;dur=210;desc="6 queries"`) — the query count is the number most useful for spotting N sequential round-trips. Timing is attributed to the originating request via `AsyncLocalStorage`, so it is correct under concurrency and never cross-attributes. SQL text is never emitted, only durations and a count.
+  - **`auth`** — identity / session resolution in the dispatcher, the prime suspect for unexplained data-API overhead.
+  - **`hooks`** — total business-hook execution time with a hook count, fed through the engine's existing `HookMetricsRecorder` seam (wired from the runtime, so `@objectstack/objectql`'s lean `core` tier stays observability-free).
+  - **`serialize`** — response JSON encoding in the HTTP adapter.
+
+  Adds `countServerTiming(name, dur, unit)` (and `PerfTiming.count`) to fold high-frequency phases into a single aggregate member instead of flooding the header. Every phase is a no-op when perf-tuning is off (`serverTiming: true` / `OS_SERVER_TIMING=true`), so there is zero measurable overhead on the normal path.
+
+  Closes #2408.
+
+- Updated dependencies [f972574]
+- Updated dependencies [22013aa]
+- Updated dependencies [3ad3dd5]
+- Updated dependencies [3a18b60]
+- Updated dependencies [a8aa34c]
+- Updated dependencies [a3823b2]
+- Updated dependencies [43a3efb]
+- Updated dependencies [524696a]
+- Updated dependencies [5e3301d]
+- Updated dependencies [46e876c]
+- Updated dependencies [158aa14]
+- Updated dependencies [d2723e2]
+- Updated dependencies [fefcd54]
+- Updated dependencies [beaf2de]
+- Updated dependencies [369eb6e]
+- Updated dependencies [b659111]
+- Updated dependencies [5754a23]
+- Updated dependencies [6c270a6]
+- Updated dependencies [668dd17]
+- Updated dependencies [8abf133]
+- Updated dependencies [e0859b1]
+- Updated dependencies [04ecd4e]
+- Updated dependencies [4d5a892]
+- Updated dependencies [16cebeb]
+- Updated dependencies [86d30af]
+- Updated dependencies [8923843]
+- Updated dependencies [a2795f6]
+- Updated dependencies [f16b492]
+- Updated dependencies [4b6fde8]
+- Updated dependencies [2018df9]
+- Updated dependencies [fc5a3a2]
+  - @objectstack/spec@16.0.0-rc.0
+
 ## 15.1.1
 
 ### Patch Changes

@@ -1,5 +1,135 @@
 # @objectstack/driver-sql
 
+## 16.0.0-rc.0
+
+### Minor Changes
+
+- efbcfe1: feat(observability): admin-only richer per-request timing detail via `X-OS-Debug-Timing: json` (#2408)
+
+  Completes the optional "richer JSON" diagnostic from #2408. In addition to the
+  basic `Server-Timing` header, an admin/service caller can now request a
+  per-query breakdown — the slowest SQL statements and a query count — by sending
+  `X-OS-Debug-Timing: json`. The detail is returned in a separate
+  `X-OS-Debug-Timing-Detail` response header (compact JSON) and is **admin-only,
+  even under global mode**: an ordinary caller never sees SQL shapes.
+
+  - **observability**: `PerfTiming` gains opt-in per-event detail capture
+    (`enableDetail` / `recordDetail` / `details`) plus the ambient
+    `recordServerTimingDetail`. The disclosure gate gains a `privileged` level
+    (set by `allowPerfDisclosure`, read via `isPerfDisclosurePrivileged`) so the
+    richer detail can be gated independently of the basic header.
+  - **driver-sql**: when detail capture is on, the query listener additionally
+    records each query's **parametrized** statement (knex's `q.sql`, `?`
+    placeholders) — never the bindings, so no literal row value ever enters the
+    collector. Zero overhead when detail is off.
+  - **plugin-hono-server**: `X-OS-Debug-Timing: json` enables detail capture; the
+    middleware emits `X-OS-Debug-Timing-Detail` (slowest queries, capped and
+    sanitized to header-safe ASCII) only when the principal is a proven admin.
+
+  Basic and global behavior are unchanged; `json` is purely additive.
+
+### Patch Changes
+
+- 47d923c: fix(driver-sql): drop the vestigial `sqlite3` peerDependency — the SQLite path uses `better-sqlite3` (#3277)
+
+  `package.json` advertised `peerDependencies.sqlite3: "^5.0.0"`, but the driver never
+  loads `sqlite3` at runtime. Every first-party SQLite construction site builds a
+  `client: 'better-sqlite3'` Knex driver (`resolveSqliteDriver` in
+  `@objectstack/service-datasource`, the datasource driver factory, and the whole
+  driver test suite), and the README already tells consumers to `pnpm add better-sqlite3`.
+  `better-sqlite3` is auto-provided as an `optionalDependency` (with the native → wasm →
+  memory step-down of #2229 covering a failed native build), so the SQLite requirement is
+  already satisfied without the consumer installing anything.
+
+  The stale `sqlite3` peer only misled: a consumer resolving peer deps could `pnpm add
+sqlite3` (never used) while believing they'd satisfied the SQLite requirement. Removing
+  it aligns the declared contract with the code and the docs. The `sqlite3` string alias
+  still maps to `better-sqlite3` in the driver factory and dialect detection, so
+  `driver: 'sqlite3'` config keeps working — it just resolves to `better-sqlite3` like
+  everything else.
+
+- ce468c8: feat(observability): decompose `Server-Timing` into auth / db / hooks / serialize spans (perf-tuning mode)
+
+  The opt-in `Server-Timing` header now breaks a request's server time into the phases that actually explain it, so an operator can open DevTools → Network → Timing and see where the time went without standing up an external tracing backend:
+
+  - **`db`** — total SQL time with a **query count**. The SQL driver wires knex's `query` / `query-response` events (keyed by `__knexQueryUid`) and folds each query into one aggregate member (`db;dur=210;desc="6 queries"`) — the query count is the number most useful for spotting N sequential round-trips. Timing is attributed to the originating request via `AsyncLocalStorage`, so it is correct under concurrency and never cross-attributes. SQL text is never emitted, only durations and a count.
+  - **`auth`** — identity / session resolution in the dispatcher, the prime suspect for unexplained data-API overhead.
+  - **`hooks`** — total business-hook execution time with a hook count, fed through the engine's existing `HookMetricsRecorder` seam (wired from the runtime, so `@objectstack/objectql`'s lean `core` tier stays observability-free).
+  - **`serialize`** — response JSON encoding in the HTTP adapter.
+
+  Adds `countServerTiming(name, dur, unit)` (and `PerfTiming.count`) to fold high-frequency phases into a single aggregate member instead of flooding the header. Every phase is a no-op when perf-tuning is off (`serverTiming: true` / `OS_SERVER_TIMING=true`), so there is zero measurable overhead on the normal path.
+
+  Closes #2408.
+
+- 86d30af: fix(tenancy): platform-global (`tenancy.enabled:false`) objects are never driver-org-scoped (#3249)
+
+  An org-context read of a platform-global object (e.g. `sys_license`, ADR-0066)
+  could return 0 rows for an authenticated caller while an anonymous read saw the
+  data: the engine stamped `execCtx.tenantId` into driver options unconditionally,
+  and the SQL driver's tenant-field cache could be re-corrupted to
+  `organization_id` by a partial re-registration (lifecycle archive `syncSchema`,
+  schema-drift re-sync) whose schema omitted the `tenancy` block.
+
+  - New `isTenancyDisabled(schema)` export from `@objectstack/spec/data` — the
+    single source of truth for the ADR-0066 platform-global posture, now shared by
+    the registry (tenant-column injection), the ObjectQL engine, and the SQL
+    driver.
+  - `ObjectQL.buildDriverOptions` no longer stamps `tenantId` for objects whose
+    registered schema declares `tenancy.enabled: false` (an explicitly-passed
+    options `tenantId` still wins — deliberate caller intent).
+  - `SqlDriver` (and `SqliteWasmDriver`) now keep a sticky record of an explicit
+    `tenancy.enabled:false` declaration: a later registration without a `tenancy`
+    block preserves the opt-out instead of re-scoping via the implicit
+    `organization_id` heuristic; a registration that carries a `tenancy`
+    declaration stays authoritative.
+
+- Updated dependencies [f972574]
+- Updated dependencies [22013aa]
+- Updated dependencies [3ad3dd5]
+- Updated dependencies [3a18b60]
+- Updated dependencies [a8aa34c]
+- Updated dependencies [e057f42]
+- Updated dependencies [a3823b2]
+- Updated dependencies [43a3efb]
+- Updated dependencies [524696a]
+- Updated dependencies [5e3301d]
+- Updated dependencies [dd9f223]
+- Updated dependencies [46e876c]
+- Updated dependencies [5f05de2]
+- Updated dependencies [021ba4c]
+- Updated dependencies [158aa14]
+- Updated dependencies [83e8f7d]
+- Updated dependencies [d2723e2]
+- Updated dependencies [fefcd54]
+- Updated dependencies [efbcfe1]
+- Updated dependencies [2049b6a]
+- Updated dependencies [beaf2de]
+- Updated dependencies [369eb6e]
+- Updated dependencies [b659111]
+- Updated dependencies [5754a23]
+- Updated dependencies [6c270a6]
+- Updated dependencies [290e2f0]
+- Updated dependencies [668dd17]
+- Updated dependencies [8abf133]
+- Updated dependencies [e0859b1]
+- Updated dependencies [92f5f19]
+- Updated dependencies [32899e6]
+- Updated dependencies [ce468c8]
+- Updated dependencies [04ecd4e]
+- Updated dependencies [4d5a892]
+- Updated dependencies [16cebeb]
+- Updated dependencies [86d30af]
+- Updated dependencies [8923843]
+- Updated dependencies [a2795f6]
+- Updated dependencies [f16b492]
+- Updated dependencies [4b6fde8]
+- Updated dependencies [2018df9]
+- Updated dependencies [fc5a3a2]
+  - @objectstack/spec@16.0.0-rc.0
+  - @objectstack/core@16.0.0-rc.0
+  - @objectstack/types@16.0.0-rc.0
+  - @objectstack/observability@16.0.0-rc.0
+
 ## 15.1.1
 
 ### Patch Changes
