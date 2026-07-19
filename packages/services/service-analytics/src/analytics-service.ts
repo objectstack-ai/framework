@@ -11,7 +11,7 @@ import type { Cube, FilterCondition } from '@objectstack/spec/data';
 import type { ExecutionContext } from '@objectstack/spec/kernel';
 import type { Dataset } from '@objectstack/spec/ui';
 import type { Logger } from '@objectstack/spec/contracts';
-import { createLogger, bucketKeyToCalendarRange } from '@objectstack/core';
+import { createLogger, bucketKeyToCalendarRange, zonedDateStartToUtcMs } from '@objectstack/core';
 import { CubeRegistry } from './cube-registry.js';
 import type { AnalyticsStrategy, DriverCapabilities, StrategyContext } from './strategies/types.js';
 import { NativeSQLStrategy } from './strategies/native-sql-strategy.js';
@@ -558,27 +558,34 @@ export class AnalyticsService implements IAnalyticsService {
     // still in `rows[i][dim]` here (this runs BEFORE label resolution rewrites
     // it to a display label).
     const rangeTz = selection.timezone ?? context?.timezone ?? 'UTC';
-    const dateDims = selectedDims.filter(
-      (d) => !!d.field && d.type === 'date' && !!d.dateGranularity,
-    );
-    // A tz-naive `date` field's calendar bounds are timezone-independent, so
-    // they're exact under ANY reference tz. A `datetime` field buckets on the
-    // reference tz's calendar — its boundaries are that tz's midnight instants,
-    // which YYYY-MM-DD calendar bounds capture only under UTC. Under a non-UTC
-    // tz we therefore emit ranges only for `date` fields and let `datetime`
-    // dims fall back to a superset drill (host omits the range).
-    const rangeDims =
-      rangeTz === 'UTC'
-        ? dateDims
-        : dateDims.filter(
-            (d) => this.measureCurrency?.(dataset.object, d.field as string)?.type === 'date',
-          );
+    // Per drillable date+granularity dim, decide how to serialize its bounds
+    // (ADR-0053 temporal semantics):
+    //   - `datetime` → the reference tz's MIDNIGHT INSTANT (ISO), because the
+    //     bucket is defined on that tz's calendar (works under any tz, incl. DST);
+    //   - `date` → `YYYY-MM-DD` calendar bounds, a tz-naive calendar day that is
+    //     exact under ANY reference tz;
+    //   - unknown field type → safe only under UTC (where the calendar day and
+    //     its instant coincide); under a non-UTC tz we can't tell whether to
+    //     shift, so the dim is omitted and the host drills a superset.
+    const rangeDims: Array<{ d: (typeof selectedDims)[number]; instant: boolean }> = [];
+    for (const d of selectedDims) {
+      if (!d.field || d.type !== 'date' || !d.dateGranularity) continue;
+      const ftype = this.measureCurrency?.(dataset.object, d.field as string)?.type;
+      if (ftype === 'datetime') rangeDims.push({ d, instant: true });
+      else if (ftype === 'date') rangeDims.push({ d, instant: false });
+      else if (rangeTz === 'UTC') rangeDims.push({ d, instant: false });
+      // else: unknown field type under a non-UTC reference tz → omit (superset).
+    }
     if (rangeDims.length && result.rows.length) {
+      const bound = (ymd: string, instant: boolean): string =>
+        instant ? new Date(zonedDateStartToUtcMs(ymd, rangeTz)).toISOString() : ymd;
       (result as AnalyticsResultWithDrill).drillRanges = result.rows.map((row) => {
         const ranges: Record<string, { field: string; gte: string; lt: string }> = {};
-        for (const d of rangeDims) {
+        for (const { d, instant } of rangeDims) {
           const cal = bucketKeyToCalendarRange(row[d.name] as string, d.dateGranularity!);
-          if (cal) ranges[d.name] = { field: d.field as string, gte: cal.start, lt: cal.end };
+          if (cal) {
+            ranges[d.name] = { field: d.field as string, gte: bound(cal.start, instant), lt: bound(cal.end, instant) };
+          }
         }
         return ranges;
       });

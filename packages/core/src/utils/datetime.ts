@@ -60,6 +60,49 @@ export function calendarPartsInTzOrUtc(d: Date, tz?: string): CalendarParts {
 }
 
 /**
+ * The UTC instant (epoch ms) at which calendar day `ymd` (`YYYY-MM-DD`) *begins*
+ * in reference timezone `tz` — i.e. local **midnight** of that day rendered as a
+ * UTC instant. The inverse direction of {@link calendarPartsInTz}.
+ *
+ * DST-safe: the zone offset is read from the platform tz database via
+ * `Intl.DateTimeFormat` (never hand-computed), and a two-pass resolution settles
+ * the rare case where the offset differs side-to-side of the target instant. An
+ * unset, `'UTC'`, invalid, or unparseable input returns plain UTC midnight.
+ *
+ * Used by date-bucket drill ranges (#1752): a `datetime` field buckets on the
+ * reference-tz calendar, so its bucket boundary is that tz's midnight instant.
+ */
+export function zonedDateStartToUtcMs(ymd: string, tz?: string): number {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd);
+  const wallAsUtc = m ? Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : NaN;
+  if (!tz || tz === 'UTC' || Number.isNaN(wallAsUtc)) return wallAsUtc;
+  try {
+    // The tz offset (local − UTC, in ms) at instant `t`: read t's wall clock in
+    // `tz`, re-interpret those parts as UTC, and subtract t.
+    const offsetAt = (t: number): number => {
+      const p = new Intl.DateTimeFormat('en-US', {
+        timeZone: tz,
+        hourCycle: 'h23',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      }).formatToParts(new Date(t));
+      const g = (k: string) => Number(p.find((x) => x.type === k)?.value);
+      return Date.UTC(g('year'), g('month') - 1, g('day'), g('hour'), g('minute'), g('second')) - t;
+    };
+    // Want U such that localParts(U) == midnight, i.e. U = wallAsUtc − offset(U).
+    // Iterate from the zero-offset guess; converges in ≤2 steps off a DST edge.
+    const off1 = offsetAt(wallAsUtc - offsetAt(wallAsUtc));
+    return wallAsUtc - off1;
+  } catch {
+    return wallAsUtc; // unknown zone → UTC midnight
+  }
+}
+
+/**
  * Granularity of a canonical date-bucket key. Mirrors `@objectstack/spec`'s
  * `DateGranularity` enum but kept as a local literal union so this low-level
  * package needs no dependency on spec.

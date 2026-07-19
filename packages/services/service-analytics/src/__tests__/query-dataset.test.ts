@@ -247,7 +247,7 @@ describe('AnalyticsService.queryDataset', () => {
     ]);
   });
 
-  it('#1752 — omits the range for a datetime field under a non-UTC reference tz (superset fallback)', async () => {
+  it('#1752 — a datetime field under a non-UTC reference tz drills the tz midnight instants', async () => {
     const q = DatasetSchema.parse({
       name: 'sales_dt', label: 'Sales', object: 'opportunity', include: [],
       dimensions: [{ name: 'closed_at', field: 'closed_at', type: 'date', dateGranularity: 'month' }],
@@ -257,7 +257,8 @@ describe('AnalyticsService.queryDataset', () => {
       queryCapabilities: () => ({ nativeSql: false, objectqlAggregate: true, inMemory: false }),
       executeAggregate: async () => [{ closed_at: '2026-06', revenue: 100 }],
       // closed_at is a datetime instant → its month bucket boundary is that tz's
-      // midnight, which YYYY-MM-DD calendar bounds can't express → omit (superset).
+      // MIDNIGHT INSTANT. June/July 2026 in New York are EDT (−04), so local
+      // midnight is 04:00 UTC.
       measureCurrency: (_o, f) => (f === 'closed_at' ? { type: 'datetime' } : undefined),
       getReadScope: (_o, ctx?: ExecutionContext) => (ctx?.tenantId ? { organization_id: ctx.tenantId } : undefined),
     });
@@ -266,8 +267,10 @@ describe('AnalyticsService.queryDataset', () => {
       { dimensions: ['closed_at'], measures: ['revenue'], timezone: 'America/New_York' },
       { tenantId: 'org_A' } as ExecutionContext,
     ) as any;
-    expect(result.drillRanges).toBeUndefined();
-    expect(result.object).toBeUndefined();
+    expect(result.object).toBe('opportunity');
+    expect(result.drillRanges).toEqual([
+      { closed_at: { field: 'closed_at', gte: '2026-06-01T04:00:00.000Z', lt: '2026-07-01T04:00:00.000Z' } },
+    ]);
   });
 
   it('#1752 — still emits the range for a tz-naive date field under a non-UTC tz', async () => {
