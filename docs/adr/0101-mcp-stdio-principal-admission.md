@@ -1,6 +1,6 @@
 # ADR-0101: MCP stdio Principal Admission — env-supplied API-key identity, fail-closed, no system bypass
 
-**Status**: Proposed (2026-07-19)
+**Status**: Accepted (2026-07-19) — v1 landed with this acceptance (#3246): key→EC threading, fail-closed start, no `system` bypass; `mcp-stdio-authority` graduated `experimental` → `enforced`
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: [ADR-0096](./0096-execution-surface-identity-admission.md) (execution-surface identity admission — this ADR closes its last unadmitted transport), [ADR-0024](./0024-mcp-connectors.md) §4 (trust model), [ADR-0036](./0036-app-as-rest-api-and-mcp-server.md) (the app *as* an MCP server — the surface being admitted), [ADR-0099](./0099-posture-adjudicated-tiering-and-external-rung.md) (posture rides the `ExecutionContext` this ADR threads)
 **Composes with**: framework#3055 (consume-side declarative stdio **spawn** policy — the sibling trust decision: #3055 gates *who may start* a local MCP process from metadata; this ADR gates *as whom* our own stdio server reads data), [ADR-0097](./0097-declarative-connector-instances.md)

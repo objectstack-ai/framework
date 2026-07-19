@@ -131,14 +131,15 @@ const PROBES: ReadonlyArray<{ file: string; re: RegExp; key: (m: RegExpExecArray
     re: /this\.buildMcpBridge\(context\)/g,
     key: () => 'mcp:http-dispatcher.ts:buildMcpBridge(context-threaded)',
   },
-  // (3) The stdio transport's UNSCOPED data bridge: the long-lived server is fed
-  // the raw metadata service + data engine with no principal. Wrapping these in
-  // a principal-bound bridge (the admission fix) changes this line → the
-  // unscoped-stdio key goes STALE → forces re-classifying mcp-stdio-authority.
+  // (3) The stdio transport's PRINCIPAL binding (ADR-0101): the long-lived
+  // server reads record data only under an OS_MCP_STDIO_API_KEY identity,
+  // resolved via resolveStdioExecutionContext and threaded into the record
+  // reader. Dropping that resolution (reverting to a raw/unscoped bridge) makes
+  // this key vanish → the mcp-stdio-authority row goes STALE → red CI.
   {
     file: 'packages/mcp/src/plugin.ts',
-    re: /bridgeResources\(metadataService, dataEngine\)/g,
-    key: () => 'mcp:plugin.ts:bridgeResources(unscoped-stdio)',
+    re: /resolveStdioExecutionContext\s*\(/g,
+    key: () => 'mcp:plugin.ts:stdio-principal-bound',
   },
 ];
 
@@ -254,9 +255,9 @@ describe('#2567 — anonymous-deny surface ratchet bites', () => {
     expect(problems.some((p) => /STALE covers/.test(p) && p.includes(threaded))).toBe(true);
   });
 
-  it('(g) the stdio unscoped-bridge posture is pinned; changing it goes STALE (#3167)', () => {
-    const stdio = 'mcp:plugin.ts:bridgeResources(unscoped-stdio)';
-    // Baseline sanity: the long-lived server bridges the raw services today.
+  it('(g) the stdio principal binding is pinned; dropping it goes STALE (ADR-0101)', () => {
+    const stdio = 'mcp:plugin.ts:stdio-principal-bound';
+    // Baseline sanity: the stdio path resolves an API-key principal today.
     expect(discoverAnonymousDenySurfaces().has(stdio)).toBe(true);
     const problems = checkLedger(
       AUTHZ_CONFORMANCE,

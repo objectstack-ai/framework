@@ -226,15 +226,16 @@ The **HTTP surface** and the long-lived **stdio transport** are separate switche
 see the note below):
 
 ```bash
-os start                                # HTTP MCP served at /api/v1/mcp by default
-OS_MCP_SERVER_ENABLED=false os start    # opt out of the HTTP MCP surface
-OS_MCP_STDIO_ENABLED=true os start      # additionally auto-start the local stdio transport
+os start                                                  # HTTP MCP served at /api/v1/mcp by default
+OS_MCP_SERVER_ENABLED=false os start                      # opt out of the HTTP MCP surface
+OS_MCP_STDIO_ENABLED=true OS_MCP_STDIO_API_KEY=osk_... os start   # start the local stdio transport as that key's identity
 ```
 
 | Variable | Type | Default | Description |
 |:---|:---|:---|:---|
 | `OS_MCP_SERVER_ENABLED` | boolean | `true` | The MCP **HTTP** surface (`/api/v1/mcp`) is a core capability and defaults **on**. Set `false` to disable it (endpoint 404s, the Connect-an-Agent page disappears). |
-| `OS_MCP_STDIO_ENABLED` | boolean | `false` | Auto-start the long-lived **stdio** transport at boot. Opt-in and **stricter** than the HTTP surface: stdio bridges the raw services with no per-request principal, so it is unscoped — safe only as a single-operator local tool. Leave off unless a local client spawns the process directly. |
+| `OS_MCP_STDIO_ENABLED` | boolean | `false` | Auto-start the long-lived **stdio** transport at boot. Opt-in and **stricter** than the HTTP surface. **Requires `OS_MCP_STDIO_API_KEY`** — stdio runs as that key's identity with RLS/FLS/tenant applied; if the key is missing or invalid, boot **fails closed** (stdio refuses to start). See ADR-0101. |
+| `OS_MCP_STDIO_API_KEY` | string | — | The `osk_...` API key the **stdio** transport runs as. Resolved through the same verify chain as the HTTP/REST surfaces, so reads are scoped to that identity's permissions. Mint one from **Setup → Connect an Agent** (or `POST /api/v1/keys`). For full authority, mint a key on a platform-admin or dedicated **service** identity — there is deliberately no `system`/unscoped bypass. |
 | `OS_MCP_SERVER_NAME` | string | `objectstack` | Server name advertised to MCP clients. |
 | `OS_MCP_SERVER_TRANSPORT` | enum | `stdio` | `stdio` \| `http`. Use `http` (Streamable HTTP) for a remote client; `stdio` for a local one. |
 
