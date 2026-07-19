@@ -1,0 +1,693 @@
+---
+title: v16.0.0
+description: One org identifier for hook and action authors, quorum and per-group sign-off (会签) approvals, time-relative automations that actually fire, filtered roll-ups, strict dashboard widgets, an identity-scoped MCP stdio transport, and a metadata-driven approvals inbox — plus a large enforce-or-remove sweep that makes dead metadata loud. Backend and Console notes for 16.0.0.
+---
+
+**The v16 line** converges the developer surface and makes declared metadata
+honest: hook and action bodies read the caller's org under one blessed name
+(`organizationId`), approvals grow real multi-approver governance (M-of-N
+quorum and one-from-each-group 会签) with decision actions declared as
+metadata instead of hand-written buttons, time-relative business rules
+("remind me 60 days before the contract ends") become a first-class trigger,
+and a platform-wide enforce-or-remove sweep turns silently-ignored keys —
+dashboard widget typos, dead hook events, phantom webhook triggers, unknown
+`requires` capabilities — into loud errors at authoring time.
+
+> **Release status:** the 16.0.0 train is currently published as
+> `16.0.0-rc.0`. This page describes the 16.0.0 content; section headings say
+> 16.0.0 for brevity. (15.1.1 was a small patch on the previous line —
+> better-auth family pinning and auth-plugin init isolation — covered by the
+> [v15 page](/docs/releases/v15).)
+
+## Highlights — 16.0.0
+
+- **Ask for approval like a real organization.** Approval steps now support
+  **M-of-N quorum** and **per-group sign-off (会签)** — one approver from each
+  named group, tallied against an open-time snapshot with OOO substitution — a
+  single rejection still vetoes, and thresholds clamp so a misconfiguration
+  can never deadlock a request. Decisions can carry file attachments, progress
+  ("2 of 3 · finance pending") is computed server-side, and notification links
+  deep-link straight into the request drawer.
+- **The approvals inbox is now metadata, not hand-written buttons.**
+  Approve / reject / reassign / send-back / request-info / remind / recall /
+  resubmit are declared `type:'api'` actions on `sys_approval_request`; the
+  Console's generic action runtime renders and executes them anywhere the
+  object appears — new decision capabilities ship as backend metadata with
+  zero Console changes.
+- **"Alert 60 days before `end_date`" finally just works.** A flow start node
+  can declare a `timeRelative` descriptor (`offsetDays: [60, 30, 7]` or
+  `withinDays`); a daily sweep launches the flow once per matching record —
+  no more date-equality conditions that only fire if someone happens to edit
+  the record on exactly the right day.
+- **Roll-ups can count only what matters.** `summaryOperations.filter` lets a
+  parent total aggregate just the matching children (`sum` of `received`
+  lines, `count` of `signup` engagements) — and re-aggregates when a child
+  moves in or out of the predicate.
+- **Silent no-ops became loud errors.** Strict dashboard widgets name the
+  offending key and point at the dataset shape; hooks subscribing to
+  never-fired events, webhooks on triggers with no event source, validation
+  rules on `delete`, unknown `requires` capability tokens, and a batch of
+  dead field/object/agent properties now fail at parse/validate time instead
+  of parsing and doing nothing.
+- **One name for the caller's org.** `ctx.user.organizationId` /
+  `ctx.session.organizationId` across hooks and action bodies — matching the
+  `organization_id` column and `current_user.organizationId` in RLS — with the
+  confusing `tenantId` alias removed.
+- **`record.due_date == today()` now matches.** The formula engine rewrites
+  temporal equality comparisons so the most natural due-today predicate stops
+  silently returning `false` — plus advisory type-soundness warnings when an
+  expression does arithmetic on a text/boolean field.
+- **Ops-grade diagnostics without a tracing stack:** opt-in `Server-Timing`
+  decomposed into auth / db (with query count) / hooks / serialize spans,
+  per-request admin-gated via `X-OS-Debug-Timing`, with an admin-only
+  slowest-queries breakdown.
+- **A safer, faster sandbox.** Hook/action budgets meter script CPU-time
+  instead of wall clock (a slow host or nested write chain no longer trips
+  the 250ms budget), the runner honors a body's declared `timeoutMs`, and
+  the QuickJS engine drops asyncify for the leaner sync variant.
+- **MCP grows an authoring loop and loses its last unscoped surface:** a
+  `validate_expression` tool lets agents lint a formula against the real
+  schema *before* saving it, the dev banner prints a ready-to-paste
+  `claude mcp add` command — and the long-lived stdio transport now requires
+  an API-key principal (fail-closed) instead of reading data unscoped.
+
+---
+
+# 16.0.0 in detail
+
+## Breaking changes & migration
+
+Strict-semver edges and behavior changes, with migrations — read before
+recompiling metadata authored against spec 15.x or upgrading a deployment
+with custom hooks, actions, MCP stdio, or multi-org tenancy.
+
+### Hook & action `ctx`: the `tenantId` alias is removed — read `organizationId` (#3280, #3290)
+
+The caller's active organization is now surfaced to JS authors under one
+blessed name, matching the `organization_id` column and
+`current_user.organizationId` in RLS/sharing. #3280 added
+`ctx.session.organizationId` and `ctx.user.organizationId` (hooks *and*
+action bodies — the REST and MCP `run_action` paths both populate them);
+#3290 then **removed** the deprecated `tenantId` alias from the hook
+`ctx.session`, the action-body `ctx.session`, and the action-body `ctx.user`.
+
+```diff
+- const org = ctx.session.tenantId;   // hook or action body
++ const org = ctx.user?.organizationId ?? ctx.session?.organizationId;
+```
+
+**Migration** (in any `*.hook.ts` / `*.action.ts` body):
+`ctx.session.tenantId` → `ctx.session.organizationId`;
+`ctx.user.tenantId` → `ctx.user.organizationId`. The value is unchanged.
+`ctx.user` is `undefined` for system/unauthenticated writes, so read
+`ctx.session?.organizationId` when the code must work without a resolved
+user. The **driver-layer** tenancy axis (`ExecutionContext.tenantId`,
+`DriverOptions.tenantId`, `TenancyConfig.tenantField`) is deliberately
+untouched — that configurable isolation column legitimately carries an
+*environment* id in database-per-tenant kernels and is a different concept.
+Community edition never populates an org, so `organizationId` is `undefined`
+there.
+
+### Strict dashboard widgets — undeclared keys are loud (ADR-0021, #3251)
+
+`DashboardWidgetSchema` is now `.strict()`: an undeclared top-level key — a
+typo, a hallucinated key, or a removed pre-ADR-0021 inline-analytics key
+(`object` / `categoryField` / `valueField` / `aggregate`, pivot `rowField` /
+`columnField`) — is a **parse error** naming the key and pointing at the
+dataset shape (`dataset` + `dimensions` + `values`) instead of being
+silently stripped into a widget that renders nothing. `options: z.unknown()`
+remains the escape hatch for renderer-specific extras. Recorded as protocol-16
+migration `step16` (`dashboard-widget-strict-unknown-keys`), the protocol-16
+counterpart of 15.0.0's strict form/page flip. **Migration:** recompile;
+rewrite any flagged widget onto the dataset shape (both Studio authoring
+surfaces already emit only that shape — objectui#2703).
+
+### MCP stdio: its own switch, and a mandatory API-key principal (ADR-0101, #3167, #3246)
+
+Two changes close the platform's last identity-less execution surface:
+
+- **`OS_MCP_SERVER_ENABLED` no longer silently starts stdio.** The HTTP
+  surface (`/api/v1/mcp`) and the long-lived stdio transport used to share
+  one env var. Stdio auto-start is now its own switch,
+  **`OS_MCP_STDIO_ENABLED`** (default off); `OS_MCP_SERVER_ENABLED` governs
+  only HTTP. The legacy `=true` trigger still starts stdio for one release
+  with a deprecation warning.
+- **BREAKING (stdio auto-start only): stdio requires
+  `OS_MCP_STDIO_API_KEY=osk_...`.** The transport previously bridged the
+  metadata service and data engine with **no per-request principal** —
+  unscoped reads. It now resolves the supplied key through the same verify +
+  authorization chain as HTTP/REST (RLS/FLS/tenant apply exactly as on
+  `/data`; re-resolved per read so revocation takes effect live) and **fails
+  closed**: enabling auto-start without a resolvable key refuses to boot.
+  There is no unscoped fallback and deliberately no `system` bypass — full
+  authority is a key minted on a platform-admin or service identity. The
+  default-on HTTP surface is unaffected.
+
+### Feed contracts retired from the type surface and discovery (#1959, #3180)
+
+The feed runtime was deleted long ago (`sys_comment` / `sys_activity` are the
+canonical collaboration backend); 16.0.0 removes the dead surfaces that still
+pointed at it. `@objectstack/spec` drops `IFeedService`, the entire
+`FeedApiContracts` / `FeedProtocol` request/response family, and the
+feed-item data schemas; `@objectstack/client` drops `client.feed.*`;
+`ObjectStackProtocolImplementation`'s constructor loses its `getFeedService`
+argument; discovery drops `capabilities.feed` / `routes.feed`. Every removed
+method was already unreachable (the feed route was never mounted). **Bug fix
+riding along:** the `comments` capability keyed off the deleted feed service
+and was permanently `false`; it now tracks the presence of `sys_comment`, so
+`declared === enforced`. **Migration:** use the data API —
+`client.data.create('sys_comment', { object, record_id, body })`, read
+`sys_activity` — and `discovery.capabilities.comments`.
+
+### The enforce-or-remove sweep — dead metadata is now loud (#2377, ADR-0049)
+
+A platform-wide audit removed declared-but-unenforced surfaces. Authoring
+these was a false affordance — especially dangerous for AI-authored metadata:
+
+- **Field props** `vectorConfig`, `fileAttachmentConfig`, `dependencies`,
+  `columnName`, `index`, `referenceFilters` — removed (silently stripped, or
+  tombstoned with guidance). Vector fields keep flat `dimensions`; file/image
+  keep flat `multiple`/`accept`/`maxSize`; indexes belong in object
+  `indexes[]`; `lookupFilters` replaces `referenceFilters`;
+  `external.columnMap` is the only physical-column mapping.
+- **Object props** `versioning`, `softDelete`, `search`, `recordName`,
+  `keyPrefix`, `tags`, `active`, `abstract` — `ObjectSchema.create()` now
+  throws a located error naming the replacement (`search` →
+  `searchableFields`; `recordName` → an `autonumber` field as `nameField`).
+- **Agent** `visibility` (never enforced — setting `private` hid nothing) and
+  `tenantId`, plus `planning.strategy` / `planning.allowReplan` — removed.
+  Restrict agents with the *enforced* `access` / `permissions` keys.
+- **Hook events collapse 18 → 8 (#3195).** The 10 never-dispatched events
+  (`beforeFindOne`/`afterFindOne`, `beforeCount`/`afterCount`,
+  `beforeAggregate`/`afterAggregate`, `before`/`afterUpdateMany`,
+  `before`/`afterDeleteMany`) are removed. `findOne` fires the same
+  `beforeFind`/`afterFind` as `find`; bulk updates/deletes fire the singular
+  events with the row-scoping predicate in `ctx.input.ast`. `registerHook`
+  now warns on any event the engine never dispatches.
+- **Validation rules lose the dead `'delete'` event (#3184)** — the evaluator
+  never ran on delete; guard deletions with a `beforeDelete` hook.
+- **Webhook triggers `undelete` and `api` are removed (#3196)** — neither
+  ever had a fire path; the auto-enqueuer now warns when a stored
+  `sys_webhook` row carries an unmappable trigger.
+- **The `js` *expression* dialect is retired (#3278)** — it was a stub with
+  no engine (`{cel, cron, template}` remain). Procedural JS is unaffected:
+  sandboxed `ScriptBody { language: 'js' }` bodies are a separate surface.
+- **`systemFields.owner` dropped (#3175 follow-up)** — nothing read it; use
+  the now first-class `ownership: 'user' | 'org' | 'none'` (see below).
+- **Schema-only surfaces are labeled (#3197):** GraphQL subscriptions,
+  WebSocket/realtime event enums, connector `webhooks`/`triggers`, and the
+  unimplemented notification channels now say "not yet enforced" in their
+  doc comments and `.describe()` texts.
+
+### Engine-owned system rows are read-only through the generic data API (ADR-0103, #3220)
+
+The overloaded `managedBy: 'system'` bucket conflated rows a platform service
+owns end-to-end with platform-defined schema whose rows are legitimately
+admin-writable — and had no engine enforcement, so a wildcard admin could
+raw-write service-owned rows through `/data`. The write policy is now the
+**resolved affordance**: genuinely user-writable objects (RBAC link tables,
+`sys_user_preference`, `sys_approval_delegation`, messaging config) declare
+`userActions`; engine-owned objects (jobs, notifications, approval
+request/approver/token/action, `sys_record_share`, `sys_automation_run`,
+audit trails, `sys_secret`, `sys_import_job`, plus `sys_presence` /
+`sys_metadata`) are locked to `['get','list']`, and a new fail-closed guard
+(`assertEngineOwnedWriteAllowed`) rejects user-context generic writes to
+them. `reconcileManagedApiMethods` now strips contradictory advertised verbs
+for **every** managed bucket, and `/me/permissions` clamps accordingly.
+**Potentially breaking:** a third-party `system` object that relied on the
+old fail-open behavior gets its write verbs stripped (with a warning) —
+declare `userActions` for the verbs it legitimately takes from users. The
+Console badges engine-owned objects distinctly (objectui#2705).
+
+### Multi-org: the carried posture rung is authoritative for the tenant wall (ADR-0099 P1, #3211)
+
+The Layer 0 cross-tenant exemption now reads the principal's carried
+`ctx.posture` rung as authoritative; the platform-admin capability probe is
+demoted to a fallback for resolver-less contexts. Read and write tenant
+checks share one decision so they cannot drift. **Security narrowing
+(multi-org deployments only):** a principal whose rung is not
+`PLATFORM_ADMIN` no longer crosses the tenant wall on private /
+platform-global / better-auth-managed objects even if its permission sets
+carry a platform-exclusive capability — the two affected shapes are a
+**scoped** `admin_full_access` grant (non-null `organization_id`) and a
+custom set granting a platform capability piecemeal. **Upgrade check:** scan
+`sys_user_permission_set` for scoped `admin_full_access` rows and custom sets
+whose `systemPermissions` intersect `{manage_metadata,
+manage_platform_settings, studio.access, manage_users}`; grant the
+**unscoped** `admin_full_access` where genuine cross-tenant operator access
+is intended. A runtime `[authz/ADR-0099]` warning names any principal hitting
+the divergence.
+
+### Approver type `role` → `org_membership_level` (#3133)
+
+`ApproverType.role` was the last authoring surface projecting the reserved
+word "role" (ADR-0090 D3) — and it manufactured a real silent failure: since
+every other surface renamed to `position`, `{ type: 'role', value:
+'sales_manager' }` reads like the legacy spelling of a position, resolves
+against the membership tier, finds nothing, and waits forever on an approver
+that cannot exist. The canonical spelling is now `org_membership_level`;
+`role` remains a deprecated alias for one window (15.x flows keep loading,
+with a warning) and is removed next major. New paired lints:
+`approval-approver-not-membership-tier` and
+`approval-approver-type-deprecated`. If the value names an org position, the
+fix is `type: 'position'`.
+
+## Behavior changes (16.0.0)
+
+- **Bulk user import defaults to `auto` (#3236).**
+  `POST /api/v1/auth/admin/import-users` gains a fourth `passwordPolicy` and
+  makes it the default (was `none`): each row with a deliverable channel
+  (real email + wired email service, or phone + SMS invite path) is
+  **invited**; only genuinely unreachable rows fall back to a temporary
+  password (returned once, `must_change_password` stamped). Per-row outcomes
+  surface on `rows[].delivery` with a `summary.delivery` breakdown. Callers
+  that omitted `passwordPolicy` and want the old identity-only behavior must
+  now pass `'none'` explicitly.
+- **`readonly` fields are stripped on INSERT too (#3043).** 15.1 enforced
+  static `readonly` on UPDATE; creating a record born
+  `approval_status: 'approved'` was the shorter attack. Non-system creates
+  through the external data ingress (REST, GraphQL/MCP dispatch, bulk
+  import) now silently drop caller-supplied `readonly` keys; the field falls
+  back to its declared `defaultValue`. Trusted internal writers
+  (better-auth, metadata repository, seed loader) are unaffected;
+  author-defined business objects only (`sys_*` objects keep their own
+  reject-style guards).
+- **Validation rules now run on multi-row updates (#3106).** The
+  `options.multi` bulk branch previously skipped `evaluateValidationRules`
+  entirely — every object rule, `requiredWhen`, and per-option `visibleWhen`
+  was a silent no-op there. The engine now evaluates the payload against each
+  matched row's prior state and rejects the whole batch on any
+  error-severity violation (annotated with the failing record id).
+- **The cross-object transactional batch is gated like single-record writes
+  (#1604).** `POST {basePath}/batch` now validates its body
+  (`CrossObjectBatchRequestSchema`), enforces `enable.apiEnabled` /
+  `enable.apiMethods` for every op *before* opening the transaction, requires
+  ids for update/delete, rejects unresolvable `{ $ref }` (no more silent
+  NULL FKs), and rejects `atomic: false` (`400 BATCH_NOT_ATOMIC`).
+- **`dateField == today()` matches now (#3183).** A `Field.date` reads back
+  as a `YYYY-MM-DD` string, and cel-js equality treats a string and a
+  timestamp as unequal — so the most natural due-today predicate silently
+  never matched. The engine now rewrites temporal `==`/`!=` comparisons to
+  coerce the field operand (`date(record.due_date) == today()`),
+  per-occurrence, type-blind-safe, and memoized. Applies to formulas,
+  defaults, validation rules, hook and flow conditions; RLS/sharing compile
+  via `cel-to-filter` and were already loud.
+- **Sandbox budgets meter script CPU-time, not wall clock (ADR-0102 D1,
+  #3295).** Idle host-await time and nested hooks' own execution are no
+  longer charged to the caller, so a loaded host or a deep nested-write chain
+  can't trip the 250ms hook budget while the script is merely waiting. The
+  timeout knobs keep their names, defaults, and precedence; a generous
+  wall-clock ceiling (default 30s, `OS_SANDBOX_WALL_CEILING_MS`) backstops
+  never-settling host calls. Error strings changed (`exceeded CPU budget of
+  Nms` / `exceeded wall-clock ceiling of Nms`) — update any matching code.
+  Also: a body's declared `timeoutMs` is finally honored instead of being
+  clamped to the 250ms default (#1867), and
+  `OS_SANDBOX_HOOK_TIMEOUT_MS` / `OS_SANDBOX_ACTION_TIMEOUT_MS` set
+  deployment-wide defaults (#3259).
+- **better-auth's own writes run as system context (#3164).** The identity
+  adapter's writes carried no context, so the 15.1 `readonly` UPDATE strip
+  silently dropped better-auth's writes to `sys_user` columns — change-email
+  and admin ban returned success but never persisted. Its internal writes now
+  carry `isSystem` (user-context writes to identity tables are still rejected
+  by the ADR-0092 guard). `withSystemReadContext` → `withSystemContext`
+  (deprecated alias kept one release).
+- **Platform-global objects are never driver-org-scoped (#3249).** An
+  org-context read of a `tenancy.enabled: false` object (e.g. `sys_license`)
+  could return 0 rows while an anonymous read saw data. The engine no longer
+  stamps `tenantId` for such objects, drivers keep a sticky record of the
+  opt-out across partial re-registrations, and `isTenancyDisabled(schema)`
+  is the single shared source of truth.
+
+## New capabilities in 16.0.0
+
+### Approvals: quorum, per-group sign-off (会签), attachments, and declared actions (#3266 series)
+
+- **Decision behaviors (#3268):** approval steps gain `quorum` (M-of-N via
+  `minApprovals`) and `per_group` (one approver from each labeled group —
+  会签), tallied against an open-time snapshot with OOO substitution. A
+  single rejection stays a veto; thresholds clamp so misconfiguration can
+  never deadlock. `sys_approval_action` gains a `Field.file` **attachments**
+  column threaded through decide/comment, the REST routes, and the client
+  SDK.
+- **Server-computed progress + deep links (#3274):** `getRequest` attaches
+  `decision_progress` (got/need for unanimous/quorum; per-group breakdown for
+  `per_group`), and `notify()` rewrites inbox action URLs to
+  `/system/approvals?request=<id>` deep links.
+- **Decision capabilities as metadata (#3282, #3300):** approve / reject /
+  reassign — then send-back (`/revise`), request-info, remind, recall, and
+  resubmit (`/resubmit`) — are declared as `type:'api'` actions on
+  `sys_approval_request` with typed params, pending-only `visible` gates, and
+  submitter-vs-approver predicates (`record.submitter_id == ctx.user.id`).
+  The previously-404ing `/revise` and `/resubmit` REST routes are wired. The
+  reassign dialog's `to` param is field-backed on `submitter_id`, so it
+  renders a real user picker. A contract test pins the action set. The
+  Console side retires the inbox's hand-written buttons (see Console below).
+
+### Time-relative automation — a daily sweep, not date-equality roulette (#1874)
+
+A flow start node can declare `config.timeRelative` — swept object,
+`dateField`, and either `offsetDays: [60, 30, 7]` (T-minus thresholds) or
+`withinDays: 30` ("expiring soon"; negative = overdue lookback), plus an
+optional AND-ed `filter` and an optional `schedule` (default daily 08:00
+UTC). The new `time_relative` trigger (`TimeRelativeTriggerPlugin` in
+`@objectstack/trigger-schedule`) launches the flow **once per matching
+record** with the record on the automation context, so start-node conditions
+and `{record.<field>}` interpolation work exactly as for record-change
+flows. The discovery query runs as system, capped (`maxRecords`, default
+1000), with per-record failure isolation. `os validate` gains readiness
+checks; the flow designer gets a first-class panel (objectui#2668).
+
+### Flow trigger observability — no more four-layer silence (2026-07-17 eval)
+
+A misauthored auto-launched flow used to produce zero output anywhere. Now:
+the `os serve`/`os dev`/`os start` startup banner prints a **`Flows:`
+section** (flow/bound/draft counts, registered trigger types) with loud `⚠`
+lines for flows with no automation engine, no registered trigger, or a dead
+record-change binding; trigger-fired run failures log at **ERROR** on
+stderr; `RecordChangeTrigger` probes object existence at bind time; a
+`kernel:bootstrapped` binding audit warns per enabled-but-unbound flow; and
+`os validate` gains flow-wiring advisories (unknown target object, draft
+status). Registration-time flow-condition validation also runs schema-aware
+checks for dynamically registered flows (#1928).
+
+### Filtered roll-ups and honest state machines
+
+- **`summaryOperations.filter` (#1868):** a roll-up `summary` field can
+  aggregate only matching child rows (operator and compound forms included),
+  letting one child object feed several distinct parent totals; the engine
+  re-runs the filtered aggregate on every child write, so rows moving in or
+  out of the predicate keep the parent current. The Field metadata form
+  declares the sub-fields so Studio renders a structured editor (#3257), and
+  Studio gains a visual filter editor (objectui#2669).
+- **`state_machine.initialStates` (#3165):** transitions only ever governed
+  UPDATE — a record could be *born* `approved`. Rules can now declare the
+  states a record may be created in; out-of-list inserts are rejected
+  server-side (`invalid_initial_state`). Omit for legacy behavior.
+- **`ownership` is first-class (#3175):** the record-ownership model
+  (`'user' | 'org' | 'none'`, driving `owner_id` auto-provisioning) is now a
+  declared `ObjectSchema` key instead of an `(schema as any)` read that the
+  sanctioned authoring path rejected; a retired `'own'`/`'extend'` value
+  fails with guidance (that's the package-contribution kind).
+
+### Analytics: exact drill-through scopes (#1752, #3214)
+
+Drilling a "2026-Q2" cell needs a range, not an equality. `queryDataset` now
+emits a `drillRanges` sidecar of half-open `[start, end)` bounds for
+`dateGranularity`-bucketed date dimensions (`bucketKeyToCalendarRange` in
+core is the inverse of `bucketDateValue`); `datetime` dimensions under a
+non-UTC reference timezone use ISO **instant** bounds at that zone's
+midnight (DST-safe, `zonedDateStartToUtcMs`); and `drillRawTotals` extends
+the raw-value snapshot to totals/subtotal rows, so subtotal drills
+exact-match on stored values instead of display labels. Consumed by the
+Console's report drill-through (objectui#2672).
+
+### Performance diagnostics: Server-Timing spans (#2408)
+
+- Opt-in `Server-Timing` now decomposes requests into **`auth`** (identity
+  resolution), **`db`** (total SQL time + query count, correctly attributed
+  under concurrency via `AsyncLocalStorage`; SQL text never emitted),
+  **`hooks`** (business-hook time + count), and **`serialize`** — readable in
+  DevTools → Network → Timing with no tracing backend.
+- **Per-request, admin-gated:** send `X-OS-Debug-Timing: 1` and the header is
+  emitted only for admin/service principals — no more global-only mode
+  fingerprinting the backend to every caller. `X-OS-Debug-Timing: json`
+  additionally returns an admin-only `X-OS-Debug-Timing-Detail` header with
+  the slowest parametrized statements (placeholders only, never bindings).
+  Zero overhead when off.
+
+### AI / MCP
+
+- **`validate_expression` tool (#1928):** agents can run the same expression
+  checks as `objectstack build` against an object's *real* schema before
+  authoring — errors (bare refs, unknown fields with did-you-mean, unknown
+  functions), warnings (type-soundness, date-equality pitfalls), the
+  in-scope field/function inventory, and the inferred result type. Read-only,
+  `data:read`-scoped, fail-closed on `sys_*`.
+- **Discoverable serve-side MCP (#3167):** the `os dev` banner prints the MCP
+  endpoint, the agent-skill URL, and a ready-to-paste `claude mcp add`
+  command, so "an agent operates the app it's building" is wired from the
+  dev loop.
+- **Advisory expression guardrails (#1928 tier 4, #3183):** builds warn when
+  a text/boolean field is used with arithmetic/ordering against a number
+  (exactly the cases the runtime would fault to `null` — never the ones it
+  rescues), threaded through formulas, validation rules, predicates, and
+  flow conditions (fatal only under `--strict`).
+
+### Spec, kernel & platform
+
+- **One platform capability vocabulary (#3265):** `requires` tokens are
+  canonical kebab-case owned by the spec (`PLATFORM_CAPABILITY_TOKENS`) with
+  deprecated-alias canonicalization; `defineStack` now **rejects** unknown
+  tokens at authoring (a typo no runtime provides was previously silently
+  ignored) while the serve resolver warns-not-throws on raw artifacts so
+  older artifacts never crash-boot a server.
+- **Typed atomic batch SDK (#1604 / ADR-0034):**
+  `client.data.batchTransaction(operations)` — the all-or-nothing
+  cross-object batch with `{ $ref: <opIndex> }` intra-batch parent
+  references, deliberately exposing no `atomic` flag. Non-atomic bulk stays
+  on `data.batch()` / `createMany` / `updateMany`.
+- **`ActionParamSchema` widget config (objectui ADR-0059):** inline params
+  can declare `multiple`, `accept`, `maxSize` for file/image params;
+  field-backed params inherit from the referenced field. The `create_user`
+  result dialog surfaces the sign-in phone number, and `sys_user` list
+  views/detail highlights finally show `phone_number` (#3262).
+- **View metadata validates all three runtime shapes (#3095):** the `view`
+  type-schema is now a genuine union over defineView containers (non-empty
+  enforced — `defineView()` also rejects zero-view containers, with a
+  matching `os validate` check), standalone ViewItem records, and console
+  personalization overlays — a kanban missing `groupByField` no longer saves
+  with a false `200` and a "valid" badge.
+- **Metadata subsystem correctness:** `register()`/`unregister()` announce to
+  `subscribe()` watchers by default (ObjectQL's schema cache no longer goes
+  stale until restart; bulk ingest opts out via `{ notify: false }`, #3112);
+  unscoped `GET /meta/:type` dedupes package-aware so two packages shipping
+  the same `type/name` stay distinct rows (ADR-0048 #1828); and Studio-saved
+  drafts publish/discard in the draft's own org scope, fixing `no_draft`
+  after "Save Draft" (#3115).
+- **Sandbox engine (ADR-0102 D2, #3296):** the QuickJS sandbox drops asyncify
+  for the sync variant (smaller, faster, an entire suspended-stack failure
+  class removed; a deferred-disposal leak fixed), and the pump loop stops
+  idle-spinning while awaiting host calls (#3233).
+- **Bulk-write reliability (#3147–#3152):** short driver returns are degraded
+  per-row instead of padded as phantom successes; the remaining un-retried
+  seed/import write points get transient retries; import `$ref` resolution
+  flushes pending creates; retries are idempotent after commit-then-lost
+  responses; summary recompute failures surface as `ERR_SUMMARY_RECOMPUTE`;
+  autonumbers are assigned after validation (no sequence gaps). Seed replays
+  also stop corrupting lookup natural keys and are now idempotent
+  (no `updated_at` churn per boot).
+
+### CLI & developer experience
+
+- **Scaffold ships the connector executors (ADR-0097):** `npm create
+  objectstack` wires `ConnectorRestPlugin` / `ConnectorOpenApiPlugin` /
+  `ConnectorMcpPlugin` plus `requires: ['automation']`, so a declarative
+  `connectors:` entry materializes with no host-code edit (declarative
+  stdio stays deny-by-default). The `openapi` provider now degrades + retries
+  on an unreachable remote spec URL instead of aborting boot (#3049
+  follow-up).
+- **Scaffold correctness:** projects ship a real `.gitignore` again (npm
+  strips the file from tarballs; it's now aliased as `_gitignore` and
+  restored on copy — `.env` is finally ignored too), declare pnpm 10/11
+  build approvals so `pnpm install` doesn't exit 1, and no longer inherit
+  repo-internal agent skills.
+- **Dev loop (15.1 third-party eval, P2 batch):** hot-added `*.object.ts`
+  files are queryable without a restart (registry ingest + schema sync +
+  first-seen seeds on `metadata:reloaded`); the dev admin credential hint
+  re-arms on every boot while the default password still verifies (and the
+  login page can show it via a dev-gated `devSeedAdmin` config field);
+  `os doctor` understands current metadata shapes.
+- **`os lint` signal (#3091 class):** platform built-in i18n gaps are folded
+  into one summary line (`--include-platform` to audit them), and an inline
+  `label:` counts as the default-locale source, so a fresh scaffold lints
+  clean instead of reporting 800+ errors on its own template.
+- **Driver dispatch honesty (#3276):** `OS_DATABASE_DRIVER=memory` actually
+  gets the mingo InMemoryDriver (it silently fell through to SQLite
+  `:memory:` — a different engine), and selecting `turso`/libSQL in the
+  open-core CLI fails loudly naming the cloud/EE package instead of silently
+  degrading to SQLite.
+- **Everyday fixes:** `pnpm dev -- --fresh -p <port>` works (the pnpm-injected
+  `--` separator is dropped pre-parse, #3114); `os explain object` documents
+  `ownership` with the right values (#3244); `createLogger({ file })`
+  actually writes under ESM and reports unopenable destinations; the
+  kernel logger honors `NO_COLOR` and TTY detection; audit update diffs
+  exclude computed fields and treat `undefined`/`null` as equal, so the
+  record History tab stops showing phantom changes (#3293); the seed-replayer
+  reports `skipped` so hosts can stamp seed-once on all-skip replays.
+
+## New in Console (Studio) — bundled objectui 16.0
+
+16.0.0 bundles the **objectui 16.0 Console major** (15.0.0 → 16.0.0, the
+range `077e45b..94d4876`, objectui #2589–#2705). The major is a version-line
+alignment with objectstack; the code-level breaking edges are the
+`@object-ui/types` spec-adoption cleanup (#2589 — value-erased `…Schema`
+re-exports from `spec/ui` are dropped; import them from `@objectstack/spec`
+directly) and the removal of the Gantt mobile QR-share context action
+(#2687).
+
+### Approvals inbox goes metadata-driven (#2678 line)
+
+- **`DeclaredActionsBar` (#2692):** a reusable bar that renders and executes
+  an object's *declared* actions for any (object, record, location) through
+  the console action runtime end-to-end — param/confirm/result dialogs,
+  `{id}` target interpolation, fail-closed `visible` CEL, `refreshAfter`.
+- **The inbox retires its hand-written buttons (#2697):** send-back /
+  request-info / reassign / remind / recall / resubmit come from the declared
+  set (framework#3300); approve/reject stay in the richer composer (it stages
+  file attachments) and are `exclude`d from the bar. Net ~230 lines of
+  bespoke inbox action code deleted; new decision capabilities now ship as
+  backend metadata.
+- **Decision UX (#2681):** attachment-capable decision composer with named
+  chips in the timeline, server-computed progress as per-group tick badges /
+  M-of-N counts, `?request=` deep links auto-opening the drawer, and the
+  flow-designer approval panel synced with the engine schema
+  (quorum / per_group / minApprovals / group).
+
+### Action dialogs render real field widgets (ADR-0059, #2704)
+
+`ActionParamDialog` retires its bespoke per-type branch chain: every declared
+param renders through the same `fieldWidgetMap` as the object form, so a
+param of *any* form-supported type (file, image, richtext, color, address,
+code, date, …) gets its real widget — uploads ride the ambient
+UploadProvider with `multiple`/`accept`/`maxSize` honored. Result dialogs
+skip declared fields whose path doesn't resolve (#2674).
+
+### Dashboards author the dataset shape only (#2703)
+
+Both Studio surfaces (widget config panel and inspector) now emit only the
+ADR-0021 semantic-layer shape (`dataset` + `dimensions` + `values`) — the
+authoring-side counterpart that let the framework flip
+`DashboardWidgetSchema.strict()`. The widget config panel becomes a dataset
+picker (chart *and* pivot) with a catalog; filter-binding field pickers
+source from the bound dataset's dimensions.
+
+### Flow designer: nested regions, visible and editable (#2670)
+
+`loop` / `parallel` / `try_catch` containers stop being opaque cards: their
+regions render as read-only mini-canvases (#2675), then as inline push-down
+expansions on the canvas (#2680), and finally nodes *inside* a region are
+selectable and editable through the same schema-driven inspector with path
+write-back (#2699). The Runs panel nests per-iteration / per-region step
+logs (#2667) — paired with the backend's region-aware run-history compaction
+(#3234), which keeps container steps and early failures when a big loop
+overflows the persisted budget. Also: the schedule panel authors the
+canonical `config.schedule` the runtime actually reads (#2671), and the
+`xExpression` marker renders the loop `collection` as a template editor
+instead of false-flagging `{tasks}` as malformed CEL (framework#3304).
+
+### Gantt (plugin-gantt)
+
+- **Ownership-aware rescheduling (#2683):** an own-dates, unlocked summary
+  shifts like a task and carries its unlocked subtree by the same delta;
+  locked tasks that violate a link are reported, not moved; pushed starts
+  snap to configured shift-band (班次) boundaries; and toolbar auto-schedule
+  **confirms first** ("shift N task(s)? (M locked skipped)").
+- **Manual-scheduling summary bars, interaction switches, and a
+  `beforeTaskUpdate` host veto (#2677);** a `dependencyTypes` switch hides
+  the type switcher for id-only dependency stores (#2686); the row 「→」
+  detail slot is mirrored in the task-list header (#2690).
+- **Removed:** the mobile QR-share context action (#2687, the objectui 16.0
+  breaking edge).
+
+### Studio Access pillar (#2600 B-series)
+
+The permission matrix hits the first screen: identity and zero-grant
+capability sections start collapsed (B1); the Explain panel's object field
+becomes a package-scoped dropdown instead of free text (B2); the Bulk column
+stops clipping at narrow widths (B3); wide objects get a field filter plus
+Read-all / Write-all / Clear bulk shortcuts scoped to the visible rows (B4);
+and curated capability labels + picker group headers localize (B5).
+
+### Lists, grids, data & detail
+
+- **Master-detail saves are atomic on capable backends (#2684):**
+  MasterDetailForm / LineItemsPanel persist through
+  `dataSource.batchTransaction` (`$ref` parent links); the client-side
+  compensation-delete anti-pattern is gone, with emulation only when the
+  endpoint is genuinely absent (404/405/501).
+- The record **History tab renders display values** instead of raw audit
+  payloads (#2691), paired with the backend diff fixes (#3293); the detail
+  header gets a Record-#id floor and the meta footer stops showing raw user
+  ids (#2689).
+- List toolbars gain a manual refresh button (#2645); injected `owner_id`
+  stays out of leading auto-derived columns (#2702); the import wizard
+  explains its disabled Next (live unmapped-required-fields hint) and
+  surfaces the legacy per-row fallback as a "compatibility fallback" notice
+  (#2646); single-file child objects stay inline grids instead of flipping
+  to per-row forms, and the non-spec `attachment` type is dropped (#2656).
+- Report drill-through scopes a date-bucket cell to its exact time range via
+  the new `drillRanges` bounds (#2672); the roll-up summary editor gains a
+  visual child-row filter (#2669).
+
+### Auth & login
+
+- **Never strand SSO-only users on a password wall (#2629):** the
+  `/auth/config` fetch gets single-flight caching + retrying backoff, the
+  login form holds a spinner until config resolves (honoring `ssoEnforced`
+  on first paint), and a 20s watchdog rejects hung sign-ins so the button
+  contract can recover; the duplicate "or" divider is gone (#2633 aligns the
+  signup page).
+- Dev-seeded admin credentials hint on the login page (#2635, dev-gated).
+
+### Platform & fixes
+
+- **`@object-ui/types` adopts `@objectstack/spec` 15.1.1 (#2589,
+  breaking):** value-erased `…Schema` re-exports from `spec/ui` are dropped;
+  ListView bridge types derive from the spec (#2636, #2622).
+- CEL-dialect component/action predicates route to the canonical
+  `@objectstack/formula` engine (#2664); discovery trusts only
+  handlerReady/available services (ADR-0076 D12, #2637); internal html-page
+  links route through the SPA navigation handler (#2642); writable system
+  objects are distinguished from engine-owned in badges + empty states
+  (ADR-0103, #2705); the approver Type dropdown drops the deprecated `role`
+  spelling for a membership-tier picker (#2643); metadata-admin stops
+  surfacing the spec's removed dead fields and the inert object "Enabled"
+  toggle (#2658, #2659); dashboard label fallbacks and skill activation
+  editors are fixed (#2666); AgentPreview drops the removed agent
+  `visibility` (#2665).
+
+## Upgrade checklist
+
+### 16.0.0
+
+- **Hooks/actions:** rename `ctx.session.tenantId` / `ctx.user.tenantId` →
+  `organizationId` in every `*.hook.ts` / `*.action.ts` body.
+- **Dashboards:** recompile; rewrite any widget flagged by the strict schema
+  onto the dataset shape (`dataset` + `dimensions` + `values`).
+- **MCP stdio:** if you enable stdio auto-start, set `OS_MCP_STDIO_ENABLED`
+  *and* provision `OS_MCP_STDIO_API_KEY` on a suitable identity — boot fails
+  closed without it. Stop relying on `OS_MCP_SERVER_ENABLED` to start stdio.
+- **Feed:** replace `client.feed.*` and `discovery.capabilities.feed` with
+  data-API reads/writes on `sys_comment` / `sys_activity` and
+  `capabilities.comments`; drop the third
+  `ObjectStackProtocolImplementation` constructor argument.
+- **Metadata:** recompile and fix keys flagged by the enforce-or-remove sweep
+  (object tombstones throw with guidance; field/agent keys strip silently —
+  remove them). Rewrite `events: ['delete']` validation rules as
+  `beforeDelete` hooks; move webhooks off `undelete`/`api` triggers; check
+  hooks against the 8 real events.
+- **Multi-org:** before upgrading, audit scoped `admin_full_access` grants
+  and custom permission sets carrying platform-exclusive capabilities;
+  switch intended cross-tenant operators to the unscoped set (ADR-0099).
+- **Third-party `system` objects:** declare `userActions` for verbs users
+  legitimately need; otherwise generic writes are now rejected (ADR-0103).
+- **Approvals:** rewrite `ApproverType 'role'` → `org_membership_level` (or
+  `position` if the value names one) before the alias is removed next major.
+- **Identity import integrations:** pass `passwordPolicy: 'none'` explicitly
+  if you relied on the old identity-only default.
+- **Sandbox:** update anything matching the old `exceeded timeout of Nms`
+  error string.
+- **Console hosts:** import spec schema values from `@objectstack/spec`
+  instead of the removed `@object-ui/types` `spec/ui` re-exports.
+
+## References
+
+ADR-0099 (posture-authoritative tenant wall) · ADR-0101 (MCP stdio
+principal) · ADR-0102 (sandbox CPU budget + sync engine) · ADR-0103
+(engine-owned vs admin-writable) · ADR-0021 (dashboard dataset shape) ·
+ADR-0034 (atomic batch) · ADR-0049 / #2377 (enforce-or-remove) · ADR-0059
+(objectui action-param widgets) · ADR-0090 D3 (`org_membership_level`) ·
+#3266/#3268 (approvals quorum/会签) · #2678 (objectui declared-actions
+inbox) · #1874 (time-relative trigger) · #1868 (filtered roll-ups) · #1928
+(expression guardrails) · #1752 (drill ranges) · #2408 (Server-Timing) ·
+#3280/#3290 (organizationId).
