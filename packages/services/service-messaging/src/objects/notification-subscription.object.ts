@@ -24,6 +24,10 @@ export const NotificationSubscription = ObjectSchema.create({
     icon: 'rss',
     isSystem: true,
     managedBy: 'system',
+    // [ADR-0103] Admin/user-writable DATA on a platform-defined schema: authored
+    // from the Setup "Notification Subscriptions" grid. Affordance only — opening
+    // it keeps the system write guard from rejecting the write.
+    userActions: { create: true, edit: true, delete: true },
     description: 'Standing subscription of a principal (role/team/user) to a notification topic.',
     titleFormat: '{principal} · {topic}',
     highlightFields: ['topic', 'principal', 'enabled', 'created_at'],

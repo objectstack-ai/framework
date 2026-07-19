@@ -91,4 +91,11 @@ export const NotificationReceipt = ObjectSchema.create({
         { fields: ['notification_id', 'user_id', 'channel'], unique: true },
         { fields: ['user_id', 'state'] },
     ],
+
+    enable: {
+        // [ADR-0103] Engine-owned: delivery/read receipts are written by the
+        // messaging service (context-less raw-engine writes) when a notification
+        // is delivered or marked read, never via the generic data API.
+        apiMethods: ['get', 'list'],
+    },
 });

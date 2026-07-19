@@ -76,4 +76,10 @@ export const SysApprovalApprover = ObjectSchema.create({
     // Sync path: rewrite all rows of one request on each approver-set change.
     { fields: ['request_id'] },
   ],
+
+  enable: {
+    // [ADR-0103] Engine-owned: approver rows are rewritten by the approval
+    // engine (SYSTEM_CTX) on each approver-set change, never via generic CRUD.
+    apiMethods: ['get', 'list'],
+  },
 });

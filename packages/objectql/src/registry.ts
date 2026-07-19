@@ -381,30 +381,30 @@ const MANAGED_WRITE_VERB_AFFORDANCE: Record<string, 'create' | 'edit' | 'delete'
 };
 
 /**
- * Reconcile a better-auth-managed object's `enable.apiMethods` against the
- * generic-write affordances it actually grants (ADR-0092 / #1591).
+ * Reconcile a managed object's `enable.apiMethods` against the generic-write
+ * affordances it actually grants (ADR-0092 / ADR-0103).
  *
- * `managedBy: 'better-auth'` promises generic CRUD is suppressed — identity
- * writes flow through better-auth's own endpoints, and the plugin-auth
- * identity write guard fail-closed rejects direct create/update/delete from a
- * user context. An object that *also* advertises those verbs in
- * `enable.apiMethods` is internally contradictory: the HTTP exposure gate
- * (ADR-0049) would admit the request and let it 403 at the engine instead of
- * answering a clean 405, and the metadata misrepresents what the API offers.
+ * A `managedBy` object whose resolved affordances forbid a write verb, yet
+ * which *also* advertises that verb in `enable.apiMethods`, is internally
+ * contradictory: the HTTP exposure gate (ADR-0049) would admit the request and
+ * let it 403 at the engine instead of answering a clean 405, and the metadata
+ * misrepresents what the API offers.
  *
  * This is the registration-time backstop that makes the contradiction
  * impossible to *ship*: any write verb whose CRUD affordance the object does
  * not grant — via the `managedBy` bucket default plus `userActions` overrides,
  * exactly as {@link resolveCrudAffordances} computes for the UI — is stripped,
- * with a warning. Reads are never touched. `sys_user` keeps `update` because
- * `userActions.edit: true` grants the edit affordance (its writes are clamped
- * to a field whitelist by the guard); every other identity table derives down
- * to reads only.
+ * with a warning. Reads are never touched.
  *
- * Scope is deliberately limited to `better-auth`, the only bucket the write
- * guard enforces today — generalizing to an `externallyManaged`/`writeVia`
- * capability for the other buckets is ADR-0049 / #1878 (a separate phase),
- * not this reconciliation.
+ * Runs for every managed bucket (ADR-0103). Objects that legitimately take
+ * user-context writes declare `userActions` opening those verbs, so their
+ * apiMethods are kept: `sys_user` keeps `update` (`userActions.edit: true`; its
+ * writes are field-whitelist-clamped by the identity guard), and the `system`
+ * writable set (RBAC link tables, prefs, messaging config) keeps its CRUD
+ * verbs. Engine-owned `system` / `append-only` objects and the other identity
+ * tables — which grant no write affordance — derive down to reads only. Any
+ * future managed object that advertises a write verb it does not permit is the
+ * drift this backstop catches.
  *
  * Returns the input unchanged when nothing is stripped; otherwise a new schema
  * with a rewritten `enable.apiMethods` (immutable, like {@link applySystemFields}).
@@ -413,7 +413,7 @@ export function reconcileManagedApiMethods(
   schema: ServiceObject,
   opts?: { warn?: (msg: string) => void },
 ): ServiceObject {
-  if ((schema as any).managedBy !== 'better-auth') return schema;
+  if ((schema as any).managedBy == null) return schema;
 
   const methods = (schema as any).enable?.apiMethods;
   if (!Array.isArray(methods) || methods.length === 0) return schema;
@@ -433,10 +433,10 @@ export function reconcileManagedApiMethods(
 
   const warn = opts?.warn ?? ((msg: string) => console.warn(msg));
   warn(
-    `[Registry] Object "${schema.name}" is managedBy:'better-auth' but advertised ` +
-      `generic write verb(s) [${stripped.join(', ')}] in enable.apiMethods it does not ` +
-      `permit — stripping them (ADR-0092/#1591). Writes on better-auth-managed tables go ` +
-      `through better-auth's endpoints, not the generic data API. Kept: [${kept.join(', ')}].`,
+    `[Registry] Object "${schema.name}" is managedBy:'${(schema as any).managedBy}' but advertised ` +
+      `generic write verb(s) [${stripped.join(', ')}] in enable.apiMethods its resolved affordances ` +
+      `do not permit — stripping them (ADR-0092/ADR-0103). Declare userActions to open a verb the ` +
+      `object legitimately takes from a user context. Kept: [${kept.join(', ')}].`,
   );
 
   return {

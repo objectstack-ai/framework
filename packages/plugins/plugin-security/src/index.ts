@@ -50,6 +50,8 @@ export { claimSeedOwnership } from './claim-seed-ownership.js';
 export { normalizeManagedByVocab } from './normalize-managed-by.js';
 export { appDefaultPermissionSetName } from './app-default-permission-set.js';
 export { DelegatedAdminGate, isTenantAdmin } from './delegated-admin-gate.js';
+export { assertEngineOwnedWriteAllowed, ENGINE_OWNED_BUCKETS } from './system-write-guard.js';
+export type { EngineOwnedSchemaLike } from './system-write-guard.js';
 export { explainAccess, buildContextForUser } from './explain-engine.js';
 export type { ExplainEngineDeps, ExplainInput } from './explain-engine.js';
 export type { DelegatedAdminGateDeps } from './delegated-admin-gate.js';

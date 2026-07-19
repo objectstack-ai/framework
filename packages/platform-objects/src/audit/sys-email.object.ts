@@ -186,4 +186,10 @@ export const SysEmail = ObjectSchema.create({
     { fields: ['related_object', 'related_id'] },
     { fields: ['sent_by'] },
   ],
+
+  enable: {
+    // [ADR-0103] Engine-owned append-only mail log: written only by the mail
+    // service (SYSTEM_CTX; even the status update is system-elevated). Reads open.
+    apiMethods: ['get', 'list'],
+  },
 });

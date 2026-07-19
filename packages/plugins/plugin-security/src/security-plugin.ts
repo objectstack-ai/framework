@@ -40,6 +40,7 @@ import { matchesFilterCondition } from '@objectstack/formula';
 import { FieldMasker } from './field-masker.js';
 import { assertReadableQueryFields } from './predicate-guard.js';
 import { PermissionDeniedError } from './errors.js';
+import { assertEngineOwnedWriteAllowed } from './system-write-guard.js';
 import { bootstrapPlatformAdmin } from './bootstrap-platform-admin.js';
 import {
   backfillOrgAdminGrants,
@@ -675,6 +676,22 @@ export class SecurityPlugin implements Plugin {
       // `isSystem` and short-circuited above; the dev-mode default binding
       // is validated at seed time by the same predicate.)
       await this.assertAudienceAnchorBindingGate(opCtx);
+
+      // [ADR-0103] Engine-owned write guard. Fail-closed on a user-context
+      // generic write to a `system`/`append-only` object whose resolved
+      // affordances forbid the verb (the engine-owned default). Keyed off
+      // resolveCrudAffordances, not the raw bucket, so the admin/user-writable
+      // members (RBAC link tables, prefs, messaging config) — which declare
+      // userActions opening their verbs — pass through to the DelegatedAdminGate
+      // / RLS below. System/boot writes carry `isSystem` and short-circuited
+      // above; context-less service writes carry no userId and pass by
+      // construction. Runs BEFORE the empty-principal fall-open so engine-owned
+      // tables fail CLOSED for principal-less-but-user-context callers.
+      assertEngineOwnedWriteAllowed(
+        typeof ql?.getSchema === 'function' ? ql.getSchema(opCtx.object) : undefined,
+        opCtx.operation,
+        opCtx.context,
+      );
 
       // [ADR-0090 D12] Delegated-administration gate. Writes to the RBAC
       // link tables (assignments / bindings / direct grants / env-set

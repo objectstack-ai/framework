@@ -226,4 +226,10 @@ export const SysRecordShare = ObjectSchema.create({
     // Reconciliation key for rule-driven shares.
     { fields: ['source', 'source_id'] },
   ],
+
+  enable: {
+    // [ADR-0103] Engine-owned: materialized only by the sharing engine
+    // (SYSTEM_CTX), never via the generic data API. Reads stay open.
+    apiMethods: ['get', 'list'],
+  },
 });

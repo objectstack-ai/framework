@@ -26,6 +26,11 @@ export const SysUserPreference = ObjectSchema.create({
   // the user's own settings page, never created by an admin. The list
   // surface in Setup is a support/diagnostic view only.
   managedBy: 'system',
+  // [ADR-0103] Admin/user-writable DATA on a platform-defined schema: a user
+  // authors their own preferences (RLS self-grant). Affordance only — RLS is the
+  // authz; opening it here keeps the system write guard from rejecting the
+  // legitimate self-service write.
+  userActions: { create: true, edit: true, delete: true },
   description: 'Per-user key-value preferences (theme, locale, etc.)',
   nameField: 'key', // [ADR-0079] canonical primary-title pointer (single-field titleFormat)
   titleFormat: '{key}',

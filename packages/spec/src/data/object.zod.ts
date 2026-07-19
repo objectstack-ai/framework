@@ -590,15 +590,24 @@ const ObjectSchemaBase = z.object({
    *   purpose-built "Import definition (JSON)" action instead). Example:
    *   `sys_sharing_rule`, `sys_position`, `sys_permission_set`, `sys_view`,
    *   `sys_app`.
-   * - `system`       — Runtime rows whose lifecycle is owned by a
-   *   platform service (the approval engine, the sharing engine, the
-   *   invitation service, …). Generic CRUD is hidden — users interact
-   *   with these via *domain actions* invoked from the source record
-   *   (e.g. "Submit for Approval" on an Opportunity creates an
-   *   `sys_approval_request`; "Recall" on the request changes its
-   *   state). Example: `sys_approval_request`, `sys_record_share`,
-   *   `sys_notification`, `sys_invitation`,
-   *   `sys_user_permission_set` / `sys_position_permission_set`.
+   * - `system`       — Platform-defined schema. The bucket DEFAULT is
+   *   *engine-owned*: runtime rows whose lifecycle a platform service owns
+   *   end to end (the approval engine, the sharing engine, the job runner,
+   *   …), written only via `isSystem` / a service `SYSTEM_CTX` / a
+   *   context-less engine call. Generic CRUD is hidden — users interact
+   *   with these via *domain actions* on the source record (e.g. "Submit
+   *   for Approval" creates an `sys_approval_request`). Example:
+   *   `sys_approval_request`, `sys_record_share`, `sys_notification`,
+   *   `sys_automation_run`, `sys_job`.
+   *   Some `system` objects are platform schema but hold **admin/user-writable
+   *   DATA** — the RBAC link tables (`sys_user_position`,
+   *   `sys_user_permission_set`, `sys_position_permission_set`, governed by
+   *   the `DelegatedAdminGate`), `sys_user_preference`, the messaging config
+   *   grids. They declare {@link userActions} to open the writes they take;
+   *   the affordance is a declaration only — the real authz stays the
+   *   delegated-admin gate / RLS. An `engine-owned` object is precisely a
+   *   `system`/`append-only` object whose resolved affordances grant no write
+   *   (ADR-0103).
    * - `append-only`  — Immutable audit log. No New / Import / Edit /
    *   Delete; only View and Export. Example: `sys_approval_action`,
    *   `sys_audit_log`, `sys_activity`, `sys_email`, `sys_presence`.
@@ -611,12 +620,18 @@ const ObjectSchemaBase = z.object({
    *   suppressed; replaced by purpose-built actions
    *   (Invite User, Reset Password, Revoke Session, Rotate Key, …).
    *
-   * The flag is purely declarative on the schema. Enforcement happens in
-   * two places:
+   * The flag supplies the DEFAULT affordance row; the enforced write policy
+   * is {@link resolveCrudAffordances} (bucket default + `userActions`).
+   * Enforcement happens in three places:
    *   1. Default permission sets ({@link packages/platform-objects/src/security/default-permission-sets.ts})
    *      deny direct CRUD for `system` / `append-only` / `better-auth`.
    *   2. UI clients honour {@link resolveCrudAffordances} to gate the
    *      New / Import / Edit / Delete / Export buttons accordingly.
+   *   3. Engine write guards fail-closed on user-context generic writes to a
+   *      managed object whose resolved affordances forbid the verb —
+   *      `better-auth` via plugin-auth's identity write guard (ADR-0092),
+   *      `system` / `append-only` via plugin-security's system write guard
+   *      (ADR-0103). `isSystem` / context-less engine writes bypass.
    *
    * Use {@link userActions} to override the default matrix for a single
    * field (e.g. an "append-only" table that should still allow Export).
@@ -1422,8 +1437,12 @@ export interface RowCrudPredicates {
  *   config       — admin authored: New/Edit/Delete OK, no CSV import
  *                  (definitions have nested envelopes; admins should use
  *                  a purpose-built "Import definition" action instead)
- *   system       — engine-managed runtime rows: no generic CRUD; users
- *                  interact via domain actions on the source record
+ *   system       — platform-defined schema. DEFAULT is engine-owned: no
+ *                  generic CRUD; users interact via domain actions on the
+ *                  source record. `userActions` opens the admin/user-writable
+ *                  ones (RBAC link tables, prefs, messaging config) — the
+ *                  affordance declaration only; authz stays the delegated-admin
+ *                  gate / RLS (ADR-0103)
  *   append-only  — audit log: View + Export only
  *   better-auth  — identity tables owned by better-auth driver; CRUD
  *                  routed through purpose-built actions (Invite, Reset

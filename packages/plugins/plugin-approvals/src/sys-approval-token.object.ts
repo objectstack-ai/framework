@@ -92,4 +92,10 @@ export const SysApprovalToken = ObjectSchema.create({
     { fields: ['token_hash'] },
     { fields: ['request_id'] },
   ],
+
+  enable: {
+    // [ADR-0103] Engine-owned: one-time email-approval tokens are minted and
+    // consumed by the approval engine (SYSTEM_CTX), never via the data API.
+    apiMethods: ['get', 'list'],
+  },
 });

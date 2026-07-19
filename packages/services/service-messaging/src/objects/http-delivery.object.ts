@@ -171,6 +171,12 @@ export const HttpDelivery = ObjectSchema.create({
         { fields: ['status', 'claimed_at'] },
         { fields: ['source', 'ref_id'] },
     ],
+
+    enable: {
+        // [ADR-0103] Engine-owned webhook outbox: written only by SqlHttpOutbox
+        // (context-less raw-engine writes), never via the generic data API.
+        apiMethods: ['get', 'list'],
+    },
 });
 
 /** Canonical object name — exported so SqlHttpOutbox callers can override. */

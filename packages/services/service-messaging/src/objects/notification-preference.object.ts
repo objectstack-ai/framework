@@ -26,6 +26,11 @@ export const NotificationPreference = ObjectSchema.create({
     icon: 'bell-ring',
     isSystem: true,
     managedBy: 'system',
+    // [ADR-0103] Admin/user-writable DATA on a platform-defined schema: a user
+    // authors their own mute/allow rows (and admins the `user_id = '*'` global
+    // defaults) from the Setup "Notification Preferences" grid. Affordance only —
+    // opening it keeps the system write guard from rejecting the self-service write.
+    userActions: { create: true, edit: true, delete: true },
     description: 'Per-user × topic × channel notification toggle (mute/allow), with admin-global defaults.',
     titleFormat: '{user_id} · {topic} · {channel}',
     highlightFields: ['user_id', 'topic', 'channel', 'enabled', 'digest'],

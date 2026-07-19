@@ -82,4 +82,10 @@ export const SysJobRun = ObjectSchema.create({
     { fields: ['job_name', 'started_at'] },
     { fields: ['status', 'started_at'] },
   ],
+
+  enable: {
+    // [ADR-0103] Engine-owned append-only run log: written only by the job
+    // runner (SYSTEM_CTX). Reads stay open for the Setup grid.
+    apiMethods: ['get', 'list'],
+  },
 });

@@ -3758,7 +3758,12 @@ export class RestServer {
                     };
 
                     try {
-                        await (p as any).createData({ object: IMPORT_JOB_OBJECT, data: jobRow, context, ...(environmentId ? { environmentId } : {}) });
+                        // [ADR-0103] sys_import_job rows are engine-owned — the import
+                        // worker owns their lifecycle, and the object is locked to
+                        // ['get','list']. Persist system-elevated so the engine-owned
+                        // write guard admits it; attribution is preserved because
+                        // `created_by` is stamped explicitly on the row above.
+                        await (p as any).createData({ object: IMPORT_JOB_OBJECT, data: jobRow, context: { ...(context as any), isSystem: true }, ...(environmentId ? { environmentId } : {}) });
                     } catch (err: any) {
                         logError('[REST] Failed to persist import job:', err);
                         res.status(500).json({ code: 'IMPORT_JOB_CREATE_FAILED', error: 'Could not create import job' });
@@ -3772,7 +3777,7 @@ export class RestServer {
                     // handling and persists terminal state to the job row.
                     const patch = async (data: Record<string, any>) => {
                         try {
-                            await (p as any).updateData({ object: IMPORT_JOB_OBJECT, id: jobId, data, context, ...(environmentId ? { environmentId } : {}) });
+                            await (p as any).updateData({ object: IMPORT_JOB_OBJECT, id: jobId, data, context: { ...(context as any), isSystem: true }, ...(environmentId ? { environmentId } : {}) }); // [ADR-0103] engine-owned
                         } catch (err) {
                             logError('[REST] import job progress write failed:', err);
                         }
@@ -3879,7 +3884,7 @@ export class RestServer {
                         // Signal the in-process worker and mark the durable row.
                         this.cancelledImportJobs.add(jobId);
                         try {
-                            await (p as any).updateData({ object: IMPORT_JOB_OBJECT, id: jobId, data: { status: 'cancelled', completed_at: new Date().toISOString() }, context, ...(environmentId ? { environmentId } : {}) });
+                            await (p as any).updateData({ object: IMPORT_JOB_OBJECT, id: jobId, data: { status: 'cancelled', completed_at: new Date().toISOString() }, context: { ...(context as any), isSystem: true }, ...(environmentId ? { environmentId } : {}) }); // [ADR-0103] engine-owned
                         } catch { /* worker will still stop via the in-memory flag */ }
                     }
                     res.json({ success: true });
@@ -3941,7 +3946,8 @@ export class RestServer {
                     await (p as any).updateData({
                         object: IMPORT_JOB_OBJECT, id: jobId,
                         data: { reverted_at: new Date().toISOString() },
-                        context, ...(environmentId ? { environmentId } : {}),
+                        context: { ...(context as any), isSystem: true }, // [ADR-0103] engine-owned
+                        ...(environmentId ? { environmentId } : {}),
                     });
                     res.json({ success: true, jobId, object: objectName, deleted, restored, failed });
                 } catch (error: any) {

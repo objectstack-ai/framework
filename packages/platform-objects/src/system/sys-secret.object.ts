@@ -137,5 +137,10 @@ export const SysSecret = ObjectSchema.create({
   enable: {
     trackHistory: false, // rotation events are recorded by sys_setting_audit
     audit: true,
+    // [ADR-0103] Engine-owned: secrets are minted/rotated only by the settings /
+    // secret service (SYSTEM_CTX), never via the generic data API. Locked to
+    // reads (ciphertext only; decryption is a separate privileged path) — an
+    // empty apiMethods array would fail OPEN, so this list is explicit.
+    apiMethods: ['get', 'list'],
   },
 });

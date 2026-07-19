@@ -50,17 +50,22 @@ describe('foldWildcardSuperUser', () => {
 });
 
 /**
- * ADR-0092 D2 — the identity write guard is a second enforcement layer the
- * permission sets don't model. The client hint must reflect permission ∩ guard:
- * managed (`better-auth`) objects are user-context-writable only where the
- * object opened the affordance; others (system/config/…) are untouched.
+ * ADR-0092 D2 / ADR-0103 — the engine write guards are a second enforcement
+ * layer the permission sets don't model. The client hint must reflect
+ * permission ∩ guard: guarded (`better-auth`, and now engine-owned
+ * `system`/`append-only`) objects are user-context-writable only where the
+ * object opened the affordance via `userActions`; `config`/`platform` are
+ * untouched.
  */
 describe('clampManagedObjectWrites', () => {
   const SCHEMAS: Record<string, ManagedSchemaLike> = {
     sys_user: { managedBy: 'better-auth', userActions: { edit: true } },
     sys_member: { managedBy: 'better-auth' },
     sys_session: { managedBy: 'better-auth' },
-    sys_automation_run: { managedBy: 'system' }, // NOT better-auth → not guarded
+    // ADR-0103: system with no userActions → engine-owned → guarded (clamped).
+    sys_automation_run: { managedBy: 'system' },
+    // ADR-0103: system that opened its writes → writable set → NOT clamped.
+    sys_user_position: { managedBy: 'system', userActions: { create: true, edit: true, delete: true } },
     crm_lead: { managedBy: 'platform' },
   };
   const schemaOf = (n: string) => SCHEMAS[n];
@@ -83,11 +88,24 @@ describe('clampManagedObjectWrites', () => {
     expect(objects.sys_session.allowRead).toBe(true); // read never clamped
   });
 
-  it('leaves non-better-auth managed buckets untouched (system objects have no write guard)', () => {
-    const objects: Record<string, any> = { sys_automation_run: { allowEdit: true }, crm_lead: { allowEdit: true } };
+  it('clamps engine-owned system objects (ADR-0103) but leaves config/platform untouched', () => {
+    const objects: Record<string, any> = {
+      sys_automation_run: { allowRead: true, allowEdit: true, allowCreate: true, allowDelete: true },
+      crm_lead: { allowEdit: true },
+    };
     clampManagedObjectWrites(objects, schemaOf);
-    expect(objects.sys_automation_run.allowEdit).toBe(true);
+    // system + no userActions → engine-owned → writes clamped off; read kept.
+    expect(objects.sys_automation_run).toMatchObject({ allowRead: true, allowEdit: false, allowCreate: false, allowDelete: false });
+    // platform bucket → not guarded → untouched.
     expect(objects.crm_lead.allowEdit).toBe(true);
+  });
+
+  it('leaves the writable system set untouched (userActions opened the writes)', () => {
+    const objects: Record<string, any> = {
+      sys_user_position: { allowRead: true, allowEdit: true, allowCreate: true, allowDelete: true },
+    };
+    clampManagedObjectWrites(objects, schemaOf);
+    expect(objects.sys_user_position).toMatchObject({ allowRead: true, allowEdit: true, allowCreate: true, allowDelete: true });
   });
 
   it('treats the #2614 object form by its enabled flag only (predicates are UI gating, not a grant)', () => {

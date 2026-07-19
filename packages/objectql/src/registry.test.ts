@@ -723,9 +723,10 @@ describe('applySystemFields', () => {
 });
 
 // ==========================================
-// reconcileManagedApiMethods — #1591 / ADR-0092
-// Registration-time consistency: a better-auth-managed object may not
-// advertise generic write verbs it doesn't grant.
+// reconcileManagedApiMethods — #1591 / ADR-0092 / ADR-0103
+// Registration-time consistency: ANY managed object may not advertise generic
+// write verbs its resolved affordances don't grant. Scope generalized from
+// better-auth to every managed bucket in ADR-0103.
 // ==========================================
 describe('reconcileManagedApiMethods', () => {
     const managed = (extra: any = {}): any => ({
@@ -773,7 +774,7 @@ describe('reconcileManagedApiMethods', () => {
         expect(out.enable.apiMethods).toEqual(['get']);
     });
 
-    it('leaves non-better-auth objects untouched (platform bucket keeps full CRUD)', () => {
+    it('leaves platform-bucket objects untouched (grant full CRUD → nothing stripped)', () => {
         const warn = vi.fn();
         const platform: any = {
             name: 'sys_business_unit',
@@ -782,6 +783,58 @@ describe('reconcileManagedApiMethods', () => {
         };
         const out = reconcileManagedApiMethods(platform, { warn });
         expect(out).toBe(platform);
+        expect(out.enable.apiMethods).toEqual(['get', 'list', 'create', 'update', 'delete']);
+        expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('leaves unmanaged objects (no managedBy) untouched', () => {
+        const warn = vi.fn();
+        const plain: any = {
+            name: 'crm_lead',
+            enable: { apiEnabled: true, apiMethods: ['get', 'list', 'create', 'update', 'delete'] },
+        };
+        const out = reconcileManagedApiMethods(plain, { warn });
+        expect(out).toBe(plain);
+        expect(warn).not.toHaveBeenCalled();
+    });
+
+    // ADR-0103 — the scope generalization: engine-owned system/append-only
+    // objects derive to reads, while the writable set keeps its verbs.
+    it('strips write verbs from a system-bucket object with no write affordances (engine-owned)', () => {
+        const warn = vi.fn();
+        const engineOwned: any = {
+            name: 'sys_automation_run',
+            managedBy: 'system',
+            enable: { apiEnabled: true, apiMethods: ['get', 'list', 'create', 'update', 'delete'] },
+        };
+        const out = reconcileManagedApiMethods(engineOwned, { warn });
+        expect(out.enable.apiMethods).toEqual(['get', 'list']);
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(warn.mock.calls[0][0]).toContain("managedBy:'system'");
+    });
+
+    it('strips write verbs from an append-only object with no write affordances', () => {
+        const warn = vi.fn();
+        const appendOnly: any = {
+            name: 'sys_email',
+            managedBy: 'append-only',
+            enable: { apiEnabled: true, apiMethods: ['get', 'list', 'update'] },
+        };
+        const out = reconcileManagedApiMethods(appendOnly, { warn });
+        expect(out.enable.apiMethods).toEqual(['get', 'list']);
+        expect(warn).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps CRUD on a system-bucket object whose userActions open the writes (writable set)', () => {
+        const warn = vi.fn();
+        const writable: any = {
+            name: 'sys_user_position',
+            managedBy: 'system',
+            userActions: { create: true, edit: true, delete: true },
+            enable: { apiEnabled: true, apiMethods: ['get', 'list', 'create', 'update', 'delete'] },
+        };
+        const out = reconcileManagedApiMethods(writable, { warn });
+        expect(out).toBe(writable); // nothing stripped
         expect(out.enable.apiMethods).toEqual(['get', 'list', 'create', 'update', 'delete']);
         expect(warn).not.toHaveBeenCalled();
     });
