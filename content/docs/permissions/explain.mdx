@@ -41,7 +41,7 @@ another user's private note reports:
   "layer": "vama_bypass",
   "verdict": "widens",
   "detail": "View/Modify All Data bypass held via [showcase_auditor] — ownership and sharing checks are skipped.",
-  "contributors": [{ "kind": "permission_set", "name": "showcase_auditor", "via": "position:auditor" }]
+  "contributors": [{ "kind": "permission_set", "name": "showcase_auditor", "via": "direct grant" }]
 }
 ```
 
@@ -95,9 +95,10 @@ A deployment without `@objectstack/plugin-security` answers 501.
 - **The [access-matrix snapshot gate](/docs/permissions/access-matrix)** —
   the publish-time matrix is the same evaluation run over representative
   (permission set × object) pairs; explain is the per-decision zoom lens.
-- **Delegated-administration audits** — explain reports both *who granted*
-  (the `granted_by` stamp) and, via contributor attribution, *who could
-  have* ([delegated administration](/docs/permissions/delegated-administration)).
+- **Delegated-administration audits** — via contributor attribution, each
+  layer's verdict names the permission set behind it and how the caller holds
+  it — including a position held *via delegation*
+  ([delegated administration](/docs/permissions/delegated-administration)).
 
 ## See also
 

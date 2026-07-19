@@ -335,7 +335,7 @@ The plugin package declares its CLI commands location and oclif metadata:
 
 #### Step 2: Implement oclif Command Classes
 
-Place command classes under `src/commands/` (compiled to `dist/commands/`). The file path determines the command name — `commands/marketplace/search.ts` becomes `os marketplace:search`.
+Place command classes under `src/commands/` (compiled to `dist/commands/`). The file path determines the command name — `commands/marketplace/search.ts` becomes `os marketplace search`.
 
 ```typescript
 // src/commands/marketplace/search.ts
@@ -377,7 +377,7 @@ Once installed, the new commands appear in `os --help` and can be invoked direct
 os --help
 
 # Use marketplace commands
-os marketplace:search "crm"
+os marketplace search "crm"
 ```
 
 To remove a plugin command, uninstall it:
@@ -390,7 +390,7 @@ os plugins uninstall @acme/plugin-marketplace
 
 ## Directory Structure Convention
 
-ObjectStack defines a Plugin Structure Standard (OPS) for consistent project layout:
+Plugins follow the **ObjectStack Plugin Standards (OPS)** for a consistent project layout:
 
 ```
 plugin-my-feature/

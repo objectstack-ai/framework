@@ -382,18 +382,15 @@ features:
 **Use Case:** Default values defined by plugin authors.
 
 ```typescript
-// @mycompany/crm plugin manifest
-export default definePlugin({
-  name: '@mycompany/crm',
-  
-  config: {
-    defaults: {
-      maxAccountsPerUser: 1000,
-      enableScoring: true,
-      syncInterval: 'daily',
-    },
-  },
-});
+// @mycompany/crm plugin — default config values.
+// NOTE: there is no `definePlugin()` helper. A plugin is an object
+// implementing the `Plugin` interface; default settings ship via a
+// settings manifest whose specifiers each declare a `default`.
+export const crmConfigDefaults = {
+  maxAccountsPerUser: 1000,
+  enableScoring: true,
+  syncInterval: 'daily',
+};
 
 // In application code (no config set)
 const maxAccounts = config.get('crm.maxAccountsPerUser');
@@ -865,15 +862,13 @@ export async function someHandler({ context }) {
 
 ### 4. Provide Sensible Defaults
 ```typescript
-// ✓ GOOD: Plugin works out-of-box with defaults
-export default definePlugin({
-  config: {
-    defaults: {
-      maxRetries: 3,
-      timeout: 30000,
-    },
-  },
-});
+// ✓ GOOD: Plugin works out-of-box with defaults.
+// (Defaults ship as `default` on the plugin's settings-manifest
+//  specifiers; there is no `definePlugin()` helper.)
+export const myPluginDefaults = {
+  maxRetries: 3,
+  timeout: 30000,
+};
 ```
 
 ### 5. Document Configuration

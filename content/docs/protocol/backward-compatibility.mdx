@@ -113,10 +113,10 @@ flowchart TD
 
 ### Linting Your Project
 
-The CLI's `lint` command validates your metadata against the current schema and surfaces issues. Adding `--fix` prints the suggested fix for each issue (dry-run; it does not modify files):
+The CLI's `lint` command checks your metadata for style and convention issues and surfaces them. Adding `--fix` prints the suggested fix for each issue (dry-run; it does not modify files):
 
 ```bash
-# Validate metadata against the current schema
+# Check metadata for style and convention issues
 os lint
 
 # Show what could be auto-fixed (dry-run)
@@ -130,7 +130,7 @@ os diff <before> <after> --breaking-only
 ```
 
 <Callout type="info">
-There is no `lint --deprecations` flag — deprecation scanning lives on `os doctor --scan-deprecations`. An automated `migrate`/`codemod` command is referenced in the migration guides but is not yet available; until then, combine `os doctor --scan-deprecations`, `os diff`, and the CHANGELOG migration notes (below) to upgrade across MAJOR versions.
+There is no `lint --deprecations` flag — deprecation scanning lives on `os doctor --scan-deprecations`. An automated `codemod` command is referenced in the migration guides but is not yet available; until then, combine `os doctor --scan-deprecations`, `os diff`, and the CHANGELOG migration notes (below) to upgrade across MAJOR versions.
 </Callout>
 
 ### Migration Guides

@@ -114,7 +114,7 @@ editor consumes from the registered Zod schema.
   plugin's `onInstall` hook (see *Plugin lifecycle*, below):
 
   ```ts
-  import { registerMetadataTypeSchema } from '@objectstack/spec';
+  import { registerMetadataTypeSchema } from '@objectstack/spec/kernel';
   registerMetadataTypeSchema('my_widget', MyWidgetSchema);
   ```
 
@@ -154,7 +154,7 @@ registry.registerEditPage('my_widget', (params) => (
 
 `DesignerEditorWrapper` handles:
 
-- Loading `?layers=code,overlay,effective` from the REST API
+- Loading the layered `{ code, overlay, effective }` view via `?layers=true` from the REST API
 - Dirty tracking (`JSON.stringify` diff)
 - Save with destructive-change confirmation dialog
 - Reset overlay / Refresh / History buttons

@@ -45,7 +45,7 @@ and `plugin-security/src/security-plugin.ts` (`computeLayeredRlsFilter`).
 </Callout>
 
 <Callout type="warn">
-**Lifecycle operations are pending:** the `transfer` / `restore` / `purge` operations do not exist in ObjectQL yet (roadmap M2). Their RBAC gate is already mapped in the permission evaluator — the moment the operations ship they are denied unless the matching flag (or `modifyAllRecords`) is granted — but authoring these flags today grants nothing (#1883).
+**Lifecycle operations are partly pending:** the dedicated `transfer` / `restore` / `purge` ObjectQL operations do not exist yet (roadmap M2); their RBAC gate is already mapped in the permission evaluator, so the moment they ship they are denied unless the matching flag (or `modifyAllRecords`) is granted. One exception: `allowTransfer` is **already enforced today** through the ordinary `insert` / `update` door — `owner_id` is system-managed, so planting a record under another user or reassigning / disowning one is denied unless the caller holds `allowTransfer` (or `modifyAllRecords`, which implies it) (#3004). Authoring `allowRestore` / `allowPurge` today still grants nothing (#1883).
 </Callout>
 
 ---
@@ -196,9 +196,11 @@ OWD sets the baseline access level for each object across the entire organizatio
 
 <Callout type="warn">
 These are the **only four canonical values** (ADR-0090 D4). The legacy spellings
-`read` / `read_write` / `full` were **removed** — the conversion pipeline rewrites
-them to `public_read` / `public_read_write` on upgrade, and an unknown value
-resolves to `private` (fail-closed). A custom object that omits `sharingModel`
+`read` / `read_write` / `full` were **removed**. The conversion pipeline mechanically
+rewrites `read` → `public_read` and `read_write` → `public_read_write` on upgrade;
+`full` has no lossless target (it implied access wider than any canonical value), so it
+is surfaced as a manual migration to `public_read_write` or explicit sharing rules. An
+unknown value resolves to `private` (fail-closed). A custom object that omits `sharingModel`
 resolves to `private` at runtime (D1), and `os validate`'s security-posture check
 requires every custom object to declare it explicitly. These models are enforced
 by `plugin-sharing` + `plugin-security` and dogfood-proven over the real HTTP stack.

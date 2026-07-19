@@ -19,7 +19,7 @@ ObjectStack is composed of seven protocol layers that work together to form a co
 |:---|:---|:---|
 | **Data (ObjectQL)** | `src/data/` | Objects, Fields, Queries, Hooks, State Machines |
 | **UI (ObjectUI)** | `src/ui/` | Views, Apps, Dashboards, Reports, Actions |
-| **System (Kernel)** | `src/system/` | Manifest, Datasources, Plugins, Kernel |
+| **System (Kernel)** | `src/kernel/` | Manifest, Datasources, Plugins, Kernel |
 | **Automation** | `src/automation/` | Flows, Workflows, Triggers, Approvals |
 | **AI** | `src/ai/` | Agents, RAG Pipelines, Model Registry |
 | **API** | `src/api/` | REST, GraphQL, WebSocket, Realtime |
@@ -208,7 +208,7 @@ sequenceDiagram
     participant WS as WebSocket
 
     C->>API: POST /api/v1/data/task
-    API->>K: create(task, data)
+    API->>K: insert(task, data)
 
     K->>V: Validate against ObjectSchema
     V-->>K: Validation Result
@@ -218,13 +218,13 @@ sequenceDiagram
         API-->>C: Error Response
     end
 
-    K->>BH: beforeCreate hooks
+    K->>BH: beforeInsert hooks
     BH-->>K: Transformed data
 
     K->>D: INSERT record
     D-->>K: Created record
 
-    K->>AH: afterCreate hooks
+    K->>AH: afterInsert hooks
     AH-->>K: Side effects complete
 
     K->>T: Fire triggers

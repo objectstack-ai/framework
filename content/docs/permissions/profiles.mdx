@@ -27,8 +27,9 @@ never by authoring "subtraction profiles".
 
 > **Migrating v1 metadata.** Replace `isProfile: true` with either
 > `isDefault: true` (if the set was the app's default posture) or nothing (if
-> it was a job-function set — bind it to a position instead). The D7 publish
-> linter and the schema both reject the old shape.
+> it was a job-function set — bind it to a position instead). `isProfile` is no
+> longer part of `PermissionSetSchema`, so a leftover flag is simply ignored —
+> migrate it rather than rely on it.
 
 ## See also
 
