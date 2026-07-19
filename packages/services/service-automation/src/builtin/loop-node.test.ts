@@ -69,6 +69,17 @@ describe('loop container executor (ADR-0031)', () => {
     ],
   });
 
+  it('publishes xExpression:"template" on the collection field of its configSchema (objectui #2670)', () => {
+    // The shipped descriptor tells the flow designer `collection` is an
+    // `interpolate()` `{var}` template — so it renders a `{var}` picker and does
+    // not false-positive the CEL brace-trap on `{tasks}`.
+    const descriptor = engine.getActionDescriptor('loop');
+    const schema = descriptor?.configSchema as
+      | { properties?: { collection?: { xExpression?: unknown } } }
+      | undefined;
+    expect(schema?.properties?.collection?.xExpression).toBe('template');
+  });
+
   it('iterates the body region once per item, binding iterator + index', async () => {
     engine.registerFlow('loop_flow', loopFlow(
       {
