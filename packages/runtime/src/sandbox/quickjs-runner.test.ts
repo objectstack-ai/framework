@@ -53,7 +53,7 @@ describe('QuickJSScriptRunner — L2 hook script', () => {
     expect(r.value).toEqual({ ok: true, doubled: 42 });
   });
 
-  it('respects the timeoutMs cap', async () => {
+  it('respects the timeoutMs cap (CPU budget)', async () => {
     await expect(
       runner.runScript(
         {
@@ -65,7 +65,7 @@ describe('QuickJSScriptRunner — L2 hook script', () => {
         ctx(),
         hookOpts,
       ),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/CPU budget of 50ms/);
   });
 
   it('rejects use of api.read without capability', async () => {
@@ -402,43 +402,41 @@ describe('QuickJSScriptRunner — timeout resolution honors body.timeoutMs (#186
     expect(r.value).toEqual({ ok: true });
   }, 10000);
 
-  it('still applies the 250ms hook default when the body declares no timeoutMs', async () => {
-    const api = { object: () => ({ update: () => new Promise<never>(() => {}) }) };
+  it('applies the 250ms default CPU budget when the body declares no timeoutMs', async () => {
+    // A synchronous busy loop burns CPU (unlike a never-settling host call, which
+    // is idle and would hit the wall ceiling instead). The error embeds the
+    // effective budget — asserting on it proves the 250ms default applied.
     await expect(
       defaultRunner.runScript(
-        { language: 'js', source: "return await ctx.api.object('x').update({});", capabilities: ['api.write'] },
-        ctx({ api }),
+        { language: 'js', source: 'while (true) {}', capabilities: [] },
+        ctx(),
         hookOpts,
       ),
-      // The error message embeds the effective budget — asserting on it proves
-      // the 250ms default applied without a flaky wall-clock measurement.
-    ).rejects.toThrow(/timeout of 250ms/);
+    ).rejects.toThrow(/CPU budget of 250ms/);
   }, 10000);
 
-  it('lets a hook body LOWER its timeout below the default', async () => {
-    const api = { object: () => ({ update: () => new Promise<never>(() => {}) }) };
+  it('lets a hook body LOWER its CPU budget below the default', async () => {
     await expect(
       defaultRunner.runScript(
-        { language: 'js', source: "return await ctx.api.object('x').update({});", capabilities: ['api.write'], timeoutMs: 50 },
-        ctx({ api }),
+        { language: 'js', source: 'while (true) {}', capabilities: [], timeoutMs: 50 },
+        ctx(),
         hookOpts,
       ),
-    ).rejects.toThrow(/timeout of 50ms/);
+    ).rejects.toThrow(/CPU budget of 50ms/);
   }, 10000);
 });
 
 // ---------------------------------------------------------------------------
-// Env-overridable timeout defaults (#3259). Every invocation compiles a fresh
-// WASM module, and a nested hook compiles another inside the parent's budget, so
-// on a loaded/slow host (an oversubscribed CI runner) the 250ms hook default can
-// trip even while the VM is making progress. `OS_SANDBOX_HOOK_TIMEOUT_MS` lets an
-// operator raise the FALLBACK default without a code change; an explicit
-// constructor option still wins over the env, and a body's own timeoutMs still
-// wins over the resolved default. Each test constructs its runner AFTER setting
-// the env (the constructor reads it once), and the env is saved/restored so a
-// CI-wide value doesn't leak in or out.
+// Env-overridable CPU-budget defaults (#3259 / ADR-0102 D1). `OS_SANDBOX_HOOK_TIMEOUT_MS`
+// sets the FALLBACK per-invocation CPU budget for hooks; an explicit constructor
+// option still wins over the env, and a body's own timeoutMs still wins over the
+// resolved default. A synchronous busy loop (`while(true){}`) burns CPU, so the
+// error embeds the RESOLVED budget — asserting on it proves which value applied
+// without a flaky wall-clock measurement. Each test constructs its runner AFTER
+// setting the env (the constructor reads it once), and the env is saved/restored
+// so a CI-wide value doesn't leak in or out.
 // ---------------------------------------------------------------------------
-describe('QuickJSScriptRunner — env-overridable timeout defaults (#3259)', () => {
+describe('QuickJSScriptRunner — env-overridable CPU-budget defaults (#3259)', () => {
   const HOOK_ENV = 'OS_SANDBOX_HOOK_TIMEOUT_MS';
   let saved: string | undefined;
   beforeEach(() => {
@@ -450,34 +448,68 @@ describe('QuickJSScriptRunner — env-overridable timeout defaults (#3259)', () 
     else process.env[HOOK_ENV] = saved;
   });
 
-  // A never-settling host call forces the deadline path; the SandboxError embeds
-  // the RESOLVED budget, so asserting on the message proves which timeout applied
-  // without a flaky wall-clock measurement.
-  const neverSettles = { object: () => ({ update: () => new Promise<never>(() => {}) }) };
-  const runHook = (r: QuickJSScriptRunner) =>
-    r.runScript(
-      { language: 'js', source: "return await ctx.api.object('x').update({});", capabilities: ['api.write'] },
-      ctx({ api: neverSettles }),
-      hookOpts,
-    );
+  const runBurn = (r: QuickJSScriptRunner) =>
+    r.runScript({ language: 'js', source: 'while (true) {}', capabilities: [] }, ctx(), hookOpts);
 
-  it('falls back to the built-in 250ms hook default when the env var is unset', async () => {
-    await expect(runHook(new QuickJSScriptRunner())).rejects.toThrow(/timeout of 250ms/);
+  it('falls back to the built-in 250ms CPU budget when the env var is unset', async () => {
+    await expect(runBurn(new QuickJSScriptRunner())).rejects.toThrow(/CPU budget of 250ms/);
   }, 10000);
 
   it('uses OS_SANDBOX_HOOK_TIMEOUT_MS as the default when set', async () => {
     process.env[HOOK_ENV] = '150';
-    await expect(runHook(new QuickJSScriptRunner())).rejects.toThrow(/timeout of 150ms/);
+    await expect(runBurn(new QuickJSScriptRunner())).rejects.toThrow(/CPU budget of 150ms/);
   }, 10000);
 
   it('lets an explicit constructor option win over the env var', async () => {
     process.env[HOOK_ENV] = '150';
-    await expect(runHook(new QuickJSScriptRunner({ hookTimeoutMs: 50 }))).rejects.toThrow(/timeout of 50ms/);
+    await expect(runBurn(new QuickJSScriptRunner({ hookTimeoutMs: 50 }))).rejects.toThrow(/CPU budget of 50ms/);
   }, 10000);
 
   it('ignores a non-numeric / non-positive env value and keeps the built-in default', async () => {
     process.env[HOOK_ENV] = 'not-a-number';
-    await expect(runHook(new QuickJSScriptRunner())).rejects.toThrow(/timeout of 250ms/);
+    await expect(runBurn(new QuickJSScriptRunner())).rejects.toThrow(/CPU budget of 250ms/);
+  }, 10000);
+});
+
+// ---------------------------------------------------------------------------
+// CPU budget vs wall ceiling (ADR-0102 D1). The two bounds are distinct: CPU
+// time bounds a runaway *script*; the wall ceiling bounds a body stuck on a host
+// call that never settles. Critically, idle host-await time is NOT charged to the
+// CPU budget — the regression that caused the #3259 flake.
+// ---------------------------------------------------------------------------
+describe('QuickJSScriptRunner — CPU budget vs wall ceiling (ADR-0102)', () => {
+  it('does NOT charge idle host-await time to the CPU budget (#3259 root cause)', async () => {
+    // Host settles ~500ms — well past the 250ms CPU budget — but the VM burns ~no
+    // CPU while awaiting, so it MUST resolve. The old wall-clock 250ms killed this.
+    const api = {
+      object: () => ({
+        update: async () => {
+          await new Promise<void>((resolve) => setTimeout(resolve, 500));
+          return { ok: true };
+        },
+      }),
+    };
+    const r = new QuickJSScriptRunner({ hookTimeoutMs: 250 });
+    const out = await r.runScript(
+      { language: 'js', source: "return await ctx.api.object('x').update({});", capabilities: ['api.write'] },
+      ctx({ api }),
+      hookOpts,
+    );
+    expect(out.value).toEqual({ ok: true });
+  }, 10000);
+
+  it('cuts a body stuck on a never-settling host call at the wall ceiling', async () => {
+    // CPU budget 250ms is never reached (the VM is idle); wallCeilingMs 300ms —
+    // effective ceiling max(300, 250) = 300 — is the backstop that fires.
+    const api = { object: () => ({ update: () => new Promise<never>(() => {}) }) };
+    const r = new QuickJSScriptRunner({ hookTimeoutMs: 250, wallCeilingMs: 300 });
+    await expect(
+      r.runScript(
+        { language: 'js', source: "return await ctx.api.object('x').update({});", capabilities: ['api.write'] },
+        ctx({ api }),
+        hookOpts,
+      ),
+    ).rejects.toThrow(/wall-clock ceiling of 300ms/);
   }, 10000);
 });
 
@@ -558,26 +590,26 @@ describe('QuickJSScriptRunner — long-running async host work (pump budget)', (
     expect(calls).toBe(N);
   }, 40000);
 
-  it('still enforces the timeout on a host call that never settles', async () => {
+  it('still enforces the wall ceiling on a host call that never settles', async () => {
     const api = {
       object: () => ({
-        // Never resolves — must be killed by the deadline, not hang forever.
+        // Never resolves — an idle body burns no CPU, so it is the wall ceiling
+        // (not the CPU budget) that must kill it rather than hang forever.
         update: () => new Promise<never>(() => {}),
       }),
     };
-
+    const r = new QuickJSScriptRunner({ actionTimeoutMs: 300, wallCeilingMs: 300 });
     await expect(
-      runner.runScript(
+      r.runScript(
         {
           language: 'js',
           source: "return await ctx.api.object('wid').update({ id: 'x' });",
           capabilities: ['api.write'],
-          timeoutMs: 300,
         },
         ctx({ api }),
         actionOpts,
       ),
-    ).rejects.toThrow(/timeout/i);
+    ).rejects.toThrow(/wall-clock ceiling/i);
   }, 10000);
 });
 
@@ -733,12 +765,12 @@ describe('QuickJSScriptRunner — ctx.api.transaction', () => {
     ).rejects.toThrow(/api\.transaction/);
   }, 30000);
 
-  it('rolls back a transaction the body leaves open when the deadline fires', async () => {
+  it('rolls back a transaction the body leaves open when the wall ceiling fires', async () => {
     const events: Array<{ op: string; tx: number | null }> = [];
     let nextTx = 0;
     const api = {
       object: () => ({
-        // never settles — the in-tx op stalls until the deadline cuts in
+        // never settles — the in-tx op stalls until the wall ceiling cuts in
         insert: () => new Promise<never>(() => {}),
       }),
       beginTransaction: async () => {
@@ -750,8 +782,10 @@ describe('QuickJSScriptRunner — ctx.api.transaction', () => {
       rollbackTransaction: async (h: number) => { events.push({ op: 'rollback', tx: h }); },
     };
 
+    // Idle in-tx op → the wall ceiling (not the CPU budget) is the backstop.
+    const r = new QuickJSScriptRunner({ wallCeilingMs: 300 });
     await expect(
-      runner.runScript(
+      r.runScript(
         {
           language: 'js',
           source: `
@@ -765,9 +799,9 @@ describe('QuickJSScriptRunner — ctx.api.transaction', () => {
         ctx({ api }),
         actionOpts,
       ),
-    ).rejects.toThrow(/timeout/i);
+    ).rejects.toThrow(/ceiling/i);
 
-    // begin happened, the op stalled, deadline fired → finally rolled it back.
+    // begin happened, the op stalled, wall ceiling fired → finally rolled it back.
     expect(events.map((e) => e.op)).toEqual(['begin', 'rollback']);
   }, 10000);
 
@@ -808,11 +842,12 @@ describe('QuickJSScriptRunner — ctx.api.transaction', () => {
 // ---------------------------------------------------------------------------
 describe('QuickJSScriptRunner — idle pump backoff (#3233)', () => {
   it('does not busy-spin while idle-waiting on a slow host call — pump count stays bounded', async () => {
-    // A host call that never settles; the deadline cuts it off. Under the old
+    // A host call that never settles; the wall ceiling cuts it off. Under the old
     // unconditional setImmediate yield this reported ~50k pump iterations for a
     // ~250ms wait; the adaptive backoff keeps it to a small bounded number.
     const api = { object: () => ({ update: () => new Promise<never>(() => {}) }) };
-    const err = await runner
+    const r = new QuickJSScriptRunner({ wallCeilingMs: 300 });
+    const err = await r
       .runScript(
         { language: 'js', source: "return await ctx.api.object('x').update({});", capabilities: ['api.write'], timeoutMs: 300 },
         ctx({ api }),
@@ -821,7 +856,7 @@ describe('QuickJSScriptRunner — idle pump backoff (#3233)', () => {
       .then(() => null, (e) => e as SandboxError);
     expect(err).toBeInstanceOf(SandboxError);
     const m = /after (\d+) pump iterations/.exec(err!.message);
-    expect(m, `timeout message should report the pump count: ${err?.message}`).toBeTruthy();
+    expect(m, `ceiling message should report the pump count: ${err?.message}`).toBeTruthy();
     const pumps = Number(m![1]);
     // ~300ms at an ≤8ms idle poll ≈ tens of pumps, not tens of thousands.
     expect(pumps).toBeLessThan(1000);

@@ -1,6 +1,6 @@
 # ADR-0102: Sandbox Execution Budget & Engine Variant — CPU-time budget with a wall ceiling; per-invocation sync WASM modules, precompiled
 
-**Status**: Proposed (2026-07-19) — spec'd and API-verified in framework#3275; lands as Phase 1 #3295 (D1), Phase 2 #3296 (D2), Phase 3 #3297 (D3). Flips to **Accepted** when Phase 1 merges; D3 is explicitly deferrable without weakening D1/D2.
+**Status**: Accepted (2026-07-19) — **D1 landed** with Phase 1 (#3295): CPU-time budget + wall ceiling in `QuickJSScriptRunner`, nested-write integration tests now green at the stock 250ms budget. D2 (#3296, drop asyncify) and D3 (#3297, precompile) remain **Proposed**; D3 is explicitly deferrable without weakening D1/D2.
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: the #1867 sandbox redesign (deferred-promise host calls + pump loop) — the mechanism that both retired asyncify's only remaining justification (D2) and created the discrete VM-entry points D1 meters. No earlier ADR covers the sandbox runner; prior art is code history (#3232 honor body `timeoutMs`, #3264 test de-flake, #3270 env-overridable defaults).
 **Tracking**: framework#3275 (implementation-ready spec) · #3295 / #3296 / #3297 (phases) · #3259 (motivating CI flake, closed by the #3270 stopgap)
@@ -41,7 +41,7 @@ The value resolved by `resolveTimeout()` (body `timeoutMs` › enclosing `opts.t
 
 Consequence for the knobs: names, defaults (250ms hooks / 5000ms actions), and precedence are unchanged; only the *dimension* changes. Raising the CPU budget no longer trades away host-latency tolerance, and vice versa. This restores meaning to the 250ms default on any hardware — which is what lets CI drop its 10s floor (a stopgap that today also loosens the runaway bound for every test).
 
-Open point to settle at Phase 1 review: whether the ceiling also gets `OS_SANDBOX_WALL_CEILING_MS` (recommended — symmetric with the CPU knobs, wanted by slow-IO deployments) or stays constructor-only.
+Settled (Phase 1): the ceiling is both a constructor option (`wallCeilingMs`, needed for fast tests) AND env-tunable via `OS_SANDBOX_WALL_CEILING_MS` — symmetric with the CPU knobs and wanted by slow-IO deployments. Precedence: explicit option › env › built-in 30s.
 
 ### D2 — Drop asyncify: per-invocation *sync* modules (isolation unchanged)
 

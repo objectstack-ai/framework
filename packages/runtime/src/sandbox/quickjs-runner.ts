@@ -21,12 +21,13 @@
  *   fresh WASM module via `newAsyncContext()` and disposes it on settle (see
  *   {@link QuickJSScriptRunner.execute}). Runtimes are deliberately NOT pooled —
  *   a shared module hit HostRef double-free crashes when contexts were disposed
- *   concurrently, and the per-invocation isolate sidesteps that. The cost is
- *   real, though: a nested hook compiles a SECOND module inside the parent's
- *   budget, so on a loaded/slow host the fixed compile cost alone can trip the
- *   hook timeout. The per-invocation timeout default is therefore env-overridable
- *   via `OS_SANDBOX_HOOK_TIMEOUT_MS` / `OS_SANDBOX_ACTION_TIMEOUT_MS`
- *   (framework#3259) so an operator can raise the floor without a code change.
+ *   concurrently, and the per-invocation isolate sidesteps that (ADR-0102 D4).
+ * - Budgeting is CPU-time, not wall-clock (ADR-0102 D1): the per-invocation
+ *   `timeoutMs` bounds VM-active time (env defaults `OS_SANDBOX_HOOK_TIMEOUT_MS` /
+ *   `OS_SANDBOX_ACTION_TIMEOUT_MS`; `OS_SANDBOX_WALL_CEILING_MS` the wall
+ *   backstop), so host-await time and a nested hook's own run are not charged to
+ *   the caller — the load flake that motivated this (framework#3259) cannot recur
+ *   while a script is merely waiting on the host.
  * - Memory caps are advisory under quickjs (engine has no hard MB cap); the
  *   runner uses `setMemoryLimit(memoryMb * 1MB)` which is best-effort.
  */
@@ -49,12 +50,23 @@ import type {
 const DEFAULT_HOOK_TIMEOUT_MS = 250;
 const DEFAULT_ACTION_TIMEOUT_MS = 5000;
 const DEFAULT_MEMORY_MB = 32;
+// Wall-clock backstop (ADR-0102 D1): the CPU budget bounds VM-active time, but a
+// body parked forever on a host call that never settles burns no CPU — the
+// interrupt handler can't fire while no VM code runs — so a separate, generous
+// wall ceiling cuts it off. 30s matches the spec cap on `ScriptBody.timeoutMs`.
+const DEFAULT_WALL_CEILING_MS = 30_000;
 
 export interface QuickJSScriptRunnerOptions {
-  /** Default per-invocation timeout for hooks (ms). */
+  /** Default per-invocation **CPU-time** budget for hooks (ms). */
   hookTimeoutMs?: number;
-  /** Default per-invocation timeout for actions (ms). */
+  /** Default per-invocation **CPU-time** budget for actions (ms). */
   actionTimeoutMs?: number;
+  /**
+   * Wall-clock ceiling (ms) — the backstop for a body stuck on a never-settling
+   * host call. Effective ceiling is `max(this, cpuBudget)`, so it can never cut
+   * a body still inside its CPU budget. Default 30_000.
+   */
+  wallCeilingMs?: number;
   /** Default memory cap in MB. */
   memoryMb?: number;
 }
@@ -72,6 +84,7 @@ export class QuickJSScriptRunner implements ScriptRunner {
     this.opts = {
       hookTimeoutMs: opts.hookTimeoutMs ?? resolveSandboxTimeoutMs('hook', DEFAULT_HOOK_TIMEOUT_MS),
       actionTimeoutMs: opts.actionTimeoutMs ?? resolveSandboxTimeoutMs('action', DEFAULT_ACTION_TIMEOUT_MS),
+      wallCeilingMs: opts.wallCeilingMs ?? resolveSandboxTimeoutMs('wallCeiling', DEFAULT_WALL_CEILING_MS),
       memoryMb: opts.memoryMb ?? DEFAULT_MEMORY_MB,
     };
   }
@@ -160,9 +173,46 @@ export class QuickJSScriptRunner implements ScriptRunner {
     runtime.setMemoryLimit(args.memoryMb * 1024 * 1024);
     runtime.setMaxStackSize(512 * 1024);
 
+    // Budget accounting (ADR-0102 D1). `args.timeoutMs` is a CPU-time budget: the
+    // sum of VM-active slices (the initial eval + each `executePendingJobs`), NOT
+    // wall clock. Idle pump yields, host-promise settle time, and nested-hook
+    // execution (which runs host-side while this VM is parked) are excluded — so a
+    // slow/loaded host or a deep nested-write chain no longer trips the budget
+    // while the script is merely waiting. A separate wall ceiling bounds a body
+    // stuck forever on a host call that never settles.
+    const cpuBudget = args.timeoutMs;
+    const wallCeiling = Math.max(this.opts.wallCeilingMs, cpuBudget);
     const start = Date.now();
-    const deadline = start + args.timeoutMs;
-    runtime.setInterruptHandler(() => Date.now() > deadline);
+    const wallDeadline = start + wallCeiling;
+    let cpuMs = 0; // sum of completed VM slices
+    // Init to `start`, NOT 0: the interrupt handler reads `now - sliceStart`, and a
+    // 0 init makes that the full unix-epoch millis — firing the interrupt during
+    // `installCtx` (before the first real slice), which corrupts ctx marshalling
+    // (the host-side setup evalCodes get interrupted). Elapsed-since-start is ~0
+    // here, so the handler stays quiet until a real slice begins.
+    let sliceStart = start;
+    // Fires only while VM code runs, so `now - sliceStart` is the in-flight slice;
+    // added to finished `cpuMs` it is total CPU. Cuts a runaway synchronous loop
+    // the instant the CPU budget (or the wall ceiling) is exceeded.
+    runtime.setInterruptHandler(
+      () => cpuMs + (Date.now() - sliceStart) > cpuBudget || Date.now() > wallDeadline,
+    );
+    // Map a settled-VM state to the right budget error, or null if the body is
+    // simply still progressing. Callers add the just-run slice to `cpuMs` first,
+    // so `cpuMs` here is inclusive.
+    const budgetError = (pumps: number): SandboxError | null => {
+      if (cpuMs > cpuBudget) {
+        return new SandboxError(
+          `${args.origin.kind} '${args.origin.name}' exceeded CPU budget of ${cpuBudget}ms (after ${pumps} pump iterations)`,
+        );
+      }
+      if (Date.now() > wallDeadline) {
+        return new SandboxError(
+          `${args.origin.kind} '${args.origin.name}' exceeded wall-clock ceiling of ${wallCeiling}ms while awaiting host calls (after ${pumps} pump iterations)`,
+        );
+      }
+      return null;
+    };
 
     // Shared, per-invocation transaction state. `ctx.api.transaction(fn)` opens
     // it (routing subsequent ctx.api ops through the tx-scoped context) and
@@ -177,8 +227,15 @@ export class QuickJSScriptRunner implements ScriptRunner {
       // L1 expressions are pure-sync: evaluate and read __result.
       if (args.isExpression) {
         const wrapped = `globalThis.__result = JSON.stringify((function(){ return (${args.source}); })());`;
+        sliceStart = Date.now();
         const result = vm.evalCode(wrapped);
+        cpuMs += Date.now() - sliceStart;
         if (result.error) {
+          const budget = budgetError(0);
+          if (budget) {
+            result.error.dispose();
+            throw budget;
+          }
           const err = vm.dump(result.error);
           result.error.dispose();
           throw new SandboxError(
@@ -213,8 +270,15 @@ export class QuickJSScriptRunner implements ScriptRunner {
               function(e){ globalThis.__error = (e && e.message) ? (e.name + ': ' + e.message) : String(e); }
             );`;
 
+      sliceStart = Date.now();
       const evalRes = await vm.evalCodeAsync(wrapped);
+      cpuMs += Date.now() - sliceStart;
       if (evalRes.error) {
+        const budget = budgetError(0);
+        if (budget) {
+          evalRes.error.dispose();
+          throw budget;
+        }
         const err = vm.dump(evalRes.error);
         evalRes.error.dispose();
         throw new SandboxError(
@@ -227,12 +291,13 @@ export class QuickJSScriptRunner implements ScriptRunner {
       // Drive the script's async continuations to completion. Each iteration
       // yields to the host event loop (so in-flight host promises settle and
       // resolve their VM-side deferred handles) and then drains the QuickJS job
-      // queue. The ONLY bound on how long we wait is the deadline: a slow but
-      // progressing script — many sequential host writes, or one write that
-      // synchronously drives a downstream record-change automation — must be
-      // allowed to finish within its timeout, and a stuck / never-settling host
-      // call is cut off here (the QuickJS interrupt handler can't fire while we
-      // are parked on a host promise, so this deadline check is the backstop).
+      // queue. Two bounds apply (ADR-0102 D1): the CPU budget (VM-active time,
+      // via `budgetError` below) and the wall ceiling. A slow but progressing
+      // script — many sequential host writes, or one write that synchronously
+      // drives a downstream record-change automation — burns little CPU per pump
+      // and must be allowed to finish; a stuck / never-settling host call (the
+      // interrupt handler can't fire while we are parked on a host promise) is
+      // cut off by the wall ceiling, which this loop's `budgetError` checks.
       // The previous fixed `pumps < 1000` cap fired in ~tens of ms on legitimate
       // work and surfaced as "did not resolve after 1000 pump iterations".
       // Adaptive idle backoff (#3233): while the script is progressing we pump
@@ -256,8 +321,18 @@ export class QuickJSScriptRunner implements ScriptRunner {
           await new Promise<void>((resolve) => setTimeout(resolve, backoffMs));
         }
 
+        sliceStart = Date.now();
         const pending = runtime.executePendingJobs();
+        cpuMs += Date.now() - sliceStart;
         if (pending.error) {
+          // An interrupt (CPU budget / wall ceiling hit mid-slice) surfaces here
+          // as an error too — map it to the clean budget message rather than
+          // dumping `InternalError: interrupted`.
+          const budget = budgetError(pumps);
+          if (budget) {
+            pending.error.dispose();
+            throw budget;
+          }
           const err = vm.dump(pending.error);
           pending.error.dispose();
           throw new SandboxError(
@@ -270,6 +345,12 @@ export class QuickJSScriptRunner implements ScriptRunner {
         const errStr = vm.dump(errH);
         errH.dispose();
         if (errStr) {
+          // An interrupt (CPU budget / wall ceiling) raised inside the async body
+          // rejects its promise, surfacing here as __error rather than
+          // pending.error — map it to the budget message instead of the raw
+          // "InternalError: interrupted".
+          const budget = budgetError(pumps);
+          if (budget) throw budget;
           throw new SandboxError(
             `${args.origin.kind} '${args.origin.name}' threw: ${errStr}`,
             userFacingMessage(String(errStr)),
@@ -286,11 +367,8 @@ export class QuickJSScriptRunner implements ScriptRunner {
           return { value, mutatedInput, durationMs: Date.now() - start };
         }
 
-        if (Date.now() > deadline) {
-          throw new SandboxError(
-            `${args.origin.kind} '${args.origin.name}' exceeded timeout of ${args.timeoutMs}ms (after ${pumps} pump iterations)`,
-          );
-        }
+        const budget = budgetError(pumps);
+        if (budget) throw budget;
         // Progress this pump → reset to the fast path; genuinely idle → ramp the
         // counter so the next yield backs off.
         idle = pending.value > 0 ? 0 : idle + 1;

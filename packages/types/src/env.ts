@@ -240,32 +240,42 @@ export function resolveSearchPinyinEnabled(opts?: { locales?: readonly string[] 
 }
 
 /**
- * SINGLE decision point for the sandbox script-runner's DEFAULT per-invocation
- * timeout (ms), for a given origin kind, from the environment (framework#3259).
+ * SINGLE decision point for a sandbox script-runner DEFAULT (ms), resolved from
+ * the environment (framework#3259 / ADR-0102).
  *
- * The QuickJS sandbox enforces a wall-clock deadline on every hook/action
- * invocation. The built-in defaults (250ms hooks / 5000ms actions) suit a warm,
- * idle host — but every invocation compiles a fresh WASM module, and a nested
- * hook compiles ANOTHER one inside the parent's budget, so on a heavily loaded
- * or slow host (an oversubscribed CI runner, constrained production hardware)
- * that fixed VM-creation cost alone can trip the hook default even while the VM
- * is still making progress. That surfaced as an intermittent CI flake ("hook
- * '…' exceeded timeout of 250ms"). This lets an operator raise the floor once,
- * deployment-wide, instead of re-tuning every call site.
+ * The QuickJS sandbox meters each hook/action invocation against a per-invocation
+ * budget. Two dimensions are env-tunable:
+ *   - the **CPU-time budget** for hooks / actions — how much *VM-active* time a
+ *     body may burn (built-in 250ms hooks / 5000ms actions); and
+ *   - the **wall-clock ceiling** — the backstop bounding a body parked forever on
+ *     a host call that never settles (built-in 30_000ms).
+ *
+ * The built-in defaults suit a warm, idle host; a heavily loaded or slow host
+ * (an oversubscribed CI runner, constrained production hardware) may need a
+ * higher floor. This lets an operator raise it once, deployment-wide, instead of
+ * re-tuning every call site.
  *
  * Canonical vars (OS_{DOMAIN}_{NAME}, DOMAIN=SANDBOX):
- *   - hook   → `OS_SANDBOX_HOOK_TIMEOUT_MS`
- *   - action → `OS_SANDBOX_ACTION_TIMEOUT_MS`
+ *   - hook        → `OS_SANDBOX_HOOK_TIMEOUT_MS`
+ *   - action      → `OS_SANDBOX_ACTION_TIMEOUT_MS`
+ *   - wallCeiling → `OS_SANDBOX_WALL_CEILING_MS`
  *
  * Only a positive integer is honored; unset / empty / non-numeric / non-positive
  * falls back to `fallback`, so behaviour is byte-for-byte unchanged when the var
- * is absent. This is a FALLBACK default ONLY: an explicit `hookTimeoutMs` /
- * `actionTimeoutMs` passed to the runner constructor still wins over it, and a
- * body's own declared `timeoutMs` still wins over the resolved default per the
- * runner's timeout-resolution rule (the smaller of the explicit values).
+ * is absent. This is a FALLBACK default ONLY: an explicit constructor option
+ * still wins over it, and (for the CPU budget) a body's own declared `timeoutMs`
+ * still wins over the resolved default per the runner's resolution rule.
  */
-export function resolveSandboxTimeoutMs(kind: 'hook' | 'action', fallback: number): number {
-  const name = kind === 'hook' ? 'OS_SANDBOX_HOOK_TIMEOUT_MS' : 'OS_SANDBOX_ACTION_TIMEOUT_MS';
+export function resolveSandboxTimeoutMs(
+  kind: 'hook' | 'action' | 'wallCeiling',
+  fallback: number,
+): number {
+  const name =
+    kind === 'hook'
+      ? 'OS_SANDBOX_HOOK_TIMEOUT_MS'
+      : kind === 'action'
+        ? 'OS_SANDBOX_ACTION_TIMEOUT_MS'
+        : 'OS_SANDBOX_WALL_CEILING_MS';
   const raw = readEnvWithDeprecation(name, [], { silent: true });
   if (raw == null || String(raw).trim() === '') return fallback;
   const n = Number.parseInt(String(raw).trim(), 10);

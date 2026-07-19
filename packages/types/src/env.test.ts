@@ -242,13 +242,17 @@ describe('MCP switches — HTTP surface vs stdio auto-start are decoupled (#3167
 describe('resolveSandboxTimeoutMs (#3259)', () => {
   const HOOK = 'OS_SANDBOX_HOOK_TIMEOUT_MS';
   const ACTION = 'OS_SANDBOX_ACTION_TIMEOUT_MS';
+  const WALL = 'OS_SANDBOX_WALL_CEILING_MS';
   const origHook = process.env[HOOK];
   const origAction = process.env[ACTION];
+  const origWall = process.env[WALL];
   afterEach(() => {
     if (origHook === undefined) delete process.env[HOOK];
     else process.env[HOOK] = origHook;
     if (origAction === undefined) delete process.env[ACTION];
     else process.env[ACTION] = origAction;
+    if (origWall === undefined) delete process.env[WALL];
+    else process.env[WALL] = origWall;
   });
 
   it('returns the fallback unchanged when the var is unset', () => {
@@ -282,5 +286,16 @@ describe('resolveSandboxTimeoutMs (#3259)', () => {
   it('tolerates a leading integer with trailing junk (parseInt semantics, as resolveOrgLimit)', () => {
     process.env[HOOK] = '3000ms';
     expect(resolveSandboxTimeoutMs('hook', 250)).toBe(3000);
+  });
+
+  it("resolves the wall-ceiling kind from OS_SANDBOX_WALL_CEILING_MS (ADR-0102)", () => {
+    delete process.env[WALL];
+    expect(resolveSandboxTimeoutMs('wallCeiling', 30_000)).toBe(30_000); // unset → fallback
+    process.env[WALL] = '60000';
+    expect(resolveSandboxTimeoutMs('wallCeiling', 30_000)).toBe(60_000);
+    // Independent of the hook/action vars.
+    process.env[HOOK] = '111';
+    process.env[ACTION] = '222';
+    expect(resolveSandboxTimeoutMs('wallCeiling', 30_000)).toBe(60_000);
   });
 });

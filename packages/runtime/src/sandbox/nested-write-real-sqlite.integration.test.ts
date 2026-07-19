@@ -86,9 +86,9 @@ describe('#1867 nested cross-object write — REAL SqlDriver (better-sqlite3, on
     engine.registerDriver(driver, true);
     await engine.init();
     for (const o of [EXPENSE_REPORT, EXPENSE_LINE]) engine.registry.registerObject(o as any);
-    // Generous hook budget — the subject is the nested-write path on a real
-    // driver, not the 250ms default (see nested-write.integration.test.ts).
-    engine.setDefaultBodyRunner(hookBodyRunnerFactory(new QuickJSScriptRunner({ hookTimeoutMs: 10_000 }), { ql: engine, appId: 'expense' }));
+    // Runs at the STOCK 250ms CPU-time budget (ADR-0102 D1): idle host-await time
+    // and the nested rollup's own work are not charged (see nested-write.integration.test.ts).
+    engine.setDefaultBodyRunner(hookBodyRunnerFactory(new QuickJSScriptRunner(), { ql: engine, appId: 'expense' }));
     bindHooksToEngine(engine, [ROLLUP_HOOK as any], { packageId: 'expense' });
     return engine;
   }
