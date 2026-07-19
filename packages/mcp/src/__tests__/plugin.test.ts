@@ -182,20 +182,6 @@ describe('MCPServerPlugin', () => {
       );
     });
 
-    it('should handle missing data engine gracefully', async () => {
-      const aiService = createMockAIService();
-      const metadataService = createMockMetadataService();
-      const ctx = createMockPluginContext({ ai: aiService, metadata: metadataService });
-
-      const plugin = new MCPServerPlugin();
-      await plugin.init(ctx as any);
-      await plugin.start(ctx as any);
-
-      expect(ctx.logger.debug).toHaveBeenCalledWith(
-        '[MCP] Data engine not available, skipping record resources',
-      );
-    });
-
     it('should not auto-start when MCP_SERVER_ENABLED is not set', async () => {
       const ctx = createMockPluginContext();
 
@@ -216,6 +202,52 @@ describe('MCPServerPlugin', () => {
       await plugin.start(ctx as any);
 
       expect(ctx.trigger).toHaveBeenCalledWith('mcp:ready', expect.any(Object));
+    });
+  });
+
+  describe('stdio principal admission — fail-closed (ADR-0101)', () => {
+    beforeEach(() => {
+      delete process.env.OS_MCP_STDIO_ENABLED;
+      delete process.env.OS_MCP_STDIO_API_KEY;
+    });
+
+    it('refuses to start stdio when enabled without OS_MCP_STDIO_API_KEY', async () => {
+      const ctx = createMockPluginContext({
+        metadata: createMockMetadataService(),
+        objectql: createMockDataEngine(),
+      });
+      const plugin = new MCPServerPlugin({ autoStart: true });
+      await plugin.init(ctx as any);
+      await expect(plugin.start(ctx as any)).rejects.toThrow(/OS_MCP_STDIO_API_KEY/);
+    });
+
+    it('refuses to start stdio when the objectql service is unavailable', async () => {
+      process.env.OS_MCP_STDIO_API_KEY = 'osk_test';
+      const ctx = createMockPluginContext({ metadata: createMockMetadataService() }); // no objectql
+      const plugin = new MCPServerPlugin({ autoStart: true });
+      await plugin.init(ctx as any);
+      await expect(plugin.start(ctx as any)).rejects.toThrow(/objectql/);
+    });
+
+    it('refuses to start stdio when the key does not resolve to an identity', async () => {
+      process.env.OS_MCP_STDIO_API_KEY = 'osk_unknown';
+      // find() returns no rows → no sys_api_key match → no principal → no userId.
+      const ql = { find: vi.fn(async () => []) };
+      const ctx = createMockPluginContext({ metadata: createMockMetadataService(), objectql: ql });
+      const plugin = new MCPServerPlugin({ autoStart: true });
+      await plugin.init(ctx as any);
+      await expect(plugin.start(ctx as any)).rejects.toThrow(/did not resolve to a valid identity/);
+    });
+
+    it('does NOT require a key when stdio is not enabled (HTTP surface only)', async () => {
+      // No autoStart, no OS_MCP_STDIO_ENABLED → shouldStart false → no key needed.
+      const ctx = createMockPluginContext({ metadata: createMockMetadataService() });
+      const plugin = new MCPServerPlugin();
+      await plugin.init(ctx as any);
+      await expect(plugin.start(ctx as any)).resolves.toBeUndefined();
+      expect(ctx.logger.info).toHaveBeenCalledWith(
+        expect.stringContaining('[MCP] Transport not auto-started'),
+      );
     });
   });
 

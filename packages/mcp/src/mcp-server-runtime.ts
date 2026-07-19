@@ -3,7 +3,7 @@
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
-import type { Logger, IMetadataService, IDataEngine, AIToolDefinition } from '@objectstack/spec/contracts';
+import type { Logger, IMetadataService, AIToolDefinition } from '@objectstack/spec/contracts';
 import type { Agent } from '@objectstack/spec/ai';
 import type { ToolRegistry, ToolExecutionResult } from './types.js';
 import { registerObjectTools, registerActionTools } from './mcp-http-tools.js';
@@ -241,7 +241,10 @@ export class MCPServerRuntime {
    * - `objectstack://objects/{objectName}/records/{recordId}` — Get a specific record
    * - `objectstack://metadata/types` — List all metadata types
    */
-  bridgeResources(metadataService: IMetadataService, dataEngine?: IDataEngine): void {
+  bridgeResources(
+    metadataService: IMetadataService,
+    getRecord?: (objectName: string, recordId: string) => Promise<Record<string, unknown> | null>,
+  ): void {
     const logger = this.config.logger;
     let resourceCount = 0;
 
@@ -320,12 +323,19 @@ export class MCPServerRuntime {
     resourceCount++;
 
     // ── Template resource: Record by ID ──
-    if (dataEngine) {
+    // The ONE resource that reads ROW data, so it MUST run under a principal
+    // (ADR-0101): the caller supplies a principal-bound reader that applies
+    // RLS/FLS/tenant (e.g. `ql.find(obj, { where: { id }, context })`). Without
+    // one, the resource is NOT registered — there is deliberately no unscoped
+    // fallback. The long-lived stdio server reaches this only after the plugin
+    // resolved `OS_MCP_STDIO_API_KEY` to an identity; the reader re-resolves per
+    // call, so a revoked/expired key stops working on the next read.
+    if (getRecord) {
       this.mcpServer.registerResource(
         'record_by_id',
         new ResourceTemplate('objectstack://objects/{objectName}/records/{recordId}', { list: undefined }),
         {
-          description: 'Get a specific record by ID from a data object',
+          description: 'Get a specific record by ID from a data object (under the caller\'s permissions and row-level security)',
           mimeType: 'application/json',
         },
         async (_uri, variables) => {
@@ -333,9 +343,7 @@ export class MCPServerRuntime {
           const recordId = String(variables.recordId);
 
           try {
-            const record = await dataEngine.findOne(objectName, {
-              where: { id: recordId },
-            });
+            const record = await getRecord(objectName, recordId);
 
             if (!record) {
               return {
