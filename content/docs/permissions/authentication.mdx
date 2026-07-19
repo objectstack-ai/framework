@@ -698,17 +698,28 @@ SSO-onboarded users who never had a local password.
 generic data import (`rows[]` / `csv` / `xlsxBase64`, `dryRun`), but writes
 every row through better-auth so the accounts are login-capable:
 
-- `passwordPolicy: 'none'` (**default**) — identity only: accounts are created
-  without a credential record. Users first sign in through a channel (phone
-  OTP, magic link, or a password-reset link) and the Console detects the
-  missing password (`hasLocalPassword()`) and offers set-initial-password.
-- `passwordPolicy: 'invite'` — `none` plus an invitation per created account:
-  rows need a reachable identity — a real email (set-your-password email;
-  requires an email service) or, for phone-only rows, a wired SMS service
-  (invitation SMS + phone-OTP first sign-in).
-- `passwordPolicy: 'temporary'` — the no-infrastructure fallback (no email,
-  no SMS): per-row generated temporary passwords, returned once in the
-  response, with `mustChangePassword` enforced.
+- `passwordPolicy: 'auto'` (**default**) — decides **per row**: a row with a
+  deliverable channel (a real email + a wired email service, or a phone + a
+  wired SMS service) is **invited** (no shared secret leaves the server); a row
+  with no deliverable channel (placeholder email, phone-only without SMS, or an
+  email row when no email service is wired) falls back to a **temporary**
+  password. This keeps the temporary-password blast radius to only the rows
+  that genuinely can't be reached, and — unlike `invite` — it never fails the
+  request for missing infrastructure (undeliverable rows just degrade). The
+  per-row outcome is reported as `rows[].delivery` (`email` / `sms` /
+  `temporary`), with a batch breakdown on `summary.delivery`.
+- `passwordPolicy: 'invite'` — force the invite path for **every** row: a real
+  email gets a set-your-password email (requires an email service), a phone-only
+  row an invitation SMS (requires a wired SMS service + phone-OTP first sign-in).
+  Rows that aren't reachable are **failed per-row** (never downgraded) — pick
+  this when a temporary-password fallback is unacceptable.
+- `passwordPolicy: 'temporary'` — force the no-infrastructure path (no email,
+  no SMS) for every row: per-row generated temporary passwords, returned once in
+  the response, with `mustChangePassword` enforced.
+- `passwordPolicy: 'none'` — identity only: accounts are created without a
+  credential record. Users first sign in through a channel (phone OTP, magic
+  link, or a password-reset link) and the Console detects the missing password
+  (`hasLocalPassword()`) and offers set-initial-password.
 - `mode: 'insert' | 'upsert'` with `matchBy: 'email' | 'phone'`. Upsert
   updates only touch profile fields (`name`, `phone_number`, `role`) — a
   re-imported file can never modify an existing user's email or reset their
@@ -718,8 +729,9 @@ every row through better-auth so the accounts are login-capable:
 
 In the Console, platform admins reach this from the **Users list → Import**
 toolbar button (shown when the admin plugin is enabled). The import wizard
-uploads a CSV/Excel file, maps columns, previews with a dry-run, and — for
-the `temporary` policy — reveals the generated passwords once with a
+uploads a CSV/Excel file, maps columns, previews with a dry-run, and — for any
+rows that resolve to a temporary password (all of them under `temporary`, only
+the unreachable ones under `auto`) — reveals the generated passwords once with a
 download, splitting files above 500 rows into batches automatically.
 
 ---
@@ -847,7 +859,7 @@ All endpoints are available under `/api/v1/auth/*`:
 
 - `POST /api/v1/auth/admin/create-user` - Create a login-capable account (optional one-time temporary password + forced change)
 - `POST /api/v1/auth/admin/set-user-password` - Set/reset a user's password (also provisions a credential for SSO-onboarded users)
-- `POST /api/v1/auth/admin/import-users` - Bulk import users (CSV/JSON/XLSX; `none` (default) / `invite` / `temporary` password policy; ≤500 rows, dry-run supported)
+- `POST /api/v1/auth/admin/import-users` - Bulk import users (CSV/JSON/XLSX; `auto` (default, per-row invite-or-temporary) / `invite` / `temporary` / `none` password policy; ≤500 rows, dry-run supported)
 - `POST /api/v1/auth/admin/unlock-user` - Clear a brute-force lockout early
 
 For complete API documentation, see the [Better-Auth API Reference](https://www.better-auth.com/docs).

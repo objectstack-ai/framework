@@ -75,15 +75,21 @@ describe('runAdminImportUsers — request validation', () => {
     expect(m.createUser).not.toHaveBeenCalled();
   });
 
-  it('defaults to the none policy when passwordPolicy is omitted', async () => {
-    const m = makeDeps();
+  it('defaults to the auto policy when passwordPolicy is omitted (#3236)', async () => {
+    const m = makeDeps(); // email service available, no SMS
     const res = await runAdminImportUsers(
       m.deps,
       makeRequest({ format: 'json', rows: [{ email: 'a@b.co' }] }),
       ACTOR,
     );
     expect(res.status).toBe(200);
-    expect((res.body.data as any).summary.passwordPolicy).toBe('none');
+    const data = res.body.data as any;
+    expect(data.summary.passwordPolicy).toBe('auto');
+    // A deliverable email row is invited, not handed a temporary password.
+    expect(m.requestPasswordReset).toHaveBeenCalledTimes(1);
+    expect(data.rows[0].delivery).toBe('email');
+    expect(data.rows[0].temporaryPassword).toBeUndefined();
+    expect(data.summary.delivery).toEqual({ emailInvite: 1, smsInvite: 0, temporary: 0 });
   });
 
   it('rejects matchBy phone when the phoneNumber plugin is off', async () => {
@@ -398,6 +404,135 @@ describe('runAdminImportUsers — invite policy', () => {
     expect(res.status).toBe(400);
     expect(res.body.error?.code).toBe('EMAIL_SERVICE_REQUIRED');
     expect(m.createUser).not.toHaveBeenCalled();
+  });
+});
+
+// #3236 — `auto` prefers the invite path per row and only falls back to a
+// temporary password for rows with no deliverable channel. Unlike `invite`, it
+// never rejects the request for missing infrastructure.
+describe('runAdminImportUsers — auto policy (default)', () => {
+  it('invites deliverable rows and falls back to temporary only for the unreachable ones — in ONE batch', async () => {
+    // Email service up, SMS down. Row 1: real email → email invite. Row 2:
+    // phone-only with no SMS → temporary fallback (the ONLY row that gets a
+    // shared secret). That per-row split is the whole point of #3236.
+    const m = makeDeps({ phoneEnabled: true, emailAvailable: true, smsInviteAvailable: false });
+    const res = await runAdminImportUsers(
+      m.deps,
+      makeRequest({
+        passwordPolicy: 'auto', format: 'json',
+        rows: [
+          { email: 'reachable@x.co', name: 'Mail' },
+          { phone_number: '+8613800000001', name: 'PhoneOnly' },
+        ],
+      }),
+      ACTOR,
+    );
+    expect(res.status).toBe(200);
+    const data = res.body.data as any;
+    expect(data.summary.created).toBe(2);
+    expect(data.summary.passwordPolicy).toBe('auto');
+
+    // Row 1 invited by email; no temporary password.
+    expect(m.requestPasswordReset).toHaveBeenCalledTimes(1);
+    expect(m.requestPasswordReset.mock.calls[0][0].body.email).toBe('reachable@x.co');
+    expect(data.rows[0].delivery).toBe('email');
+    expect(data.rows[0].temporaryPassword).toBeUndefined();
+
+    // Row 2 fell back to temporary: a returned password + must_change stamp.
+    expect(m.sendInviteSms).not.toHaveBeenCalled();
+    expect(typeof data.rows[1].temporaryPassword).toBe('string');
+    expect(data.rows[1].delivery).toBe('temporary');
+    const stamps = m.update.mock.calls.filter((c) => c[1]?.must_change_password === true);
+    expect(stamps.length).toBe(1);
+    expect(m.noteMustChangePasswordIssued).toHaveBeenCalled();
+
+    // Breakdown surfaced on the summary — one invite, one fallback.
+    expect(data.summary.delivery).toEqual({ emailInvite: 1, smsInvite: 0, temporary: 1 });
+    expectNoPasswordLeak(m, [data.rows[1].temporaryPassword]);
+  });
+
+  it('uses the SMS invite path for phone-only rows when SMS is wired', async () => {
+    const m = makeDeps({ phoneEnabled: true, emailAvailable: true, smsInviteAvailable: true });
+    const res = await runAdminImportUsers(
+      m.deps,
+      makeRequest({
+        passwordPolicy: 'auto', format: 'json',
+        rows: [
+          { email: 'a@x.co' },
+          { phone_number: '+86 138 0000 0002' },
+        ],
+      }),
+      ACTOR,
+    );
+    const data = res.body.data as any;
+    expect(data.summary.created).toBe(2);
+    // Email row → reset email; phone-only row → SMS invite. No temp passwords.
+    expect(m.requestPasswordReset).toHaveBeenCalledTimes(1);
+    expect(m.sendInviteSms).toHaveBeenCalledTimes(1);
+    expect(m.sendInviteSms.mock.calls[0][0]).toBe('+8613800000002');
+    expect(data.rows.every((r: any) => r.temporaryPassword === undefined)).toBe(true);
+    expect(data.rows[0].delivery).toBe('email');
+    expect(data.rows[1].delivery).toBe('sms');
+    expect(data.summary.delivery).toEqual({ emailInvite: 1, smsInvite: 1, temporary: 0 });
+  });
+
+  it('never rejects for missing infrastructure — with no channels wired every row degrades to temporary', async () => {
+    const m = makeDeps({ phoneEnabled: true, emailAvailable: false, smsInviteAvailable: false });
+    const res = await runAdminImportUsers(
+      m.deps,
+      makeRequest({
+        passwordPolicy: 'auto', format: 'json',
+        rows: [
+          { email: 'a@x.co' },
+          { phone_number: '+8613800000003' },
+        ],
+      }),
+      ACTOR,
+    );
+    // Contrast with `invite`, which 400s here. `auto` provisions everyone.
+    expect(res.status).toBe(200);
+    const data = res.body.data as any;
+    expect(data.summary.created).toBe(2);
+    expect(m.requestPasswordReset).not.toHaveBeenCalled();
+    expect(m.sendInviteSms).not.toHaveBeenCalled();
+    expect(data.rows.every((r: any) => typeof r.temporaryPassword === 'string')).toBe(true);
+    expect(data.rows.every((r: any) => r.delivery === 'temporary')).toBe(true);
+    expect(data.summary.delivery).toEqual({ emailInvite: 0, smsInvite: 0, temporary: 2 });
+    expectNoPasswordLeak(m, data.rows.map((r: any) => r.temporaryPassword));
+  });
+
+  it('surfaces INVITE_EMAIL_FAILED (no rollback) when a chosen email invite fails', async () => {
+    const m = makeDeps({ resetFails: true });
+    const res = await runAdminImportUsers(
+      m.deps,
+      makeRequest({ passwordPolicy: 'auto', format: 'json', rows: [{ email: 'a@x.co' }] }),
+      ACTOR,
+    );
+    const row = (res.body.data as any).rows[0];
+    expect(row.ok).toBe(true);
+    expect(row.action).toBe('created');
+    expect(row.code).toBe('INVITE_EMAIL_FAILED');
+    expect(row.delivery).toBe('email');
+    // A failed invite is NOT silently downgraded to a temporary password.
+    expect(row.temporaryPassword).toBeUndefined();
+  });
+
+  it('writes nothing on dryRun but still projects the per-row plan', async () => {
+    const m = makeDeps({ phoneEnabled: true, emailAvailable: true, smsInviteAvailable: false });
+    const res = await runAdminImportUsers(
+      m.deps,
+      makeRequest({
+        passwordPolicy: 'auto', dryRun: true, format: 'json',
+        rows: [{ email: 'a@x.co' }, { phone_number: '+8613800000006' }],
+      }),
+      ACTOR,
+    );
+    expect(res.status).toBe(200);
+    expect(m.createUser).not.toHaveBeenCalled();
+    expect(m.requestPasswordReset).not.toHaveBeenCalled();
+    expect(m.sendInviteSms).not.toHaveBeenCalled();
+    // dryRun does not deliver, so no per-row delivery is stamped.
+    expect((res.body.data as any).summary.delivery).toEqual({ emailInvite: 0, smsInvite: 0, temporary: 0 });
   });
 });
 

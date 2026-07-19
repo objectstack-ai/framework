@@ -13,29 +13,45 @@
  * engine via `runImport`) but swaps the write path for an identity-specific
  * `ImportProtocolLike` whose `createData` drives `auth.api.createUser`.
  *
- * Password policies:
- *  - `none`       — THE DEFAULT. No password is set at all: better-auth
+ * Password policies (per-request `passwordPolicy`, default `auto`):
+ *  - `auto`       — THE DEFAULT (#3236). Decides PER ROW, preferring the
+ *                   invite path and falling back to a temporary password only
+ *                   where a row genuinely can't be reached. A row with a
+ *                   deliverable channel — a REAL email + a wired EmailService,
+ *                   or a phone + a wired SMS-invite path — is invited, so no
+ *                   shared secret ever leaves the server. A row with no
+ *                   deliverable channel (placeholder email, phone-only without
+ *                   SMS, or an email row when no email service is wired) falls
+ *                   back to `temporary`. This shrinks the temporary-password
+ *                   blast radius from "the whole batch" to "only the rows with
+ *                   no channel", and — unlike `invite` — it never rejects the
+ *                   request for missing infrastructure: undeliverable rows just
+ *                   degrade to temporary. The per-row outcome is surfaced as
+ *                   `rows[].delivery` (`email` | `sms` | `temporary`).
+ *  - `invite`     — force the invite path for EVERY row: better-auth's
+ *                   reset-password mints the credential account on first set, so
+ *                   creation stays credential-less, and a "set your password"
+ *                   invitation goes out — a reset-password email for rows with a
+ *                   REAL email (requires a wired EmailService), or — #2780 — an
+ *                   invitation SMS for phone-only rows (requires a wired,
+ *                   deliverable SmsService + the phoneNumber plugin; the user
+ *                   first signs in via phone OTP and then sets a password). Rows
+ *                   that aren't reachable are FAILED per-row (never silently
+ *                   downgraded) — pick this when a temporary-password fallback
+ *                   is unacceptable.
+ *  - `temporary`  — force the no-infrastructure path (no email, no SMS) for
+ *                   every row: each created account gets a generated temporary
+ *                   password, `must_change_password` is stamped (403
+ *                   PASSWORD_EXPIRED until changed), and the passwords are
+ *                   returned ONCE in the HTTP response, one per row. Never
+ *                   persisted, never logged.
+ *  - `none`       — identity only: no password, no invitation. better-auth
  *                   creates the account without a credential record, and the
  *                   user's first sign-in is channel-based (phone OTP, magic
- *                   link, or an email reset link). The Console already
- *                   detects credential-less accounts (`hasLocalPassword()`)
- *                   and offers `set-initial-password`, so users are nudged to
- *                   set a password after their first OTP sign-in. Import's
- *                   job is identity — credentials are the auth domain's.
- *  - `invite`     — like `none` (credential-less creation; better-auth's
- *                   reset-password creates the credential account on first
- *                   set), plus a "set your password" invitation goes out per
- *                   created account: a reset-password email for rows with a
- *                   REAL email (requires a wired EmailService), or — #2780 —
- *                   an invitation SMS for phone-only rows (requires a wired,
- *                   deliverable SmsService + the phoneNumber plugin; the user
- *                   first signs in via phone OTP and then sets a password).
- *                   Rows are validated per-channel reachability.
- *  - `temporary`  — the no-infrastructure fallback (no email, no SMS): each
- *                   created account gets a generated temporary password,
- *                   `must_change_password` is stamped (403 PASSWORD_EXPIRED
- *                   until changed), and the passwords are returned ONCE in the
- *                   HTTP response, one per row. Never persisted, never logged.
+ *                   link, or an email reset link). The Console detects
+ *                   credential-less accounts (`hasLocalPassword()`) and offers
+ *                   `set-initial-password`. Pick this to provision identity now
+ *                   and defer all credential delivery.
  *
  * Deliberate limits:
  *  - Synchronous only, ≤ IMPORT_USERS_MAX_ROWS rows per request. scrypt
@@ -97,9 +113,24 @@ export interface IdentityImportDeps {
 
 const SYSTEM_CTX = { isSystem: true, positions: [], permissions: [] };
 
+export type ImportPasswordPolicy = 'auto' | 'none' | 'invite' | 'temporary';
+
+/**
+ * The delivery decision for a single created row, resolved up front from the
+ * request policy and the row's own reachability. `auto` picks per row; every
+ * other policy resolves the same plan for every row. createData acts on
+ * `kind`; the post-write pass acts on the recorded channel.
+ */
+type RowPlan =
+  | { kind: 'none' }
+  | { kind: 'temporary' }
+  | { kind: 'invite'; channel: 'email' | 'sms' };
+
 interface RowIdentity {
   email?: string;
   phone?: string;
+  /** Set on valid rows — how this row's credential is delivered. */
+  plan?: RowPlan;
   invalid?: { code: string; error: string };
 }
 
@@ -111,7 +142,7 @@ interface RowIdentity {
 function resolveRowIdentity(
   row: Record<string, any>,
   opts: {
-    policy: 'none' | 'invite' | 'temporary';
+    policy: ImportPasswordPolicy;
     phoneEnabled: boolean;
     emailInviteOk: boolean;
     smsInviteOk: boolean;
@@ -142,15 +173,21 @@ function resolveRowIdentity(
   if (!hasEmail && !phone) {
     return { invalid: { code: 'NO_IDENTITY', error: 'Row needs an email or a phone_number' } };
   }
+
+  const email = hasEmail ? rawEmail.toLowerCase() : undefined;
+  const emailDeliverable = hasEmail && opts.emailInviteOk;
+  const smsDeliverable = !!phone && opts.smsInviteOk;
+
+  // `invite` FAILS rows it can't reach (never a silent downgrade); `auto`
+  // prefers the invite path but falls back to `temporary` for the same
+  // unreachable rows instead of failing them (#3236). Validated per row so a
+  // mixed file only fails / downgrades the rows it must.
   if (opts.policy === 'invite') {
-    // Every invite row must be REACHABLE through a wired channel: email rows
-    // need the email service, phone-only rows the SMS-invite path (#2780).
-    // Validated per row so a mixed file fails only the rows it must.
     if (hasEmail && !opts.emailInviteOk) {
       return {
         invalid: {
           code: 'EMAIL_SERVICE_REQUIRED',
-          error: 'This row\'s invitation needs a configured email service — wire an EmailService or use the temporary policy',
+          error: 'This row\'s invitation needs a configured email service — wire an EmailService, or use the "auto" (fallback) or "temporary" policy',
         },
       };
     }
@@ -158,12 +195,45 @@ function resolveRowIdentity(
       return {
         invalid: {
           code: 'INVITE_REQUIRES_EMAIL',
-          error: 'The invite policy needs a real email for this row — configure SMS delivery (phone OTP) for SMS invitations, or use the temporary policy',
+          error: 'The invite policy needs a real email for this row — configure SMS delivery (phone OTP) for SMS invitations, or use the "auto" (fallback) or "temporary" policy',
         },
       };
     }
   }
-  return { email: hasEmail ? rawEmail.toLowerCase() : undefined, phone };
+
+  let plan: RowPlan;
+  switch (opts.policy) {
+    case 'none':
+      plan = { kind: 'none' };
+      break;
+    case 'temporary':
+      plan = { kind: 'temporary' };
+      break;
+    case 'invite':
+      // Reachability validated just above — email rows go email, the rest SMS.
+      plan = { kind: 'invite', channel: hasEmail ? 'email' : 'sms' };
+      break;
+    default: // 'auto' — invite where deliverable, temporary fallback otherwise.
+      plan = emailDeliverable
+        ? { kind: 'invite', channel: 'email' }
+        : smsDeliverable
+          ? { kind: 'invite', channel: 'sms' }
+          : { kind: 'temporary' };
+      break;
+  }
+
+  return { email, phone, plan };
+}
+
+/**
+ * Stable per-row lookup key for {@link RowPlan}. A phone-only row's final email
+ * is a placeholder minted inside createData, so it can't be the key — key email
+ * rows by their (real, lowercased) email and phone-only rows by phone.
+ */
+function identityKey(email?: string, phone?: string): string {
+  if (email) return `e:${email.toLowerCase()}`;
+  if (phone) return `p:${phone}`;
+  return '';
 }
 
 export async function runAdminImportUsers(
@@ -178,12 +248,14 @@ export async function runAdminImportUsers(
   });
 
   // ── Request-level validation ─────────────────────────────────────────
-  // Default policy: `none` — import provisions identity, not credentials.
-  // Users first sign in via a channel (phone OTP / magic link / reset link)
-  // and the Console's hasLocalPassword() flow nudges them to set a password.
-  const policy = body?.passwordPolicy === undefined ? 'none' : body.passwordPolicy;
-  if (policy !== 'none' && policy !== 'invite' && policy !== 'temporary') {
-    return fail(400, 'invalid_request', 'passwordPolicy must be "none" (default), "invite", or "temporary"');
+  // Default policy: `auto` (#3236) — prefer the invite path (no shared secret
+  // leaves the server) and fall back to a temporary password only for rows
+  // with no deliverable channel. Robust to whatever infra is (or isn't) wired:
+  // it never rejects for missing email/SMS, it just degrades those rows to
+  // temporary. `none` is still available for identity-only imports.
+  const policy: ImportPasswordPolicy = body?.passwordPolicy === undefined ? 'auto' : body.passwordPolicy;
+  if (policy !== 'auto' && policy !== 'none' && policy !== 'invite' && policy !== 'temporary') {
+    return fail(400, 'invalid_request', 'passwordPolicy must be "auto" (default), "none", "invite", or "temporary"');
   }
   const mode = body?.mode === 'upsert' ? 'upsert' : body?.mode === 'insert' || body?.mode === undefined ? 'insert' : undefined;
   if (!mode) return fail(400, 'invalid_request', 'mode must be "insert" or "upsert"');
@@ -232,9 +304,13 @@ export async function runAdminImportUsers(
 
   // ── Identity pre-validation (runs for dryRun too) ────────────────────
   const phoneEnabled = deps.phoneNumberEnabled();
-  const results: Array<ImportRowResult & { temporaryPassword?: string }> = new Array(prepared.rows.length);
+  const results: Array<ImportRowResult & { temporaryPassword?: string; delivery?: 'email' | 'sms' | 'temporary' }> = new Array(prepared.rows.length);
   const validRows: Array<Record<string, any>> = [];
   const validIndex: number[] = [];
+  // Per-row delivery plan, keyed by identity so createData (which sees a
+  // coerced COPY of the row, not the original object) can look it up. `auto`
+  // decides each row here; every other policy resolves the same plan for all.
+  const planByKey = new Map<string, RowPlan>();
   for (let i = 0; i < prepared.rows.length; i++) {
     const row = { ...prepared.rows[i] };
     const identity = resolveRowIdentity(row, { policy, phoneEnabled, emailInviteOk, smsInviteOk });
@@ -246,13 +322,14 @@ export async function runAdminImportUsers(
     delete row.phoneNumber; delete row.phone;
     if (identity.email) row.email = identity.email; else delete row.email;
     if (identity.phone) row.phone_number = identity.phone; else delete row.phone_number;
+    if (identity.plan) planByKey.set(identityKey(identity.email, identity.phone), identity.plan);
     validRows.push(row);
     validIndex.push(i);
   }
 
   // ── Identity write protocol (the part generic import must NOT do) ────
   const temporaryPasswords = new Map<string, string>(); // record id → temp password
-  const createdEmails = new Map<string, { email: string; placeholder: boolean; phone?: string }>();
+  const inviteTargets = new Map<string, { channel: 'email' | 'sms'; email: string; phone?: string }>();
   const authApi = await deps.getAuthApi();
   if (typeof authApi.createUser !== 'function') {
     return fail(501, 'not_supported', 'The better-auth admin plugin is not enabled (auth.plugins.admin)');
@@ -281,11 +358,23 @@ export async function runAdminImportUsers(
         : placeholder ? (phone as string) : email.split('@')[0];
       const role: string | undefined = typeof data.role === 'string' && data.role.length > 0 ? data.role : undefined;
 
-      // Only the `temporary` policy sets a password. `none`/`invite` create
+      // The per-row plan was resolved in pre-validation (`auto` decides per
+      // row; other policies resolve the same plan for all). Key by the row's
+      // REAL email (placeholder is only minted here) or its phone.
+      const plan: RowPlan =
+        planByKey.get(identityKey(placeholder ? undefined : email, phone))
+        // Defensive: valid rows always seed a plan. Mirror the request policy.
+        ?? (policy === 'none'
+          ? { kind: 'none' }
+          : policy === 'invite'
+            ? { kind: 'invite', channel: placeholder ? 'sms' : 'email' }
+            : { kind: 'temporary' });
+
+      // Only the temporary path sets a password. Invite / none create
       // credential-less accounts (better-auth: omitted password → no
       // credential record); the credential is minted later by the user via
       // set-initial-password / the reset flow, which creates it on demand.
-      const password = policy === 'temporary' ? generateTemporaryPassword() : undefined;
+      const password = plan.kind === 'temporary' ? generateTemporaryPassword() : undefined;
 
       const created = await authApi.createUser({
         body: {
@@ -299,7 +388,7 @@ export async function runAdminImportUsers(
       const id = created?.user?.id != null ? String(created.user.id) : undefined;
       if (!id) throw Object.assign(new Error('better-auth returned no user id'), { code: 'CREATE_FAILED' });
 
-      if (policy === 'temporary') {
+      if (plan.kind === 'temporary') {
         temporaryPasswords.set(id, password as string);
         try {
           await engine.update('sys_user', { id, must_change_password: true }, { context: SYSTEM_CTX } as any);
@@ -307,8 +396,8 @@ export async function runAdminImportUsers(
         } catch (e) {
           deps.logger?.warn(`[AuthPlugin] import-users: failed to stamp must_change_password for ${id}: ${(e as Error)?.message ?? e}`);
         }
-      } else if (policy === 'invite') {
-        createdEmails.set(id, { email, placeholder, ...(phone ? { phone } : {}) });
+      } else if (plan.kind === 'invite') {
+        inviteTargets.set(id, { channel: plan.channel, email, ...(phone ? { phone } : {}) });
       }
       // `none`: nothing else to do — identity only.
       return { id };
@@ -354,46 +443,51 @@ export async function runAdminImportUsers(
   }
 
   // ── Post-write phases (skipped on dryRun) ─────────────────────────────
+  const delivery = { emailInvite: 0, smsInvite: 0, temporary: 0 };
   if (!prepared.dryRun) {
-    // invite: send a set-your-password invitation per created account —
-    // a reset-password email for real-email rows, an invitation SMS for
-    // phone-only (placeholder-email) rows (#2780). The SMS carries no
-    // credential: the user requests their own OTP at first sign-in, which
-    // keeps the placeholder-email interception logic fully aligned (the
-    // placeholder address itself is never a delivery target on any channel).
-    if (policy === 'invite') {
-      for (const r of results) {
-        if (!r || r.action !== 'created' || !r.id) continue;
-        const target = createdEmails.get(r.id);
-        if (!target) continue;
-        if (target.placeholder) {
-          if (!target.phone) continue; // defensive — placeholder rows were validated to carry a phone
+    // One pass over every created row — each is in exactly one of the two
+    // maps (or neither, for `none` and updated rows). This single loop serves
+    // every policy AND `auto`, where invite and temporary rows interleave in
+    // one batch (#3236). Invited rows get a set-your-password message — a
+    // reset-password email for real-email rows, an invitation SMS for
+    // phone-only rows (#2780; the SMS carries no credential — the user
+    // requests their own OTP at first sign-in). Temporary rows get the
+    // generated password attached to the response body ONLY.
+    for (const r of results) {
+      if (!r || r.action !== 'created' || !r.id) continue;
+      const invite = inviteTargets.get(r.id);
+      if (invite) {
+        if (invite.channel === 'sms') {
+          r.delivery = 'sms';
+          delivery.smsInvite++;
+          if (!invite.phone) continue; // defensive — SMS rows carry a phone
           try {
-            await deps.sendInviteSms(target.phone);
+            await deps.sendInviteSms(invite.phone);
           } catch (e) {
             // The account exists; only the SMS failed. Not a rollback —
             // remediation is re-sending or an admin set-user-password.
             r.code = 'INVITE_SMS_FAILED';
             r.error = `User created, but the invitation SMS failed: ${((e as Error)?.message ?? String(e)).slice(0, 200)}`;
           }
-          continue;
+        } else {
+          r.delivery = 'email';
+          delivery.emailInvite++;
+          try {
+            await authApi.requestPasswordReset({ body: { email: invite.email } });
+          } catch (e) {
+            // The account exists; only the email failed. Not a rollback —
+            // remediation is re-sending or an admin set-user-password.
+            r.code = 'INVITE_EMAIL_FAILED';
+            r.error = `User created, but the invitation email failed: ${((e as Error)?.message ?? String(e)).slice(0, 200)}`;
+          }
         }
-        try {
-          await authApi.requestPasswordReset({ body: { email: target.email } });
-        } catch (e) {
-          // The account exists; only the email failed. Not a rollback —
-          // remediation is re-sending or an admin set-user-password.
-          r.code = 'INVITE_EMAIL_FAILED';
-          r.error = `User created, but the invitation email failed: ${((e as Error)?.message ?? String(e)).slice(0, 200)}`;
-        }
+        continue;
       }
-    }
-    // temporary: attach each password to its row — response body ONLY.
-    if (policy === 'temporary') {
-      for (const r of results) {
-        if (r?.action === 'created' && r.id && temporaryPasswords.has(r.id)) {
-          r.temporaryPassword = temporaryPasswords.get(r.id);
-        }
+      const tempPassword = temporaryPasswords.get(r.id);
+      if (tempPassword !== undefined) {
+        r.temporaryPassword = tempPassword;
+        r.delivery = 'temporary';
+        delivery.temporary++;
       }
     }
 
@@ -411,6 +505,8 @@ export async function runAdminImportUsers(
           total: prepared.rows.length,
           created: summary.created, updated: summary.updated,
           skipped: summary.skipped, errors: summary.errors + preErrors,
+          // How `auto` (and the fixed policies) split the batch across channels.
+          delivery,
         }),
       }, { context: SYSTEM_CTX } as any);
     } catch { /* audit table may not exist — never fail the import */ }
@@ -430,6 +526,9 @@ export async function runAdminImportUsers(
           errors,
           dryRun: prepared.dryRun,
           passwordPolicy: policy,
+          // Per-channel split of the created rows — the value of `auto`: how
+          // many rows were invited vs. fell back to a temporary password.
+          delivery,
           mode,
           matchBy,
         },
