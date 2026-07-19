@@ -741,3 +741,50 @@ describe('QuickJSScriptRunner — ctx.api.transaction', () => {
     expect(events).toEqual([{ op: 'insert', tx: null }]);
   }, 30000);
 });
+
+// ---------------------------------------------------------------------------
+// Idle pump backoff (#3233). While the body only *waits* on an in-flight host
+// promise, the pump loop must not spin setImmediate ~200k×/s doing nothing — it
+// ramps up to a small capped setTimeout. Correctness (progress + deadline) is
+// unchanged; these assert the spin is gone and settlements are still caught.
+// ---------------------------------------------------------------------------
+describe('QuickJSScriptRunner — idle pump backoff (#3233)', () => {
+  it('does not busy-spin while idle-waiting on a slow host call — pump count stays bounded', async () => {
+    // A host call that never settles; the deadline cuts it off. Under the old
+    // unconditional setImmediate yield this reported ~50k pump iterations for a
+    // ~250ms wait; the adaptive backoff keeps it to a small bounded number.
+    const api = { object: () => ({ update: () => new Promise<never>(() => {}) }) };
+    const err = await runner
+      .runScript(
+        { language: 'js', source: "return await ctx.api.object('x').update({});", capabilities: ['api.write'], timeoutMs: 300 },
+        ctx({ api }),
+        hookOpts,
+      )
+      .then(() => null, (e) => e as SandboxError);
+    expect(err).toBeInstanceOf(SandboxError);
+    const m = /after (\d+) pump iterations/.exec(err!.message);
+    expect(m, `timeout message should report the pump count: ${err?.message}`).toBeTruthy();
+    const pumps = Number(m![1]);
+    // ~300ms at an ≤8ms idle poll ≈ tens of pumps, not tens of thousands.
+    expect(pumps).toBeLessThan(1000);
+  }, 10000);
+
+  it('still promptly catches a host call that settles during the idle backoff', async () => {
+    // Settles at ~120ms — past the fast-pump window, squarely in the backoff
+    // regime — and must still resolve well within the timeout.
+    const api = {
+      object: () => ({
+        update: async () => { await new Promise<void>((r) => setTimeout(r, 120)); return { ok: true }; },
+      }),
+    };
+    const start = Date.now();
+    const r = await runner.runScript(
+      { language: 'js', source: "return await ctx.api.object('x').update({});", capabilities: ['api.write'], timeoutMs: 5000 },
+      ctx({ api }),
+      hookOpts,
+    );
+    expect(r.value).toEqual({ ok: true });
+    // Caught within a backoff slice of the ~120ms settlement, nowhere near the timeout.
+    expect(Date.now() - start).toBeLessThan(1000);
+  }, 10000);
+});
