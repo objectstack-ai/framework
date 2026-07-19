@@ -28,6 +28,7 @@ describe('ApprovalsServicePlugin schema + nav contribution (ADR-0029 K2.b)', () 
     expect(manifest.objects.map((o: any) => o.name).sort()).toEqual([
       'sys_approval_action',
       'sys_approval_approver',
+      'sys_approval_delegation',
       'sys_approval_request',
       'sys_approval_token',
     ]);
@@ -38,6 +39,7 @@ describe('ApprovalsServicePlugin schema + nav contribution (ADR-0029 K2.b)', () 
     expect(contribution).toMatchObject({ app: 'setup', group: 'group_approvals' });
     expect(contribution.items.map((i: any) => i.objectName).sort()).toEqual([
       'sys_approval_action',
+      'sys_approval_delegation',
       'sys_approval_request',
     ]);
     // Each entry is gated so the slot stays empty when the plugin is absent.

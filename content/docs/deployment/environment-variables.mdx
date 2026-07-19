@@ -29,7 +29,7 @@ read at startup unless noted otherwise. Boolean variables accept `true` / `false
 | `OS_BOOT_EMPTY` | flag | `0` | When `1`, boot the kernel with no metadata artifact (CLI internal). |
 | `OS_MIGRATE_AND_EXIT` | flag | `0` | When `1`, run pending migrations and exit (suitable for one-shot jobs). |
 | `OS_DISABLE_CONSOLE` | flag | `0` | When `1`, do not mount the Console portal under `/_console`. |
-| `OS_EAGER_SCHEMAS` | flag | `0` | When `1`, eagerly materialise all object schemas at boot (slower start, faster first request). |
+| `OS_EAGER_SCHEMAS` | flag | `0` | When `1`, evaluate all lazily-built Zod spec schemas eagerly at module load instead of on first use — an emergency rollback of the lazy-schema memory optimization (higher startup RSS). |
 | `OS_SKIP_SCHEMA_SYNC` | flag | `0` | When `1`, skip the implicit `db:sync` on boot. Use after running migrations manually. |
 
 > **Port conflicts behave differently by mode.** In **dev** (`os dev`, or
@@ -80,7 +80,7 @@ read at startup unless noted otherwise. Boolean variables accept `true` / `false
 | `GOOGLE_CLIENT_ID` | string | — | Deployment-level Google OAuth client id for the open-source Google login implementation. |
 | `GOOGLE_CLIENT_SECRET` | string | — | Deployment-level Google OAuth client secret for the open-source Google login implementation. |
 | `OS_MULTI_ORG_ENABLED` | boolean | `false` | When `true`, expose organization creation/switching UI. When `false`, run in single-tenant mode. |
-| `OS_OIDC_PROVIDER_ENABLED` | boolean | `false` | When `true`, expose this instance as an OIDC identity provider. |
+| `OS_OIDC_PROVIDER_ENABLED` | boolean | tracks MCP | When `true`, expose this instance as an OIDC identity provider. When unset it follows the MCP server surface (`OS_MCP_SERVER_ENABLED`, on by default) — the MCP human-client track is OAuth 2.1, so every MCP-enabled deployment is its own authorization server. |
 | `OS_COOKIE_DOMAIN` | string | — | Cookie domain for cross-subdomain session sharing (e.g. `.example.com`). |
 | `OS_TRUSTED_ORIGINS` | csv | — | Comma-separated list of origins permitted for auth callbacks / CSRF. |
 | `OS_TERMS_URL` | url | — | URL shown next to the "Terms of Service" link on the sign-up form. Empty string hides the link. |
@@ -124,7 +124,7 @@ Auth settings precedence:
 | `OS_EMAIL_PROVIDER` | enum | `log` | Transport. `log` \| `resend` \| `postmark`. `log` (default) prints to stdout without sending. Real SMTP delivery requires the separate `@objectstack/plugin-mail-smtp` package. |
 | `OS_EMAIL_API_KEY` | string | — | API key for `resend` / `postmark`. |
 | `OS_EMAIL_FROM` | email | — | Default `From:` address. |
-| `OS_EMAIL_RETRIES` | number | `3` | Retry count for transient send failures. |
+| `OS_EMAIL_RETRIES` | number | `0` | Retry count for transient send failures (`0` = no retry). |
 
 > No SMTP transport ships in the open-core runtime — `OS_EMAIL_PROVIDER`
 > only materialises `log`, `resend`, or `postmark`. Real SMTP delivery
@@ -221,17 +221,31 @@ running app and gets a generated tool surface over your objects and actions
 same RBAC / RLS as the Console. No custom tooling, no separate API. See
 [Actions as Tools](/docs/ai/actions-as-tools) for the tool set.
 
+The **HTTP surface** and the long-lived **stdio transport** are separate switches
+(they used to share one, which let `=true` silently attach an unscoped transport —
+see the note below):
+
 ```bash
-os start                                # MCP is served at /api/v1/mcp by default
-OS_MCP_SERVER_ENABLED=false os start    # opt out of the MCP surface
-OS_MCP_SERVER_ENABLED=true os start     # additionally auto-start the stdio transport
+os start                                                  # HTTP MCP served at /api/v1/mcp by default
+OS_MCP_SERVER_ENABLED=false os start                      # opt out of the HTTP MCP surface
+OS_MCP_STDIO_ENABLED=true OS_MCP_STDIO_API_KEY=osk_... os start   # start the local stdio transport as that key's identity
 ```
 
 | Variable | Type | Default | Description |
 |:---|:---|:---|:---|
-| `OS_MCP_SERVER_ENABLED` | boolean | `true` | The MCP HTTP surface (`/api/v1/mcp`) is a core capability and defaults **on**. Set `false` to disable it. An explicit `true` additionally auto-starts the long-lived stdio transport at boot. |
+| `OS_MCP_SERVER_ENABLED` | boolean | `true` | The MCP **HTTP** surface (`/api/v1/mcp`) is a core capability and defaults **on**. Set `false` to disable it (endpoint 404s, the Connect-an-Agent page disappears). |
+| `OS_MCP_STDIO_ENABLED` | boolean | `false` | Auto-start the long-lived **stdio** transport at boot. Opt-in and **stricter** than the HTTP surface. **Requires `OS_MCP_STDIO_API_KEY`** — stdio runs as that key's identity with RLS/FLS/tenant applied; if the key is missing or invalid, boot **fails closed** (stdio refuses to start). See ADR-0101. |
+| `OS_MCP_STDIO_API_KEY` | string | — | The `osk_...` API key the **stdio** transport runs as. Resolved through the same verify chain as the HTTP/REST surfaces, so reads are scoped to that identity's permissions. Mint one from **Setup → Connect an Agent** (or `POST /api/v1/keys`). For full authority, mint a key on a platform-admin or dedicated **service** identity — there is deliberately no `system`/unscoped bypass. |
 | `OS_MCP_SERVER_NAME` | string | `objectstack` | Server name advertised to MCP clients. |
 | `OS_MCP_SERVER_TRANSPORT` | enum | `stdio` | `stdio` \| `http`. Use `http` (Streamable HTTP) for a remote client; `stdio` for a local one. |
+
+<Callout type="warn">
+**Deprecated (one release):** `OS_MCP_SERVER_ENABLED=true` also used to auto-start
+the stdio transport — overloading the HTTP switch, so setting it to "make sure MCP
+is on" silently attached the unscoped stdio bridge. That trigger still works but now
+logs a deprecation warning; use `OS_MCP_STDIO_ENABLED=true` instead.
+`OS_MCP_SERVER_ENABLED=false` only ever gated HTTP and is unaffected.
+</Callout>
 
 ---
 
@@ -317,6 +331,8 @@ the hosted ObjectOS Cloud control plane.
 | `OS_ENV_CACHE_TTL_MS` | number | `300000` | Env-record cache TTL in ms. |
 | `OS_ARTIFACT_CACHE_TTL_MS` | number | `300000` | Artifact-record cache TTL in ms. |
 | `OS_ARTIFACT_FETCH_TIMEOUT_MS` | number | `60000` | Timeout for remote artifact fetches. Only a positive value is honored — an unset, non-numeric, or `0` value falls back to the 60s default (pass `fetchTimeoutMs: 0` in `artifactSource` config to actually disable the timeout). |
+| `OS_SANDBOX_HOOK_TIMEOUT_MS` | number | `250` | Default wall-clock budget for a sandboxed **hook** body (QuickJS). Each invocation compiles a fresh WASM module and a nested hook compiles another inside the parent's budget, so a loaded/slow host (e.g. an oversubscribed CI runner) may need a larger floor. Only a positive integer is honored; unset / non-numeric / non-positive keeps the 250ms default. A hook body's own declared `timeoutMs` still wins over this. |
+| `OS_SANDBOX_ACTION_TIMEOUT_MS` | number | `5000` | Default wall-clock budget for a sandboxed **action** body (QuickJS). Same resolution rules as the hook variant above (positive integer only; an action body's own `timeoutMs` still wins). |
 | `OS_INLINE_SEED_BUDGET_MS` | number | `8000` | Time budget for synchronous seed execution at boot before deferring to a worker. |
 | `OS_TENANT_AUDIT` | flag | `1` | Set to `0` to silence the tenant-isolation audit warnings emitted by the SQL driver. |
 

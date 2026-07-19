@@ -134,10 +134,11 @@ export function resolveAllowDegradedTenancy(): boolean {
  * re-reading the env, so the served route, the advertised route, and the
  * authorization track can never disagree.
  *
- * Note the asymmetry with the MCP plugin's *stdio* auto-start, which stays
- * opt-in (explicit `true` / `autoStart`): attaching a long-lived stdio
- * transport to every process is a side effect no default should impose,
- * while the HTTP surface is served statelessly per-request.
+ * Note the asymmetry with the MCP plugin's *stdio* auto-start
+ * ({@link resolveMcpStdioAutoStart}), which stays opt-in and is gated by a
+ * SEPARATE switch: attaching a long-lived stdio transport to every process is
+ * a side effect no default should impose, while the HTTP surface is served
+ * statelessly per-request.
  */
 export function isMcpServerEnabled(): boolean {
   const raw = readEnvWithDeprecation('OS_MCP_SERVER_ENABLED', 'MCP_SERVER_ENABLED', {
@@ -145,6 +146,46 @@ export function isMcpServerEnabled(): boolean {
   });
   if (raw == null) return true;
   return !['0', 'false', 'off', 'no'].includes(raw.trim().toLowerCase());
+}
+
+/**
+ * SINGLE decision point for "should the MCP plugin auto-start a long-lived
+ * (stdio) transport?" — distinct from {@link isMcpServerEnabled}, which governs
+ * the stateless HTTP surface.
+ *
+ * The stdio transport is a different, stricter posture: the plugin bridges the
+ * RAW metadata service + data engine onto the long-lived server with NO
+ * per-request principal (unscoped — see the `mcp-stdio-authority` conformance
+ * row), so it is safe only as a single-operator LOCAL tool and MUST stay
+ * opt-in. It defaults OFF.
+ *
+ * Canonical switch: `OS_MCP_STDIO_ENABLED` (truthy). The plugin also starts it
+ * when constructed with `{ autoStart: true }` (that path is checked by the
+ * caller, not here).
+ *
+ * DEPRECATED alias: `OS_MCP_SERVER_ENABLED=true` historically ALSO started
+ * stdio — overloading the very var that gates the HTTP surface, so an operator
+ * setting it to "make sure MCP is on" silently attached an unscoped transport.
+ * That trigger still works (with a one-time warning from the caller) for one
+ * release; prefer the dedicated var. Note `OS_MCP_SERVER_ENABLED=false` only
+ * ever gated the HTTP surface and never started stdio, so it is unaffected.
+ *
+ * @returns `enabled` — whether stdio auto-start is requested by the env; and
+ *   `viaDeprecatedAlias` — whether it came through the legacy
+ *   `OS_MCP_SERVER_ENABLED=true` trigger (so the caller can warn once).
+ */
+export function resolveMcpStdioAutoStart(): { enabled: boolean; viaDeprecatedAlias: boolean } {
+  const stdio = readEnvWithDeprecation('OS_MCP_STDIO_ENABLED', [], { silent: true });
+  if (stdio != null && ['1', 'true', 'on', 'yes'].includes(stdio.trim().toLowerCase())) {
+    return { enabled: true, viaDeprecatedAlias: false };
+  }
+  // Legacy trigger: only the literal `true` ever started stdio (preserved
+  // exactly). `OS_MCP_SERVER_ENABLED=false`/other values never did.
+  const legacy = readEnvWithDeprecation('OS_MCP_SERVER_ENABLED', 'MCP_SERVER_ENABLED', { silent: true });
+  if (legacy != null && legacy.trim().toLowerCase() === 'true') {
+    return { enabled: true, viaDeprecatedAlias: true };
+  }
+  return { enabled: false, viaDeprecatedAlias: false };
 }
 
 /**
@@ -196,6 +237,39 @@ export function resolveSearchPinyinEnabled(opts?: { locales?: readonly string[] 
     return ['1', 'true', 'on', 'yes'].includes(String(raw).trim().toLowerCase());
   }
   return (opts?.locales ?? []).some((l) => /^zh([-_]|$)/i.test(String(l ?? '').trim()));
+}
+
+/**
+ * SINGLE decision point for the sandbox script-runner's DEFAULT per-invocation
+ * timeout (ms), for a given origin kind, from the environment (framework#3259).
+ *
+ * The QuickJS sandbox enforces a wall-clock deadline on every hook/action
+ * invocation. The built-in defaults (250ms hooks / 5000ms actions) suit a warm,
+ * idle host — but every invocation compiles a fresh WASM module, and a nested
+ * hook compiles ANOTHER one inside the parent's budget, so on a heavily loaded
+ * or slow host (an oversubscribed CI runner, constrained production hardware)
+ * that fixed VM-creation cost alone can trip the hook default even while the VM
+ * is still making progress. That surfaced as an intermittent CI flake ("hook
+ * '…' exceeded timeout of 250ms"). This lets an operator raise the floor once,
+ * deployment-wide, instead of re-tuning every call site.
+ *
+ * Canonical vars (OS_{DOMAIN}_{NAME}, DOMAIN=SANDBOX):
+ *   - hook   → `OS_SANDBOX_HOOK_TIMEOUT_MS`
+ *   - action → `OS_SANDBOX_ACTION_TIMEOUT_MS`
+ *
+ * Only a positive integer is honored; unset / empty / non-numeric / non-positive
+ * falls back to `fallback`, so behaviour is byte-for-byte unchanged when the var
+ * is absent. This is a FALLBACK default ONLY: an explicit `hookTimeoutMs` /
+ * `actionTimeoutMs` passed to the runner constructor still wins over it, and a
+ * body's own declared `timeoutMs` still wins over the resolved default per the
+ * runner's timeout-resolution rule (the smaller of the explicit values).
+ */
+export function resolveSandboxTimeoutMs(kind: 'hook' | 'action', fallback: number): number {
+  const name = kind === 'hook' ? 'OS_SANDBOX_HOOK_TIMEOUT_MS' : 'OS_SANDBOX_ACTION_TIMEOUT_MS';
+  const raw = readEnvWithDeprecation(name, [], { silent: true });
+  if (raw == null || String(raw).trim() === '') return fallback;
+  const n = Number.parseInt(String(raw).trim(), 10);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
 /**

@@ -27,6 +27,13 @@ import { isIncoherentAggregate } from '@objectstack/spec/data';
  *   (`values`). Post-cutover (ADR-0021) the result rows are keyed by
  *   measure NAME (e.g. `sum_amount`), not the base column (`amount`) — a
  *   stale base-column reference renders the axis but an empty series.
+ * - `widget-legacy-analytics-unrenderable` (#1878/#1894) — a widget uses the
+ *   removed pre-ADR-0021 inline-analytics shape (`categoryField`/`rowField`/…)
+ *   as its ONLY data wiring: no `dataset`, no `object`, no inline `data`. The
+ *   renderer reads only the dataset path, so the widget has no data at all and
+ *   renders nothing. Errored (not warned) so this class of authoring mistake —
+ *   very often an AI emitting a removed shape — fails the build instead of
+ *   shipping a blank widget past human review.
  *
  * Advisory rules — severity `warning`, build stays green:
  *
@@ -44,6 +51,12 @@ import { isIncoherentAggregate } from '@objectstack/spec/data';
  *   `count_distinct`) of a `percent`/rate field, whose total routinely
  *   exceeds 100%. Rates must AVG. Checked once per dataset (independent of
  *   any widget) when the bound object's field types are known.
+ * - `widget-legacy-analytics-shape` (#1878/#1894) — a widget sets a
+ *   pre-ADR-0021 inline key (`categoryField`/`valueField`/`xAxisField`/
+ *   `yAxisFields`/`aggregate`/`aggregation`/`rowField`/`columnField`) that the
+ *   single-form cutover removed. The dashboard renderer routes dataset-bound
+ *   widgets through `DatasetWidget` and never reads these, so they are a
+ *   silent no-op. Steers the author onto `dataset`+`dimensions`+`values`.
  *
  * Warnings can be deliberately suppressed per widget via
  * `suppressWarnings: ['<rule-id>']`; errors cannot — they describe a
@@ -57,6 +70,22 @@ export const CHART_FIELD_UNKNOWN = 'chart-field-unknown';
 export const CHART_CONFIG_MISSING = 'chart-config-missing';
 export const TABLE_COUNT_ONLY = 'table-count-only';
 export const MEASURE_AGGREGATE_INCOHERENT = 'measure-aggregate-incoherent';
+export const WIDGET_LEGACY_ANALYTICS_SHAPE = 'widget-legacy-analytics-shape';
+export const WIDGET_LEGACY_ANALYTICS_UNRENDERABLE = 'widget-legacy-analytics-unrenderable';
+
+/**
+ * Pre-ADR-0021 inline-analytics keys. The single-form cutover replaced them
+ * with the semantic-layer shape (`dataset` + `dimensions` + `values`); the
+ * dashboard renderer routes dataset-bound widgets through `DatasetWidget` and
+ * never reads these, so authoring one today is a silent no-op. Warned (not
+ * errored) because they still parse and a legacy object-bound widget keeps
+ * rendering — the author is just being steered to the governed shape.
+ * (liveness audit #1878 / #1894).
+ */
+const LEGACY_ANALYTICS_KEYS = [
+  'categoryField', 'valueField', 'xAxisField', 'yAxisFields',
+  'aggregate', 'aggregation', 'rowField', 'columnField',
+] as const;
 
 export type WidgetBindingSeverity = 'error' | 'warning';
 
@@ -228,6 +257,55 @@ export function validateWidgetBindings(stack: AnyRec): WidgetBindingFinding[] {
         if (f.severity === 'warning' && suppressed(f.rule)) return;
         findings.push({ ...f, where, path });
       };
+
+      // ── (a0) legacy pre-ADR-0021 analytics shape ──
+      // Steer authors (very often an AI) off the removed inline shape and onto
+      // the semantic-layer `dataset`+`dimensions`+`values`. The renderer reads
+      // ONLY the dataset path, so these keys are dead. Two severities:
+      //   • ERROR   — the legacy keys are the widget's only (dead) data wiring
+      //               (no dataset / object / inline data): it renders nothing.
+      //   • warning — a data source is present, so the widget still renders and
+      //               the legacy keys are merely ignored noise (suppressible).
+      const legacyUsed = LEGACY_ANALYTICS_KEYS.filter((k) => w[k] !== undefined);
+      if (legacyUsed.length > 0) {
+        const optionsData =
+          typeof w.options === 'object' && w.options !== null &&
+          (w.options as AnyRec).data !== undefined;
+        const hasDataSource =
+          w.dataset !== undefined || w.object !== undefined ||
+          w.data !== undefined || optionsData;
+        const keyList = legacyUsed.map((k) => `\`${k}\``).join(', ');
+        const plural = legacyUsed.length > 1;
+        const datasetHint =
+          `Bind a semantic dataset and select fields BY NAME: ` +
+          `\`dataset: '<name>', dimensions: [...], values: [...]\`. ` +
+          `Dataset-bound widgets render through DatasetWidget (pivot rows/cols come from ` +
+          `\`dimensions\`, cell values from \`values\`).`;
+        if (!hasDataSource) {
+          push({
+            severity: 'error',
+            rule: WIDGET_LEGACY_ANALYTICS_UNRENDERABLE,
+            message:
+              `sets legacy analytics key${plural ? 's' : ''} ${keyList} ` +
+              `(removed by the ADR-0021 single-form cutover) and binds no data source ` +
+              `(no \`dataset\`, \`object\`, or inline \`data\`) — it renders nothing.`,
+            hint:
+              `${datasetHint} The renderer ignores the legacy keys, so without a data ` +
+              `source this widget has no data at all.`,
+          });
+        } else {
+          push({
+            severity: 'warning',
+            rule: WIDGET_LEGACY_ANALYTICS_SHAPE,
+            message:
+              `sets legacy analytics key${plural ? 's' : ''} ${keyList} that the ADR-0021 ` +
+              `single-form cutover removed — the dashboard renderer ignores ${plural ? 'them' : 'it'}.`,
+            hint:
+              `${datasetHint} These inline keys are a no-op. ` +
+              `Suppress with suppressWarnings: ['${WIDGET_LEGACY_ANALYTICS_SHAPE}'] if intentional.`,
+          });
+        }
+      }
 
       // ── (a) dataset reference resolves ──
       const dsName = typeof w.dataset === 'string' ? w.dataset : undefined;

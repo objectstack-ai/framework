@@ -207,6 +207,77 @@ describe('SqliteWasmDriver tenant scope (organization_id)', () => {
     });
   });
 
+  describe('tenancy.enabled:false opts out of driver org-scoping', () => {
+    // Regression: a platform-global object (e.g. sys_license, ADR-0066) keeps an
+    // optional, often-NULL `organization_id` FK but declares `tenancy.enabled:
+    // false`. The driver previously detected the `organization_id` column via the
+    // implicit fallback and org-scoped it anyway, so an authenticated caller's
+    // active-org `tenantId` injected `WHERE organization_id = <org>` and the
+    // NULL-org rows vanished — the platform admin read zero rows while an
+    // unscoped read still saw them. tenancy.enabled:false must win. (#3249)
+    const platformGlobal = [
+      {
+        name: 'sys_license',
+        tenancy: { enabled: false },
+        fields: {
+          customer: { type: 'string' },
+          organization_id: { type: 'string' }, // optional owner FK, may be NULL
+          status: { type: 'string' },
+        },
+      },
+    ];
+
+    beforeEach(async () => {
+      await driver.disconnect();
+      driver = new SqliteWasmDriver({ filename: ':memory:' });
+      await driver.initObjects(platformGlobal);
+      // A NULL-org platform row + an org-mapped one.
+      await driver.create('sys_license', { id: 'lic_global', customer: 'ACME', organization_id: null, status: 'active' });
+      await driver.create('sys_license', { id: 'lic_org_b', customer: 'Beta', organization_id: 'org_b', status: 'active' });
+    });
+
+    it('does NOT register a tenant field for a tenancy-disabled object', () => {
+      expect((driver as any).tenantFieldByTable['sys_license']).toBeNull();
+    });
+
+    it('read is unscoped even when the caller passes tenantId (admin with active org sees all)', async () => {
+      const adminRead = await driver.find('sys_license', { object: 'sys_license' }, { tenantId: 'org_admin_active' });
+      expect(adminRead.map(r => r.id).sort()).toEqual(['lic_global', 'lic_org_b']);
+    });
+
+    it('matches the unscoped (anonymous) read — no auth-dependent divergence', async () => {
+      const scoped = await driver.find('sys_license', { object: 'sys_license' }, { tenantId: 'org_admin_active' });
+      const unscoped = await driver.find('sys_license', { object: 'sys_license' });
+      expect(scoped.map(r => r.id).sort()).toEqual(unscoped.map(r => r.id).sort());
+    });
+
+    it('does NOT auto-inject organization_id on insert when tenancy is disabled', async () => {
+      const created = await driver.create('sys_license', { id: 'lic_new', customer: 'Gamma', status: 'active' }, { tenantId: 'org_admin_active' });
+      expect(created.organization_id ?? null).toBeNull();
+    });
+
+    // #3249: the opt-out must be STICKY across partial re-registrations
+    // (lifecycle archive `syncSchema`, schema-drift re-sync) that omit the
+    // `tenancy` block — the implicit organization_id heuristic must not
+    // re-scope a platform-global table.
+    it('a later tenancy-less re-registration (syncSchema / drift re-sync) preserves the opt-out (#3249)', async () => {
+      await driver.syncSchema('sys_license', {
+        name: 'sys_license',
+        fields: platformGlobal[0].fields,
+      });
+      expect((driver as any).tenantFieldByTable['sys_license']).toBeNull();
+      const adminRead = await driver.find('sys_license', { object: 'sys_license' }, { tenantId: 'org_admin_active' });
+      expect(adminRead.map(r => r.id).sort()).toEqual(['lic_global', 'lic_org_b']);
+    });
+
+    it('a re-registration WITH an explicit tenancy declaration is authoritative and re-enables scoping', async () => {
+      await driver.initObjects([
+        { ...platformGlobal[0], tenancy: { enabled: true, tenantField: 'organization_id' } },
+      ]);
+      expect((driver as any).tenantFieldByTable['sys_license']).toBe('organization_id');
+    });
+  });
+
   describe('audit warn on missing tenantId', () => {
     it('logs once per object:op when writing without tenantId', async () => {
       await driver.disconnect();

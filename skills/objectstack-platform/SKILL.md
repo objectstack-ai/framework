@@ -154,9 +154,10 @@ It calls `defineStack()` to declare all metadata.
 
 ### Minimal Example
 
+<!-- os:check -->
 ```typescript
-import { defineStack, Data } from '@objectstack/spec';
-const { Field } = Data;
+import { defineStack } from '@objectstack/spec';
+import { Field } from '@objectstack/spec/data';
 
 export default defineStack({
   manifest: {
@@ -591,9 +592,9 @@ A minimal but complete project from scratch:
 ```
 
 **`src/objects/task.object.ts`**:
+<!-- os:check -->
 ```typescript
-import { Data } from '@objectstack/spec';
-const { Field } = Data;
+import { Field } from '@objectstack/spec/data';
 
 export default {
   name: 'task',

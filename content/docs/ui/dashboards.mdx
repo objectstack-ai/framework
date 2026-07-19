@@ -11,7 +11,7 @@ A **Dashboard** defines an analytics page with chart widgets, key metrics, and d
 
 Every widget binds to a **dataset** (the semantic layer, ADR-0021) and selects
 the dataset's `dimensions` and `values` by name. The dataset owns the base
-object, joins, and certified measures, so the same numbers stay consistent
+object, joins, and measures, so the same numbers stay consistent
 across every dashboard and report.
 
 ```typescript
@@ -111,7 +111,7 @@ selects `dimensions` (X / group / split) and `values` (the measures to plot):
 
 Every widget binds to a **dataset** — the single semantic layer (ADR-0021).
 A dataset defines the base object, allowed relationship joins, reusable
-dimensions, certified measures, and intrinsic filters once; dashboards and
+dimensions, measures, and intrinsic filters once; dashboards and
 reports then reference the same names so "revenue", "pipeline", or "win rate"
 stay consistent across surfaces.
 
@@ -132,7 +132,7 @@ export const salesDataset = defineDataset({
     { name: 'close_month', field: 'close_date', type: 'date', dateGranularity: 'month' },
   ],
   measures: [
-    { name: 'revenue', field: 'amount', aggregate: 'sum', certified: true },
+    { name: 'revenue', field: 'amount', aggregate: 'sum' },
     { name: 'deal_count', aggregate: 'count' },
   ],
 });

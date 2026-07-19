@@ -374,6 +374,7 @@ Reserved for L2 hook bodies / mapping transforms. Use TypeScript source.
 
 ## Cron quick reference
 
+<!-- os:check -->
 ```ts
 import { cron } from '@objectstack/spec';
 
@@ -389,6 +390,7 @@ explicit.
 
 ## Template quick reference
 
+<!-- os:check -->
 ```ts
 import { tmpl } from '@objectstack/spec';
 

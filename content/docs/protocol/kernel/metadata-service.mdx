@@ -64,7 +64,7 @@ Loaders adapt different storage backends to a common interface.
 | **FilesystemLoader** | `filesystem` | Reads/Writes `.json`, `.yaml`, `.ts` files from disk. Primary for development. |
 | **MemoryLoader** | `memory` | Hydrates compiled artifact items into the runtime metadata registry. |
 | **DatabaseLoader** | `database` | Stores metadata revisions in control-plane services that explicitly configure it. Not auto-enabled by ObjectStack. |
-| **RemoteLoader** | `http` | Fetches metadata from a remote API or git repository. |
+| **RemoteLoader** | `http` | Fetches metadata from a remote HTTP API. |
 
 ### 3. Granular Capabilities
 
@@ -234,6 +234,6 @@ The canonical `MetadataManagerConfigSchema` and `MetadataFallbackStrategySchema`
 
 The Metadata Service is designed to power the CLI.
 
-- **`objectstack compile`**: Validates TypeScript metadata and emits `dist/objectstack.json`.
-- **`objectstack publish`**: Uploads compiled JSON to the control plane, which creates a metadata revision and artifact.
-- **`objectstack dev`**: Boots ObjectStack from local files or the compiled artifact without a control-plane connection.
+- **`os compile`**: Validates TypeScript metadata and emits `dist/objectstack.json`.
+- **`os package publish`**: Uploads the compiled `dist/objectstack.json` artifact to the control plane as a versioned package.
+- **`os dev`**: Boots ObjectStack from local files or the compiled artifact without a control-plane connection.

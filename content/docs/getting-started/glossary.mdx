@@ -44,7 +44,7 @@ Infrastructure services including Event Bus, Job Scheduling, Translation (i18n),
 Plugin system and runtime management. Includes Plugin lifecycle, Manifest definition, Logger configuration, and Runtime Context. The core of the control layer.
 
 ### AI Protocol
-Artificial intelligence capabilities including AI Agents, RAG pipelines, Natural Language Query (NLQ), Predictive models, Cost tracking, and Orchestration.
+Platform AI primitives: AI Agents, Skills, Tools, Conversations, a multi-provider Model Registry, Embedding and vector-store references, Knowledge sources, and MCP server bindings, plus Usage (token accounting and per-call cost). Scope is deliberately narrow — higher-level concerns such as NLQ services, RAG pipeline orchestration, and predictive pipelines were removed in v1 and are meant to be built on top of these primitives.
 
 ### API Protocol
 External communication layer including REST contracts, API discovery, Realtime subscriptions (WebSocket/SSE), and Routing configuration.
@@ -157,4 +157,4 @@ The default sharing level (Security Protocol) for records in an object. Determin
 A hierarchical access control model (Security Protocol) that grants data access based on geographic or organizational boundaries.
 
 ### TCK (Technology Compatibility Kit)
-A suite of tests that validates if a Driver or Renderer complies with the official ObjectStack Protocol. If a new driver passes the TCK, it is certified as compatible.
+A **planned** suite of tests that would validate whether a Driver or Renderer complies with the official ObjectStack Protocol, certifying a passing driver as compatible. _Not yet implemented — there is no TCK program or certification mechanism in the codebase today._

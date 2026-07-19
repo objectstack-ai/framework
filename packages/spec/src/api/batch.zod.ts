@@ -243,3 +243,57 @@ export const BatchConfigSchema = lazySchema(() => z.object({
 }).passthrough()); // Allow additional properties
 
 export type BatchConfig = z.infer<typeof BatchConfigSchema>;
+
+// ==========================================
+// Cross-Object Transactional Batch (issue #1604)
+// ==========================================
+
+/**
+ * A single operation in a cross-object transactional batch. Targets one object
+ * with a create/update/delete action. A value inside `data` may carry an
+ * intra-batch reference `{ $ref: <earlier op index> }` that the server resolves
+ * to that op's created id — so a child row can point at a parent created earlier
+ * in the SAME transaction (master-detail). See ADR-0034 / #1604.
+ */
+export const CrossObjectBatchOperationSchema = lazySchema(() => z.object({
+  object: z.string().min(1).describe('Target object (table) name'),
+  action: z.enum(['create', 'update', 'delete']).optional().default('create').describe('Operation to perform (default: create)'),
+  id: z.string().optional().describe('Target record id — required for update and delete'),
+  data: RecordDataSchema.optional().describe('Record payload for create/update; a value may be { $ref: <opIndex> } to reference an earlier op\'s created id'),
+}));
+
+export type CrossObjectBatchOperation = z.input<typeof CrossObjectBatchOperationSchema>;
+
+/**
+ * Request payload for the cross-object transactional batch
+ * (`POST {basePath}/batch`). Every operation runs in ONE engine transaction —
+ * commit all or roll back all. `atomic` is accepted for contract symmetry but
+ * MUST be true (the endpoint is all-or-nothing by construction); a non-atomic
+ * per-object batch is served by `POST /data/:object/batch` instead.
+ *
+ * @example
+ * // POST /api/v1/batch — parent + child in one transaction (master-detail)
+ * {
+ *   "operations": [
+ *     { "object": "project", "action": "create", "data": { "name": "Apollo" } },
+ *     { "object": "task", "action": "create", "data": { "title": "Kickoff", "project": { "$ref": 0 } } }
+ *   ]
+ * }
+ */
+export const CrossObjectBatchRequestSchema = lazySchema(() => z.object({
+  operations: z.array(CrossObjectBatchOperationSchema).max(1000).describe('Ordered operations executed in one transaction'),
+  atomic: z.boolean().optional().default(true).describe('Always true — the cross-object batch is all-or-nothing'),
+}));
+
+export type CrossObjectBatchRequest = z.input<typeof CrossObjectBatchRequestSchema>;
+
+/**
+ * Response for the cross-object transactional batch — one result per operation,
+ * index-aligned with the request `operations` (create/update echo the record,
+ * delete echoes the driver's delete result).
+ */
+export const CrossObjectBatchResponseSchema = lazySchema(() => z.object({
+  results: z.array(z.unknown()).describe('Per-operation result, index-aligned with the request operations'),
+}));
+
+export type CrossObjectBatchResponse = z.infer<typeof CrossObjectBatchResponseSchema>;

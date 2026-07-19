@@ -27,9 +27,8 @@ These properties apply to **all** field types and are validated by the base `Fie
 | `unique` | `boolean` | `false` | Enforces database-level uniqueness constraint |
 | `multiple` | `boolean` | `false` | Stores value as array (applicable for select, lookup, file, image) |
 | `hidden` | `boolean` | `false` | Excluded from default UI rendering |
-| `readonly` | `boolean` | `false` | Blocks user edits in UI forms; server-enforced on update — a non-system write to the field is silently dropped from the payload (insert exempt) |
+| `readonly` | `boolean` | `false` | Blocks user edits in UI forms; server-enforced on **both create and update** — a non-system write to the field is silently dropped from the payload (system-context writes such as import/seed/migration are exempt) |
 | `sortable` | `boolean` | `true` | Whether field appears in list view sort options |
-| `index` | `boolean` | `false` | Creates standard database index |
 | `externalId` | `boolean` | `false` | Marks field as external ID for upsert operations |
 | `trackHistory` | `boolean` | — | Render this field's value changes as entries on the record activity timeline |
 | `visibleWhen` | `string \| Expression` | — | CEL predicate; field is shown only when `TRUE` |
@@ -91,7 +90,7 @@ These properties apply to **all** field types and are validated by the base `Fie
 | `maxLength` | `number` | — | Maximum password length |
 | `minLength` | `number` | — | Minimum password length |
 
-**Default constraints:** Validated the same as `text` (`maxLength`/`minLength` only) — the engine does not automatically hash or mask a `password`-typed field's value on read; even the platform's own credential column (`sys_account.password`) is declared as `Field.text()`, with hashing and verification owned entirely by the auth subsystem (better-auth), not driven by this field type. For a reversible encrypted-at-rest value on your own objects, use the `secret` type instead.
+**Default constraints:** Validated the same as `text` (`maxLength`/`minLength` only). On a generic (non-`better-auth`) object a `password`-typed value is stored **plaintext at rest** but **masked to `••••••••` on read** through the normal query path (ADR-0100) — the engine does not hash or encrypt it. One-way hashing and verification of real login credentials are owned entirely by the auth subsystem (better-auth); its own credential column (`sys_account.password`) is a hashed `Field.text()` column that is exempt from this masking. For a reversible, encrypted-at-rest value on your own objects, use the `secret` type instead.
 
 ---
 
@@ -244,7 +243,7 @@ These properties apply to **all** field types and are validated by the base `Fie
 | Property | Type | Default | Validation Behavior |
 |:---|:---|:---|:---|
 | `reference` | `string` | — | **Required.** Target object name |
-| `referenceFilters` | `string[]` | — | **Legacy** — schema-accepted but not read by the record-picker; use `lookupFilters` + `dependsOn` |
+| `referenceFilters` | `string[]` | — | **Removed** (#2377, ADR-0049) — no longer part of the `Field` schema; use `lookupFilters` + `dependsOn` instead |
 | `deleteBehavior` | `enum` | `set_null` | `set_null`, `cascade`, or `restrict` |
 | `multiple` | `boolean` | `false` | Allow multiple references |
 
@@ -275,32 +274,25 @@ These properties apply to **all** field types and are validated by the base `Fie
 
 | Property | Type | Default | Validation Behavior |
 |:---|:---|:---|:---|
-| `fileAttachmentConfig` | `object` | — | File size, type, and image dimension rules |
 | `multiple` | `boolean` | `false` | Allow multiple image uploads |
 
-**Default constraints:** Accepts common image MIME types. Optional dimension and thumbnail validation via `fileAttachmentConfig`.
+**Default constraints:** Accepts common image MIME types. The schema has no field-level attachment-config property — `fileAttachmentConfig` was removed in the 16.x line (#2377).
 
 ### `file`
 
 | Property | Type | Default | Validation Behavior |
 |:---|:---|:---|:---|
-| `fileAttachmentConfig` | `object` | — | Full file upload validation config |
 | `multiple` | `boolean` | `false` | Allow multiple file uploads |
 
-**Default constraints:** Accepts any file type unless restricted. Supports virus scanning, size limits, and type restrictions.
+**Default constraints:** Accepts any file type. The `Field` schema exposes no field-level upload-validation config — `fileAttachmentConfig` (and its `maxSize` / `allowedTypes` / virus-scan sub-keys) was removed in the 16.x line (#2377). File-storage constraints such as virus scanning are configured on the file-storage integration, not on the field.
 
 ```typescript
-// File field with validation
+// File field
 {
   name: 'contract_pdf',
   label: 'Contract',
   type: 'file',
-  fileAttachmentConfig: {
-    maxSize: 10485760,           // 10MB
-    allowedTypes: ['.pdf', '.docx'],
-    virusScan: true,
-    virusScanProvider: 'clamav'
-  }
+  multiple: false
 }
 ```
 
@@ -310,19 +302,11 @@ These properties apply to **all** field types and are validated by the base `Fie
 
 ### `video`
 
-| Property | Type | Default | Validation Behavior |
-|:---|:---|:---|:---|
-| `fileAttachmentConfig` | `object` | — | File size and type restrictions |
-
-**Default constraints:** Accepts common video MIME types. Size limits recommended via `fileAttachmentConfig`.
+**Default constraints:** Accepts common video MIME types. The field type has no per-field size/type config property in the schema.
 
 ### `audio`
 
-| Property | Type | Default | Validation Behavior |
-|:---|:---|:---|:---|
-| `fileAttachmentConfig` | `object` | — | File size and type restrictions |
-
-**Default constraints:** Accepts common audio MIME types. Size limits recommended via `fileAttachmentConfig`.
+**Default constraints:** Accepts common audio MIME types. The field type has no per-field size/type config property in the schema.
 
 ---
 
@@ -332,8 +316,8 @@ These properties apply to **all** field types and are validated by the base `Fie
 
 | Property | Type | Default | Validation Behavior |
 |:---|:---|:---|:---|
-| `expression` | `string` | — | **Required.** Formula expression |
-| `dependencies` | `string[]` | — | Fields this formula depends on |
+| `expression` | `string` | — | **Required.** CEL formula expression |
+| `returnType` | `enum` | — | Optional inferred result type: `number`, `text`, `boolean`, or `date` |
 
 **Default constraints:** Read-only. Value computed at runtime from `expression`. Not directly writable.
 
@@ -342,8 +326,7 @@ These properties apply to **all** field types and are validated by the base `Fie
   name: 'full_name',
   label: 'Full Name',
   type: 'formula',
-  expression: 'record.first_name + " " + record.last_name',
-  dependencies: ['first_name', 'last_name']
+  expression: 'record.first_name + " " + record.last_name'
 }
 ```
 
@@ -443,7 +426,7 @@ These properties apply to **all** field types and are validated by the base `Fie
 |:---|:---|:---|:---|
 | `dimensions` | `number` | — | **Required.** Vector size (1–10,000) |
 
-**Default constraints:** Must be a numeric array of exactly `dimensions` length. The nested `vectorConfig` object is retained for back-compat only and is a runtime no-op — set the flat `dimensions` property instead.
+**Default constraints:** Must be a numeric array of exactly `dimensions` length. Set the flat `dimensions` property directly — the legacy nested `vectorConfig` object was removed in the 16.x line (#2377) and is no longer part of the schema.
 
 ```typescript
 {
@@ -466,9 +449,11 @@ For sensitive data, use the properties and types the platform actually enforces:
 | `trackHistory` | `boolean` | — | Render the field's value changes as entries on the record activity timeline |
 
 For reversible encrypted-at-rest values (API keys, tokens, DB passwords), use the
-`secret` field type — it is the type with an enforced masking/encryption code path.
-`password` is validated like plain text and has no built-in hashing or read-masking
-(see the `password` section above). See the
+`secret` field type — it is the type with an enforced encryption/masking code path
+(encrypted at rest via `sys_secret`, masked on read). `password` is validated like
+plain text and stored plaintext at rest with no built-in hashing or encryption; it is
+masked to `••••••••` on read but offers no at-rest protection (see the `password`
+section above). See the
 [Field Type Gallery](/docs/data-modeling/field-types).
 
 ---
@@ -482,7 +467,7 @@ For reversible encrypted-at-rest values (API keys, tokens, DB passwords), use th
 | `email` | — | Basic `local@domain` shape (not full RFC 5322) |
 | `url` | — | Valid URL with protocol |
 | `phone` | — | Permissive character set, not strict E.164 |
-| `password` | — | Validated like `text`; no built-in hashing/masking |
+| `password` | — | Validated like `text`; masked on read but plaintext at rest (no hashing/encryption) |
 | `markdown` | — | `maxLength` |
 | `html` | — | Sanitized, `maxLength` |
 | `richtext` | — | Sanitized, `maxLength` |
@@ -501,11 +486,11 @@ For reversible encrypted-at-rest values (API keys, tokens, DB passwords), use th
 | `lookup` | `reference` | Foreign key integrity |
 | `master_detail` | `reference` | Cascade delete, ownership |
 | `tree` | `reference` | Self-referencing; no automatic cycle check |
-| `image` | — | `fileAttachmentConfig` for dimensions |
-| `file` | — | `fileAttachmentConfig` for restrictions |
+| `image` | — | Common image MIME types; `multiple` for many |
+| `file` | — | Any file type; `multiple` for many (no field-level upload config) |
 | `avatar` | — | Single image, typically square |
-| `video` | — | `fileAttachmentConfig` for size limits |
-| `audio` | — | `fileAttachmentConfig` for size limits |
+| `video` | — | Common video MIME types |
+| `audio` | — | Common audio MIME types |
 | `formula` | `expression` | Read-only, computed at runtime |
 | `summary` | `summaryOperations` | Read-only, roll-up from children |
 | `autonumber` | — | Read-only, auto-incremented |

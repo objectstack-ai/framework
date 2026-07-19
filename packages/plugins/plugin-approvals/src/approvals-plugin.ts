@@ -5,6 +5,7 @@ import { SysApprovalRequest } from './sys-approval-request.object.js';
 import { SysApprovalAction } from './sys-approval-action.object.js';
 import { SysApprovalApprover } from './sys-approval-approver.object.js';
 import { SysApprovalToken } from './sys-approval-token.object.js';
+import { SysApprovalDelegation } from './sys-approval-delegation.object.js';
 import { renderConfirmPage, renderResultPage } from './action-link-pages.js';
 import {
   ApprovalService,
@@ -12,7 +13,7 @@ import {
   ESCALATION_SCAN_INTERVAL_MS,
   type ApprovalEngine,
 } from './approval-service.js';
-import { bindApprovalLockHook, unbindAllHooks } from './lifecycle-hooks.js';
+import { bindApprovalLockHook, bindDelegationWriteGuard, unbindAllHooks } from './lifecycle-hooks.js';
 import { registerApprovalNode, type ApprovalAutomationSurface } from './approval-node.js';
 
 export interface ApprovalsPluginOptions {
@@ -70,7 +71,7 @@ export class ApprovalsServicePlugin implements Plugin {
       scope: 'system',
       defaultDatasource: 'cloud',
       namespace: 'sys',
-      objects: [SysApprovalRequest, SysApprovalAction, SysApprovalApprover, SysApprovalToken],
+      objects: [SysApprovalRequest, SysApprovalAction, SysApprovalApprover, SysApprovalToken, SysApprovalDelegation],
       // ADR-0029 D7 — contribute the Approvals entries into the Setup app's
       // `group_approvals` slot. This plugin owns these objects (K2.b), so it
       // ships their menu too; when the plugin isn't installed the slot is empty.
@@ -82,6 +83,7 @@ export class ApprovalsServicePlugin implements Plugin {
           items: [
             { id: 'nav_approval_requests', type: 'object', label: 'Requests', objectName: 'sys_approval_request', icon: 'inbox', requiresObject: 'sys_approval_request' },
             { id: 'nav_approval_actions', type: 'object', label: 'Action History', objectName: 'sys_approval_action', icon: 'history', requiresObject: 'sys_approval_action' },
+            { id: 'nav_approval_delegations', type: 'object', label: 'Delegations (OOO)', objectName: 'sys_approval_delegation', icon: 'user-clock', requiresObject: 'sys_approval_delegation' },
           ],
         },
       ],
@@ -122,12 +124,16 @@ export class ApprovalsServicePlugin implements Plugin {
     });
 
     // Record lock: block edits to a record while it has a pending request.
+    // Delegation write-guard: a self-service OOO delegation may only name the
+    // acting user as delegator (#1322 follow-up). Both bind under the same
+    // package id, so unbindAllHooks clears them together.
     if (!this.options.disableAutoHooks) {
       try {
         unbindAllHooks(engine);
         bindApprovalLockHook(engine, ctx.logger);
+        bindDelegationWriteGuard(engine, ctx.logger);
       } catch (err: any) {
-        ctx.logger.warn?.('[approvals] failed to bind record-lock hook', { error: err?.message });
+        ctx.logger.warn?.('[approvals] failed to bind approval hooks', { error: err?.message });
       }
     }
 

@@ -133,11 +133,11 @@ os dev --database file:./data/test.db --auth-secret $(openssl rand -hex 32)
 | `-d, --database <url>` | `OS_DATABASE_URL` | `file:…` / `libsql://` / `postgres://` / `mongodb://` / `memory://` |
 | `--database-driver <kind>` | `OS_DATABASE_DRIVER` | Force `sqlite` \| `turso` \| `postgres` \| `mongodb` \| `memory` |
 | `--database-auth-token <t>` | `OS_DATABASE_AUTH_TOKEN` | libsql/Turso token |
-| `--auth-secret <s>` | `AUTH_SECRET` | Override the dev-fallback secret |
+| `--auth-secret <s>` | `OS_AUTH_SECRET` | Override the dev-fallback secret |
 | `--environment-id <id>` | `OS_ENVIRONMENT_ID` | Environment identifier (default `env_local`) |
-| `-p, --port <n>` | `PORT` / `OS_PORT` | Listen port (default `3000`). In dev a busy port auto-hops to the next free one; the banner shows the actual port. |
-| `--ui` | — | Force Studio UI on (already on by default in dev) |
-| `--no-compile` | — | Skip the auto-compile step (errors if no artifact present) |
+| `-p, --port <n>` | `OS_PORT` / `PORT` | Listen port (default `3000`). In dev a busy port auto-hops to the next free one; the banner shows the actual port. |
+| `--ui` | — | Force Console UI on (already on by default in dev) |
+| `--compile` | — | Force compiling `objectstack.config.ts` → `dist/objectstack.json` before starting (auto when the artifact is missing; ignored with `--artifact`) |
 | `-v, --verbose` | — | Verbose output |
 
 With a file-backed SQLite database, dev also provisions a sibling
@@ -170,7 +170,7 @@ os serve --preset minimal  # Skip auto-loaded auth/i18n/ui plugins
 ```
 
 **Options:**
-- `-p, --port <port>` — Server port (default: env `PORT` or `3000`)
+- `-p, --port <port>` — Server port (default: env `OS_PORT` or `3000`)
 - `--dev` — Development mode (loads devPlugins, pretty logging)
 - `--ui / --no-ui` — Toggle Console UI at `/_console/` (default `on`)
 - `--server / --no-server` — Toggle HTTP server plugin
@@ -189,10 +189,10 @@ only gate the **automatic** registration of optional plugins.
 | Preset | Tiers | Auto-loaded optional plugins |
 |:---|:---|:---|
 | `minimal` | `core` | none |
-| `default` *(default)* | `core`, `i18n`, `ui`, `ai`, `auth` | i18n service, Studio UI, AI service, Auth + Security + Audit |
+| `default` *(default)* | `core`, `i18n`, `ui`, `ai`, `auth` | i18n service, Console UI, AI service, Auth + Security + Audit |
 | `full` | `core`, `i18n`, `ui`, `ai`, `auth` | currently an alias of `default` — same tiers, no additional plugins |
 
-The `auth` tier requires `AUTH_SECRET` to be set; otherwise `AuthPlugin`
+The `auth` tier requires `OS_AUTH_SECRET` to be set; otherwise `AuthPlugin`
 is skipped with a yellow warning and the `/api/v1/auth/*` endpoints will
 return 404. To take full control, set `tiers` on the stack config:
 
@@ -285,7 +285,7 @@ os start --database "postgres://user:pass@host:5432/mydb"
 # Pure env-var style still works (Docker / Fly / k8s friendly)
 OS_ARTIFACT_PATH=./build/myapp.json \
 OS_DATABASE_URL=file:./data/prod.db \
-AUTH_SECRET=… \
+OS_AUTH_SECRET=… \
 os start
 ```
 
@@ -297,9 +297,9 @@ os start
 | `-d, --database <url>` | `OS_DATABASE_URL` | `file:…` / `libsql://` / `postgres://` / `mongodb://` / `memory://` |
 | `--database-driver <kind>` | `OS_DATABASE_DRIVER` | Force `sqlite` \| `turso` \| `postgres` \| `mongodb` \| `memory` when the URL is ambiguous |
 | `--database-auth-token <token>` | `OS_DATABASE_AUTH_TOKEN` | Auth token for libsql/Turso |
-| `--auth-secret <secret>` | `AUTH_SECRET` | Secret for `@objectstack/plugin-auth`; without it `/api/v1/auth/*` is skipped (server still runs) |
+| `--auth-secret <secret>` | `OS_AUTH_SECRET` | Secret for `@objectstack/plugin-auth`; without it `/api/v1/auth/*` is skipped (server still runs) |
 | `--environment-id <id>` | `OS_ENVIRONMENT_ID` | Environment identifier (default `env_local`) |
-| `-p, --port <port>` | `PORT` / `OS_PORT` | Listen port (default `3000`). **Production fails loudly if the port is busy** — see note below. |
+| `-p, --port <port>` | `OS_PORT` / `PORT` | Listen port (default `3000`). **Production fails loudly if the port is busy** — see note below. |
 | `--ui` / `--no-ui` | — | Mount the Console portal at `/_console/`. Enabled by default (so you can install marketplace apps); pass `--no-ui` to disable it. |
 | `-v, --verbose` | — | Verbose output |
 
@@ -307,7 +307,7 @@ os start
 > hops to the next free port for local convenience), `os start` exits with an
 > error if its resolved port is in use. A silently drifted port would break
 > your reverse-proxy upstream, `OS_AUTH_URL` callbacks, and `OS_TRUSTED_ORIGINS`
-> (CORS). **Pin the port explicitly** (`PORT=8080 os start`) and keep
+> (CORS). **Pin the port explicitly** (`OS_PORT=8080 os start`) and keep
 > `OS_AUTH_URL` / `OS_TRUSTED_ORIGINS` in sync when you change it.
 
 **Resolution priority (artifact):** `--artifact` > `OS_ARTIFACT_PATH` > `<cwd>/dist/objectstack.json`.
@@ -315,12 +315,12 @@ os start
 
 **What it boots:**
 - Reads the artifact's `manifest`, `objects`, `views`, `flows`, …
-- Auto-registers the platform services declared in `requires: [...]` (e.g. `ai`, `automation`, `analytics`, `auth`, `ui`)
+- Auto-registers the platform services declared in `requires: [...]` (e.g. `ai`, `automation`, `analytics`, `auth`, `ui`). Declaring a **service** capability (`automation`, `analytics`, `ai`, `audit`, …) is a *requirement*: if its provider package isn't installed, boot **fails fast** with a clear error instead of silently starting without a capability you asked for. (`auth` and `ui` are tier-gated with their own opt-in rules — `auth`'s secret-gated skip is described below.)
 - Auto-detects the driver from the database URL scheme (`memory://` → in-memory, `libsql://`/`https://` → Turso, `postgres[ql]://`/`pg://` → pg, `mongodb[+srv]://` → MongoDB, otherwise sqlite)
 - Runs standalone boot mode with one active environment.
 
 **Authentication:**
-The `auth` capability is auto-loaded only when both (1) the artifact declares `requires: [..., 'auth']` **and** (2) a secret is provided via `--auth-secret` or `AUTH_SECRET`. Without a secret, `AuthPlugin` is **silently skipped with a warning** — the server still boots and serves data/REST routes, only `/api/v1/auth/*` (login/register) is omitted. This is intentional: `os start` is happy to run an unauthenticated, internal-network deployment.
+The `auth` capability is auto-loaded only when both (1) the artifact declares `requires: [..., 'auth']` **and** (2) a secret is provided via `--auth-secret` or `OS_AUTH_SECRET`. Without a secret, `AuthPlugin` is **silently skipped with a warning** — the server still boots and serves data/REST routes, only `/api/v1/auth/*` (login/register) is omitted. This is intentional: `os start` is happy to run an unauthenticated, internal-network deployment.
 
 <Callout type="info">
 **`os start` vs `os serve`:** `os serve` boots from `objectstack.config.ts` (TypeScript source).
@@ -444,8 +444,8 @@ os info --json         # JSON output for tooling
   Logic: 5 Flows  5 Agents  2 APIs
 
   Objects:
-    account (16 fields, own) — Account
-    contact (24 fields, own) — Contact
+    account (16 fields, user) — Account
+    contact (24 fields, user) — Contact
     ...
 
   Loaded in 90ms
@@ -606,7 +606,7 @@ os register --url https://api.example.com
 
 In an interactive terminal, login uses a browser-based device flow by default:
 the CLI prints a one-time verification URL, opens the browser, and polls until
-you approve access in Studio.
+you approve access in your browser.
 
 ```bash
 os login

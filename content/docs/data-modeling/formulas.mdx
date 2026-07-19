@@ -203,7 +203,7 @@ a mistake that would silently evaluate to `null` at runtime is caught before it
 ships. The same shared validator also runs when a flow is registered
 (`registerFlow`), so a flow authored dynamically gets the same verdict. Findings
 come at two severities: **errors** fail the build; **warnings** are advisory
-(surfaced, not fatal — promote them with `--strict`).
+(surfaced, not fatal — `objectstack validate --strict` promotes them to errors).
 
 | Check | Example | Severity |
 |:---|:---|:---|
@@ -520,8 +520,8 @@ But **call sites must not silently swallow that** (ADR-0032): `objectstack build
 **fails** on an invalid expression (with a located, schema-aware message), and at
 runtime the flow/rule engines **throw** a loud, attributed error instead of
 treating a bad expression as `false`/`null`. The same `validateExpression`
-validator backs `objectstack build` and metadata registration (and a planned
-`validate_expression` agent tool), so an expression is checked before it ships.
+validator backs `objectstack build` and metadata registration (and the
+agent-callable `validate_expression` tool), so an expression is checked before it ships.
 
 ---
 

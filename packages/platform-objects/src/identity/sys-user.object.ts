@@ -187,7 +187,11 @@ export const SysUser = ObjectSchema.create({
           'Copy the temporary password now — it is shown only once and never stored.',
         acknowledge: 'I have saved this password',
         fields: [
+          // The dialog skips fields whose path is absent from the response, so
+          // conditional keys are safe to declare: phoneNumber only exists for
+          // phone-based users, temporaryPassword only when the server minted one.
           { path: 'user.email', label: 'Email', format: 'text' },
+          { path: 'user.phoneNumber', label: 'Phone Number', format: 'text' },
           { path: 'temporaryPassword', label: 'Temporary Password', format: 'secret' },
         ],
       },
@@ -433,7 +437,7 @@ export const SysUser = ObjectSchema.create({
       name: 'me',
       label: 'My Profile',
       data: { provider: 'object', object: 'sys_user' },
-      columns: ['name', 'email', 'email_verified', 'two_factor_enabled', 'updated_at'],
+      columns: ['name', 'email', 'phone_number', 'email_verified', 'two_factor_enabled', 'updated_at'],
       filter: [{ field: 'id', operator: 'equals', value: '{current_user_id}' }],
       sort: [{ field: 'name', order: 'asc' }],
       pagination: { pageSize: 1 },
@@ -443,7 +447,7 @@ export const SysUser = ObjectSchema.create({
       name: 'all_users',
       label: 'All Users',
       data: { provider: 'object', object: 'sys_user' },
-      columns: ['name', 'email', 'email_verified', 'source', 'two_factor_enabled', 'created_at'],
+      columns: ['name', 'email', 'phone_number', 'email_verified', 'source', 'two_factor_enabled', 'created_at'],
       sort: [{ field: 'name', order: 'asc' }],
       pagination: { pageSize: 50 },
     },

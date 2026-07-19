@@ -135,7 +135,9 @@ A package may mark one of its sets `isDefault: true`: an **install-time
 suggestion** to bind it to the `everyone` anchor. The admin confirms each
 suggestion individually; nothing auto-binds, and the D7 linter rejects an
 `isDefault` set that carries anchor-forbidden bits (VAMA, destructive bits,
-wildcards, system permissions).
+system permissions). A plain `'*'` wildcard grant is *not* an anchor-forbidden
+bit for `everyone` — the platform's own `member_default` baseline is exactly
+that shape; the wildcard ban is the stricter `guest` tier's rule.
 
 Pending suggestions are materialized as `sys_audience_binding_suggestion`
 rows (one per package × set × anchor, read-only over the data API) and

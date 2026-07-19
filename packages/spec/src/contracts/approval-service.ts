@@ -97,6 +97,21 @@ export interface ApprovalRequestRow {
    * `node_config_json` snapshot (`__round`), so no schema migration.
    */
   round?: number;
+  /**
+   * Server-computed decision aggregation progress (#3266, single-request reads
+   * of PENDING requests only). Present when the node's behavior aggregates
+   * multiple approvals: `unanimous` (got/need = approvals of total),
+   * `quorum` (got/need = approvals of the M threshold), `per_group`
+   * (got/need = satisfied groups of total groups, plus per-group detail).
+   * Absent for `first_response`. Display-only — the engine's finalization
+   * tally in decideNode stays authoritative.
+   */
+  decision_progress?: {
+    behavior: 'unanimous' | 'quorum' | 'per_group';
+    got: number;
+    need: number;
+    groups?: Array<{ group: string; got: number; need: number; satisfied: boolean }>;
+  };
 }
 
 /** Kinds of entries on a request's audit trail. */
@@ -117,7 +132,9 @@ export type ApprovalActionKind =
   /** ADR-0044: an approver sent the request back for revision (request finalizes `returned`). */
   | 'revise'
   /** ADR-0044: the submitter resubmitted after rework (the next round's request opens with its own `submit`). */
-  | 'resubmit';
+  | 'resubmit'
+  /** #1322 M1: an out-of-office approver's slot was auto-rerouted to their delegate at resolution time. */
+  | 'ooo_substitute';
 
 /** Audit row. */
 export interface ApprovalActionRow {
@@ -128,6 +145,8 @@ export interface ApprovalActionRow {
   action: ApprovalActionKind;
   actor_id?: string;
   comment?: string;
+  /** File references attached to this action (decision attachments, #3266). */
+  attachments?: string[];
   created_at?: string;
   /** Display name of the actor (`sys_user.name`), when resolvable. */
   actor_name?: string;
@@ -138,6 +157,12 @@ export interface ApprovalDecisionInput {
   decision: 'approve' | 'reject';
   actorId: string;
   comment?: string;
+  /**
+   * File references (already stored via the storage service) to attach to this
+   * decision — e.g. a signed contract or an evidence PDF (#3266). Recorded on
+   * the `sys_approval_action` audit row's `attachments` field.
+   */
+  attachments?: string[];
 }
 
 /** Input for recalling (withdrawing) a pending request. */

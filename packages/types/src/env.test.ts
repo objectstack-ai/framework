@@ -6,6 +6,9 @@ import {
   readEnvWithDeprecation,
   resolveAllowDegradedTenancy,
   resolveSearchPinyinEnabled,
+  resolveSandboxTimeoutMs,
+  isMcpServerEnabled,
+  resolveMcpStdioAutoStart,
 } from './env.js';
 
 describe('readEnvWithDeprecation', () => {
@@ -170,5 +173,114 @@ describe('resolveSearchPinyinEnabled (#2486)', () => {
       process.env.OS_SEARCH_PINYIN_ENABLED = v;
       expect(resolveSearchPinyinEnabled()).toBe(false);
     }
+  });
+});
+
+describe('MCP switches — HTTP surface vs stdio auto-start are decoupled (#3167)', () => {
+  const origServer = process.env.OS_MCP_SERVER_ENABLED;
+  const origServerLegacy = process.env.MCP_SERVER_ENABLED;
+  const origStdio = process.env.OS_MCP_STDIO_ENABLED;
+  const restore = (key: string, val: string | undefined) => {
+    if (val === undefined) delete process.env[key];
+    else process.env[key] = val;
+  };
+  afterEach(() => {
+    restore('OS_MCP_SERVER_ENABLED', origServer);
+    restore('MCP_SERVER_ENABLED', origServerLegacy);
+    restore('OS_MCP_STDIO_ENABLED', origStdio);
+  });
+
+  it('isMcpServerEnabled (HTTP surface): default-on, only explicit falsy opts out', () => {
+    delete process.env.OS_MCP_SERVER_ENABLED;
+    expect(isMcpServerEnabled()).toBe(true);
+    for (const v of ['false', '0', 'off', 'no', 'FALSE']) {
+      process.env.OS_MCP_SERVER_ENABLED = v;
+      expect(isMcpServerEnabled(), `${v} should opt out`).toBe(false);
+    }
+    for (const v of ['true', '1', 'anything']) {
+      process.env.OS_MCP_SERVER_ENABLED = v;
+      expect(isMcpServerEnabled(), `${v} keeps HTTP on`).toBe(true);
+    }
+  });
+
+  it('stdio auto-start: default OFF when nothing is set', () => {
+    delete process.env.OS_MCP_SERVER_ENABLED;
+    delete process.env.OS_MCP_STDIO_ENABLED;
+    expect(resolveMcpStdioAutoStart()).toEqual({ enabled: false, viaDeprecatedAlias: false });
+  });
+
+  it('stdio auto-start: canonical OS_MCP_STDIO_ENABLED (truthy, no deprecation)', () => {
+    delete process.env.OS_MCP_SERVER_ENABLED;
+    for (const v of ['1', 'true', 'on', 'yes', 'TRUE']) {
+      process.env.OS_MCP_STDIO_ENABLED = v;
+      expect(resolveMcpStdioAutoStart(), v).toEqual({ enabled: true, viaDeprecatedAlias: false });
+    }
+  });
+
+  it('stdio auto-start: legacy OS_MCP_SERVER_ENABLED=true still starts it, flagged deprecated', () => {
+    delete process.env.OS_MCP_STDIO_ENABLED;
+    process.env.OS_MCP_SERVER_ENABLED = 'true';
+    expect(resolveMcpStdioAutoStart()).toEqual({ enabled: true, viaDeprecatedAlias: true });
+  });
+
+  it('stdio auto-start: OS_MCP_SERVER_ENABLED=false (or other) never starts stdio — no footgun', () => {
+    delete process.env.OS_MCP_STDIO_ENABLED;
+    for (const v of ['false', '0', 'off', '1', 'on', 'yes']) {
+      process.env.OS_MCP_SERVER_ENABLED = v;
+      // Only the literal `true` was ever the legacy stdio trigger.
+      expect(resolveMcpStdioAutoStart().enabled, `server=${v}`).toBe(false);
+    }
+  });
+
+  it('canonical switch wins over the legacy alias (no deprecation flag)', () => {
+    process.env.OS_MCP_STDIO_ENABLED = 'true';
+    process.env.OS_MCP_SERVER_ENABLED = 'true';
+    expect(resolveMcpStdioAutoStart()).toEqual({ enabled: true, viaDeprecatedAlias: false });
+  });
+});
+
+describe('resolveSandboxTimeoutMs (#3259)', () => {
+  const HOOK = 'OS_SANDBOX_HOOK_TIMEOUT_MS';
+  const ACTION = 'OS_SANDBOX_ACTION_TIMEOUT_MS';
+  const origHook = process.env[HOOK];
+  const origAction = process.env[ACTION];
+  afterEach(() => {
+    if (origHook === undefined) delete process.env[HOOK];
+    else process.env[HOOK] = origHook;
+    if (origAction === undefined) delete process.env[ACTION];
+    else process.env[ACTION] = origAction;
+  });
+
+  it('returns the fallback unchanged when the var is unset', () => {
+    delete process.env[HOOK];
+    delete process.env[ACTION];
+    expect(resolveSandboxTimeoutMs('hook', 250)).toBe(250);
+    expect(resolveSandboxTimeoutMs('action', 5000)).toBe(5000);
+  });
+
+  it('reads the kind-specific var and parses a positive integer', () => {
+    process.env[HOOK] = '10000';
+    process.env[ACTION] = '20000';
+    expect(resolveSandboxTimeoutMs('hook', 250)).toBe(10000);
+    expect(resolveSandboxTimeoutMs('action', 5000)).toBe(20000);
+  });
+
+  it('does not cross the wires between the hook and action vars', () => {
+    process.env[HOOK] = '999';
+    delete process.env[ACTION];
+    expect(resolveSandboxTimeoutMs('hook', 250)).toBe(999);
+    expect(resolveSandboxTimeoutMs('action', 5000)).toBe(5000); // action unset → fallback
+  });
+
+  it('ignores empty / non-numeric / non-positive values and keeps the fallback', () => {
+    for (const bad of ['', '   ', 'abc', '0', '-5', 'NaN']) {
+      process.env[HOOK] = bad;
+      expect(resolveSandboxTimeoutMs('hook', 250), `value=${JSON.stringify(bad)}`).toBe(250);
+    }
+  });
+
+  it('tolerates a leading integer with trailing junk (parseInt semantics, as resolveOrgLimit)', () => {
+    process.env[HOOK] = '3000ms';
+    expect(resolveSandboxTimeoutMs('hook', 250)).toBe(3000);
   });
 });

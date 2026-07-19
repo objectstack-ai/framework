@@ -1,10 +1,16 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { QuickJSScriptRunner, SandboxError } from './quickjs-runner.js';
 import type { ScriptContext, ScriptRunOptions } from './script-runner.js';
 
-const runner = new QuickJSScriptRunner();
+// Generous hook budget: these tests exercise sandbox *behaviour*, not the stock
+// 250ms hook budget. Every invocation compiles a fresh WASM module, and nested
+// hooks compile another one inside the parent's budget — on a loaded CI machine
+// that fixed cost alone can blow 250ms and flake (e.g. "hook 'lvl4' exceeded
+// timeout of 250ms"). Tests that ARE about the default budget use
+// `defaultRunner` below.
+const runner = new QuickJSScriptRunner({ hookTimeoutMs: 10_000 });
 const hookOpts: ScriptRunOptions = { origin: { kind: 'hook', name: 't' } };
 const actionOpts: ScriptRunOptions = { origin: { kind: 'action', name: 't' } };
 
@@ -262,6 +268,217 @@ describe('QuickJSScriptRunner — async host APIs', () => {
     );
     expect(r.mutatedInput).toMatchObject({ raw: 'abc-9', normalized: 'ABC-9' });
   });
+});
+
+// ---------------------------------------------------------------------------
+// Nested cross-object writes (#1867).
+//
+// A hook body that issues an engine write (`ctx.api.object('parent').update`)
+// re-enters the sandbox: the host-side write fires the *parent's* hook, which
+// runs its own body inside a fresh VM while the child's hook is still in flight.
+// The old asyncify host-call model crashed here ("memory access out of bounds"
+// — the stack cannot be unwound twice). The deferred-promise + pump model must
+// compose any depth of nesting safely.
+// ---------------------------------------------------------------------------
+describe('QuickJSScriptRunner — nested sandbox re-entrancy (#1867)', () => {
+  it('a host write that re-invokes the runner (parent hook) does not crash and returns correctly', async () => {
+    // The parent's afterUpdate hook body, run when the child writes the parent.
+    const parentBody = {
+      language: 'js' as const,
+      source: 'return { parentTouched: true, doubled: (ctx.input.n || 0) * 2 };',
+      capabilities: [] as const,
+    };
+    const api = {
+      object: (_n: string) => ({
+        update: async (patch: Record<string, unknown>) => {
+          // Re-enter the sandbox exactly as the engine does when the parent
+          // write fires the parent's own hook body.
+          const nested = await runner.run(
+            parentBody,
+            { input: { n: 21 } } as ScriptContext,
+            { origin: { kind: 'hook', name: 'parent_hook' } },
+          );
+          return { updated: patch, nested: nested.value };
+        },
+      }),
+    };
+    const r = await runner.run(
+      {
+        language: 'js',
+        source: "return await ctx.api.object('parent').update({ total: ctx.input.amount });",
+        capabilities: ['api.write'],
+      },
+      ctx({ input: { amount: 100 }, api }),
+      { origin: { kind: 'hook', name: 'child_hook' } },
+    );
+    expect(r.value).toEqual({
+      updated: { total: 100 },
+      nested: { parentTouched: true, doubled: 42 },
+    });
+  }, 15000);
+
+  it('survives a multi-level nested write chain (child → parent → grandparent → …)', async () => {
+    const makeApi = (depth: number): any => ({
+      object: () => ({
+        update: async () => {
+          if (depth <= 0) return { leaf: true };
+          const nested = await runner.run(
+            { language: 'js', source: "return await ctx.api.object('x').update({});", capabilities: ['api.write'] },
+            { input: {}, api: makeApi(depth - 1) } as ScriptContext,
+            { origin: { kind: 'hook', name: `lvl${depth}` } },
+          );
+          return { depth, nested: nested.value };
+        },
+      }),
+    });
+    const r = await runner.run(
+      { language: 'js', source: "return await ctx.api.object('x').update({});", capabilities: ['api.write'] },
+      { input: {}, api: makeApi(4) } as ScriptContext,
+      { origin: { kind: 'hook', name: 'child' }, timeoutMs: 10000 },
+    );
+    // Four levels of nesting resolve without a WASM crash.
+    expect((r.value as any).nested.nested.nested.nested).toEqual({ leaf: true });
+  }, 20000);
+
+  it('runs concurrent nested invocations (fan-out) without cross-VM corruption', async () => {
+    const leaf = { language: 'js' as const, source: 'return { leaf: true };', capabilities: [] as const };
+    const api: any = {
+      object: () => ({
+        update: async () => {
+          const [a, b, c] = await Promise.all([
+            runner.run(leaf, { input: {} } as ScriptContext, { origin: { kind: 'hook', name: 'p1' } }),
+            runner.run(leaf, { input: {} } as ScriptContext, { origin: { kind: 'hook', name: 'p2' } }),
+            runner.run(leaf, { input: {} } as ScriptContext, { origin: { kind: 'hook', name: 'p3' } }),
+          ]);
+          return { a: a.value, b: b.value, c: c.value };
+        },
+      }),
+    };
+    const r = await runner.run(
+      { language: 'js', source: "return await ctx.api.object('x').update({});", capabilities: ['api.write'] },
+      { input: {}, api } as ScriptContext,
+      { origin: { kind: 'hook', name: 'child' }, timeoutMs: 10000 },
+    );
+    expect(r.value).toEqual({ a: { leaf: true }, b: { leaf: true }, c: { leaf: true } });
+  }, 20000);
+});
+
+// ---------------------------------------------------------------------------
+// Timeout resolution (#1867). The engine default is a FALLBACK, not a hard
+// ceiling: a hook body may declare a larger `timeoutMs` (spec allows ≤30s) so a
+// legitimate nested-write rollup has room to settle instead of being clamped to
+// the 250ms hook default and killed mid-flight.
+// ---------------------------------------------------------------------------
+describe('QuickJSScriptRunner — timeout resolution honors body.timeoutMs (#1867)', () => {
+  // Pin the hook default to 250ms EXPLICITLY (not the bare stock constructor) so
+  // these assertions on the effective budget stay independent of any ambient
+  // `OS_SANDBOX_HOOK_TIMEOUT_MS` the environment/CI may set (#3259). They assert
+  // the resolution logic — body.timeoutMs vs the runner default — which is
+  // identical whether that default came from the built-in constant or an
+  // explicit option. (A dedicated suite below covers the env override itself.)
+  const defaultRunner = new QuickJSScriptRunner({ hookTimeoutMs: 250 });
+
+  it('honors a hook body timeoutMs above the 250ms hook default', async () => {
+    // Host call settles at ~600ms — comfortably past the old 250ms hook cap but
+    // within the body's declared 5000ms budget. Must resolve, not time out.
+    const api = {
+      object: () => ({
+        update: async () => {
+          await new Promise<void>((resolve) => setTimeout(resolve, 600));
+          return { ok: true };
+        },
+      }),
+    };
+    const r = await defaultRunner.runScript(
+      {
+        language: 'js',
+        source: "return await ctx.api.object('x').update({});",
+        capabilities: ['api.write'],
+        timeoutMs: 5000,
+      },
+      ctx({ api }),
+      hookOpts, // hook origin → old code hard-capped at 250ms
+    );
+    expect(r.value).toEqual({ ok: true });
+  }, 10000);
+
+  it('still applies the 250ms hook default when the body declares no timeoutMs', async () => {
+    const api = { object: () => ({ update: () => new Promise<never>(() => {}) }) };
+    await expect(
+      defaultRunner.runScript(
+        { language: 'js', source: "return await ctx.api.object('x').update({});", capabilities: ['api.write'] },
+        ctx({ api }),
+        hookOpts,
+      ),
+      // The error message embeds the effective budget — asserting on it proves
+      // the 250ms default applied without a flaky wall-clock measurement.
+    ).rejects.toThrow(/timeout of 250ms/);
+  }, 10000);
+
+  it('lets a hook body LOWER its timeout below the default', async () => {
+    const api = { object: () => ({ update: () => new Promise<never>(() => {}) }) };
+    await expect(
+      defaultRunner.runScript(
+        { language: 'js', source: "return await ctx.api.object('x').update({});", capabilities: ['api.write'], timeoutMs: 50 },
+        ctx({ api }),
+        hookOpts,
+      ),
+    ).rejects.toThrow(/timeout of 50ms/);
+  }, 10000);
+});
+
+// ---------------------------------------------------------------------------
+// Env-overridable timeout defaults (#3259). Every invocation compiles a fresh
+// WASM module, and a nested hook compiles another inside the parent's budget, so
+// on a loaded/slow host (an oversubscribed CI runner) the 250ms hook default can
+// trip even while the VM is making progress. `OS_SANDBOX_HOOK_TIMEOUT_MS` lets an
+// operator raise the FALLBACK default without a code change; an explicit
+// constructor option still wins over the env, and a body's own timeoutMs still
+// wins over the resolved default. Each test constructs its runner AFTER setting
+// the env (the constructor reads it once), and the env is saved/restored so a
+// CI-wide value doesn't leak in or out.
+// ---------------------------------------------------------------------------
+describe('QuickJSScriptRunner — env-overridable timeout defaults (#3259)', () => {
+  const HOOK_ENV = 'OS_SANDBOX_HOOK_TIMEOUT_MS';
+  let saved: string | undefined;
+  beforeEach(() => {
+    saved = process.env[HOOK_ENV];
+    delete process.env[HOOK_ENV];
+  });
+  afterEach(() => {
+    if (saved === undefined) delete process.env[HOOK_ENV];
+    else process.env[HOOK_ENV] = saved;
+  });
+
+  // A never-settling host call forces the deadline path; the SandboxError embeds
+  // the RESOLVED budget, so asserting on the message proves which timeout applied
+  // without a flaky wall-clock measurement.
+  const neverSettles = { object: () => ({ update: () => new Promise<never>(() => {}) }) };
+  const runHook = (r: QuickJSScriptRunner) =>
+    r.runScript(
+      { language: 'js', source: "return await ctx.api.object('x').update({});", capabilities: ['api.write'] },
+      ctx({ api: neverSettles }),
+      hookOpts,
+    );
+
+  it('falls back to the built-in 250ms hook default when the env var is unset', async () => {
+    await expect(runHook(new QuickJSScriptRunner())).rejects.toThrow(/timeout of 250ms/);
+  }, 10000);
+
+  it('uses OS_SANDBOX_HOOK_TIMEOUT_MS as the default when set', async () => {
+    process.env[HOOK_ENV] = '150';
+    await expect(runHook(new QuickJSScriptRunner())).rejects.toThrow(/timeout of 150ms/);
+  }, 10000);
+
+  it('lets an explicit constructor option win over the env var', async () => {
+    process.env[HOOK_ENV] = '150';
+    await expect(runHook(new QuickJSScriptRunner({ hookTimeoutMs: 50 }))).rejects.toThrow(/timeout of 50ms/);
+  }, 10000);
+
+  it('ignores a non-numeric / non-positive env value and keeps the built-in default', async () => {
+    process.env[HOOK_ENV] = 'not-a-number';
+    await expect(runHook(new QuickJSScriptRunner())).rejects.toThrow(/timeout of 250ms/);
+  }, 10000);
 });
 
 describe('QuickJSScriptRunner — long-running async host work (pump budget)', () => {
@@ -581,4 +798,51 @@ describe('QuickJSScriptRunner — ctx.api.transaction', () => {
     expect(r.value).toBe('ok');
     expect(events).toEqual([{ op: 'insert', tx: null }]);
   }, 30000);
+});
+
+// ---------------------------------------------------------------------------
+// Idle pump backoff (#3233). While the body only *waits* on an in-flight host
+// promise, the pump loop must not spin setImmediate ~200k×/s doing nothing — it
+// ramps up to a small capped setTimeout. Correctness (progress + deadline) is
+// unchanged; these assert the spin is gone and settlements are still caught.
+// ---------------------------------------------------------------------------
+describe('QuickJSScriptRunner — idle pump backoff (#3233)', () => {
+  it('does not busy-spin while idle-waiting on a slow host call — pump count stays bounded', async () => {
+    // A host call that never settles; the deadline cuts it off. Under the old
+    // unconditional setImmediate yield this reported ~50k pump iterations for a
+    // ~250ms wait; the adaptive backoff keeps it to a small bounded number.
+    const api = { object: () => ({ update: () => new Promise<never>(() => {}) }) };
+    const err = await runner
+      .runScript(
+        { language: 'js', source: "return await ctx.api.object('x').update({});", capabilities: ['api.write'], timeoutMs: 300 },
+        ctx({ api }),
+        hookOpts,
+      )
+      .then(() => null, (e) => e as SandboxError);
+    expect(err).toBeInstanceOf(SandboxError);
+    const m = /after (\d+) pump iterations/.exec(err!.message);
+    expect(m, `timeout message should report the pump count: ${err?.message}`).toBeTruthy();
+    const pumps = Number(m![1]);
+    // ~300ms at an ≤8ms idle poll ≈ tens of pumps, not tens of thousands.
+    expect(pumps).toBeLessThan(1000);
+  }, 10000);
+
+  it('still promptly catches a host call that settles during the idle backoff', async () => {
+    // Settles at ~120ms — past the fast-pump window, squarely in the backoff
+    // regime — and must still resolve well within the timeout.
+    const api = {
+      object: () => ({
+        update: async () => { await new Promise<void>((r) => setTimeout(r, 120)); return { ok: true }; },
+      }),
+    };
+    const start = Date.now();
+    const r = await runner.runScript(
+      { language: 'js', source: "return await ctx.api.object('x').update({});", capabilities: ['api.write'], timeoutMs: 5000 },
+      ctx({ api }),
+      hookOpts,
+    );
+    expect(r.value).toEqual({ ok: true });
+    // Caught within a backoff slice of the ~120ms settlement, nowhere near the timeout.
+    expect(Date.now() - start).toBeLessThan(1000);
+  }, 10000);
 });

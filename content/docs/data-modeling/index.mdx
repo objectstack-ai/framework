@@ -31,7 +31,7 @@ That one definition is enough to get a persisted table, CRUD + query endpoints, 
 
 ## What the data layer actually gives you
 
-- **A full spectrum of field types** — from `text`, `currency`, and `lookup`/`master_detail` relationships to `formula`, `summary`, `signature`, and `vector` (with index config for AI embeddings). See the [Field Types gallery](/docs/data-modeling/field-types).
+- **A full spectrum of field types** — from `text`, `currency`, and `lookup`/`master_detail` relationships to `formula`, `summary`, `signature`, and `vector` (with `dimensions` config for AI embeddings). See the [Field Types gallery](/docs/data-modeling/field-types).
 - **Validation as metadata** — required/format rules, CEL script validation with access to `previous.<field>`, uniqueness via indexes, and severity levels — enforced identically in API, UI, and automation.
 - **CEL expressions** — formula fields and computed defaults share one expression language ([Expressions](/docs/data-modeling/formulas)).
 - **A compiled query AST** — queries are JSON documents validated against the protocol, then compiled by a driver into native queries with joins, aggregations, window functions, HAVING, and subqueries. The [query cheat sheet](/docs/data-modeling/queries) covers the syntax; the [spec](/docs/protocol/objectql/query-syntax) is normative.

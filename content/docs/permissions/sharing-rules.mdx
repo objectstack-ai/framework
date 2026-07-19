@@ -140,7 +140,7 @@ export const AccountTeamSharingRule = defineSharingRule({
 | `group` | All members of a public group — **declared but not enforced**: skipped at seed time with a warning (ADR-0049) |
 | `position` | Everyone assigned that position (flat expansion — positions have no tree) |
 | `unit_and_subordinates` | Everyone in that **business unit and every unit beneath it** (the BU tree is the one hierarchy — ADR-0090 D3) |
-| `team` | Members of a `sys_team` — teams *receive* sharing; they never carry capability (ADR-0090 D8) |
+| `guest` | Public / anonymous (`guest`) principals — **declared but not enforced**: no runtime recipient mapping, skipped at seed time with a warning (ADR-0049) |
 
 A criteria `condition` must be compilable by the CEL → filter pushdown
 compiler. A condition the compiler cannot lower is **skipped and logged —

@@ -226,8 +226,12 @@ registration (`ServiceMetadata.cluster` / `ServiceFactoryRegistration.cluster`
 
 > **Status: not yet implemented (Phase 4).** The schema accepts
 > `clusterScope` / `leaderStrategy` annotations today, but no runtime code
-> yet consumes them or performs leader election. The behaviour below is the
-> intended contract once Phase 4 (see §10) lands.
+> yet consumes those annotations to wire leadership automatically — the four
+> behaviours below are the intended Phase 4 (see §10) contract. Leader
+> election itself already works via the `Lock` primitive (`service-job`'s
+> cron scheduler calls `cluster.lock.acquire(...)` directly so only one node
+> fires each scheduled job); what Phase 4 adds is the kernel doing it *for
+> you* from a service's declared `clusterScope`.
 
 When a service declares `clusterScope: 'cluster'`, the runtime will
 automatically:
@@ -367,8 +371,8 @@ To keep an in-process metadata cache coherent today, subscribe to the
 metadata change channel via PubSub and invalidate on each notification:
 
 ```ts
-ctx.cluster.pubsub.subscribe('metadata.changed', (payload) => {
-  // payload: { originNode?, type, event }
+ctx.cluster.pubsub.subscribe('metadata.changed', (msg) => {
+  const payload = msg.payload // { originNode?, type, event }
   if (payload.type === 'object') {
     myObjectCache.invalidate(payload.event)
   }
@@ -473,11 +477,11 @@ v4 consumers.
 
 1. Add `kernel/cluster.zod.ts` — schemas for `EventScope`,
    `DeliverySemantics`, `ClusterScope`, `LeaderStrategy`, `ClusterConfig`.
-2. Extend `events/core.zod.ts` `EventMetadataSchema` with optional
-   `scope`, `deliverySemantics`, `partitionKey`.
+2. Extend `events/core.zod.ts` `EventMetadataSchema` with an optional nested
+   `cluster` object (`scope`, `deliverySemantics`, `partitionKey`).
 3. Extend `kernel/service-registry.zod.ts` `ServiceMetadataSchema` and
-   `ServiceFactoryRegistrationSchema` with optional `clusterScope`,
-   `leaderStrategy`.
+   `ServiceFactoryRegistrationSchema` with an optional nested `cluster`
+   object (`clusterScope`, `leaderStrategy`).
 4. Add optional `cluster` field to `stack.zod.ts`.
 
 No runtime changes. After this phase the protocol *describes* cluster

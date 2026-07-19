@@ -8,7 +8,8 @@ import chalk from 'chalk';
 import { bundleRequire } from 'bundle-require';
 import { loadConfig, BUNDLE_REQUIRE_EXTERNALS } from '../utils/config.js';
 import { isHostConfig, shouldBootWithLibrary } from '../utils/plugin-detection.js';
-import { readEnvWithDeprecation, resolveMultiOrgEnabled, resolveAllowDegradedTenancy, isMcpServerEnabled, resolveSearchPinyinEnabled } from '@objectstack/types';
+import { readEnvWithDeprecation, resolveMultiOrgEnabled, resolveAllowDegradedTenancy, isMcpServerEnabled, resolveSearchPinyinEnabled, isModuleNotFoundError } from '@objectstack/types';
+import { PLATFORM_CAPABILITY_TOKENS, canonicalizePlatformCapability } from '@objectstack/spec/kernel';
 import { resolveObjectStackHome } from '@objectstack/runtime';
 import { LOG_LEVELS, resolveLogLevel, readLogLevelEnv } from '../utils/log-level.js';
 import {
@@ -139,6 +140,14 @@ const getAvailablePort = async (startPort: number): Promise<number> => {
   return port;
 };
 
+type CapabilitySpec = {
+  pkg: string;
+  export: string;            // named export to import
+  nameMatch: string[];       // plugin.name / constructor.name fragments to detect dupes
+  configKey?: string;        // optional config field passed as constructor arg
+  extras?: Array<{ pkg: string; export: string; nameMatch: string[] }>;
+};
+
 export default class Serve extends Command {
   static override description = 'Start ObjectStack server. Reads `objectstack.config.ts` if present; otherwise falls back to `dist/objectstack.json` (or OS_ARTIFACT_PATH, including http(s):// URLs) as a portable artifact.';
 
@@ -207,6 +216,223 @@ export default class Serve extends Command {
     minimal: ['core'],
     default: ['core', 'i18n', 'ui', 'ai', 'auth'],
     full: ['core', 'i18n', 'ui', 'ai', 'auth'],
+  };
+
+  /**
+   * True when a dynamic `import()` / `require.resolve()` failed because the
+   * module is simply NOT INSTALLED — as opposed to the module being present but
+   * throwing while it loads (a real crash). Checking `err.code` FIRST is the
+   * #1595 fix: ESM reports a missing package as `err.code ===
+   * 'ERR_MODULE_NOT_FOUND'` with the human message `Cannot find package '...'`.
+   *
+   * Thin delegate to the shared classifier in `@objectstack/types` — one owner
+   * across the CLI's optional-plugin guards, the capability resolver, and
+   * (at its next framework pin bump) cloud's objectos-runtime loader, so the
+   * parallel loaders can't drift apart and re-introduce that bug (#1597, #3265).
+   */
+  static isModuleNotFoundError(err: unknown): boolean {
+    return isModuleNotFoundError(err);
+  }
+
+  /**
+   * Resolve HOW an optional, separately-published service plugin (e.g.
+   * `@objectstack/service-ai`, `@objectstack/service-ai-studio`) should load,
+   * from explicit INTENT rather than mere package presence (#1597).
+   *
+   * Two orthogonal axes decide the outcome — the app's declared intent and the
+   * license TIER (an orthogonal DENY):
+   *
+   *   tierAllowed=false               → 'off'      never load (CE / `tiers` sans the feature)
+   *   required=true  (+ tierAllowed)  → 'required' MUST load; a missing package is fail-fast
+   *   declared=true  (+ tierAllowed)  → 'auto'     opt-in convenience; best-effort load
+   *   neither declared nor required   → 'off'      skip, with NO speculative import
+   *
+   * `required` is an explicit capability declaration (`requires: [...]`), NOT
+   * "the package happens to be installed". `declared` means the host app listed
+   * the package in its OWN package.json — a deliberate authoring act, the opt-in
+   * path — resolved WITHOUT importing anything. The caller maps the result:
+   * 'required'/'auto' → attempt load (fail-fast only when 'required'); 'off' → skip.
+   */
+  static resolveOptionalPluginLoad(opts: {
+    tierAllowed: boolean;
+    required: boolean;
+    declared: boolean;
+  }): 'required' | 'auto' | 'off' {
+    if (!opts.tierAllowed) return 'off';
+    if (opts.required) return 'required';
+    if (opts.declared) return 'auto';
+    return 'off';
+  }
+
+  /**
+   * Tier-gated capability tokens → the tier each one opens when listed in
+   * `requires`. These have no CAPABILITY_PROVIDERS entry — their loading is
+   * resolved by dedicated blocks in run() (`ai`/`ai-studio` by the intent-driven
+   * AI block (#1597), `i18n`/`ui`/`auth` by their tier blocks).
+   */
+  static readonly CAPABILITY_TO_TIER: Record<string, string> = {
+    ai: 'ai',
+    // `ai-studio` (AI-driven authoring) rides on the base AI service, so
+    // requiring it opens the same `ai` tier (#1597).
+    'ai-studio': 'ai',
+    i18n: 'i18n',
+    ui: 'ui',
+    auth: 'auth',
+  };
+
+  /**
+   * Registry of `requires` token → built-in service-plugin provider for the
+   * standalone serve path. Keys are canonical kebab-case platform capability
+   * tokens — a drift test asserts every key is in the spec-owned
+   * PLATFORM_CAPABILITY_TOKENS vocabulary (framework#3265). Adding a built-in
+   * capability = one entry here + its token in the spec vocabulary.
+   */
+  static readonly CAPABILITY_PROVIDERS: Record<string, CapabilitySpec> = {
+    automation: {
+      // Self-contained: AutomationServicePlugin seeds all built-in node
+      // executors itself (ADR-0018), so flows have executors with no
+      // companion node-pack plugins.
+      pkg: '@objectstack/service-automation',
+      export: 'AutomationServicePlugin',
+      nameMatch: ['service-automation', 'AutomationServicePlugin'],
+    },
+    analytics: {
+      pkg: '@objectstack/service-analytics',
+      export: 'AnalyticsServicePlugin',
+      nameMatch: ['service-analytics', 'AnalyticsServicePlugin'],
+      configKey: 'analyticsCubes',
+    },
+    audit: {
+      pkg: '@objectstack/plugin-audit',
+      export: 'AuditPlugin',
+      nameMatch: ['audit', 'AuditPlugin'],
+    },
+    cache: {
+      pkg: '@objectstack/service-cache',
+      export: 'CacheServicePlugin',
+      nameMatch: ['service-cache', 'CacheServicePlugin'],
+    },
+    storage: {
+      pkg: '@objectstack/service-storage',
+      export: 'StorageServicePlugin',
+      nameMatch: ['service-storage', 'StorageServicePlugin'],
+    },
+    queue: {
+      pkg: '@objectstack/service-queue',
+      export: 'QueueServicePlugin',
+      nameMatch: ['service-queue', 'QueueServicePlugin'],
+    },
+    job: {
+      pkg: '@objectstack/service-job',
+      export: 'JobServicePlugin',
+      nameMatch: ['service-job', 'JobServicePlugin'],
+    },
+    messaging: {
+      // Backs the `notify` flow node (ADR-0012): delivers to a user's
+      // channels (inbox by default → `sys_inbox_message` rows). Without
+      // this the notify node degrades to a logged no-op.
+      pkg: '@objectstack/service-messaging',
+      export: 'MessagingServicePlugin',
+      nameMatch: ['service-messaging', 'MessagingServicePlugin'],
+    },
+    triggers: {
+      // Makes autolaunched flows actually fire. The automation engine ships
+      // the `FlowTrigger` wiring; these plugins are the concrete triggers:
+      // record-change (ObjectQL lifecycle hooks) + schedule (cron/interval
+      // via the job service — so pair `triggers` with `job`).
+      pkg: '@objectstack/trigger-record-change',
+      export: 'RecordChangeTriggerPlugin',
+      nameMatch: ['trigger-record-change', 'RecordChangeTriggerPlugin'],
+      extras: [
+        {
+          pkg: '@objectstack/trigger-schedule',
+          export: 'ScheduleTriggerPlugin',
+          nameMatch: ['trigger-schedule', 'ScheduleTriggerPlugin'],
+        },
+        {
+          // Declarative time-relative sweep (#1874) — arms flows whose start
+          // node declares `config.timeRelative` (fire daily for records whose
+          // date field is within N days / at T-minus offsets). Ships in
+          // @objectstack/trigger-schedule; needs the job service + ObjectQL.
+          pkg: '@objectstack/trigger-schedule',
+          export: 'TimeRelativeTriggerPlugin',
+          nameMatch: ['trigger-schedule', 'TimeRelativeTriggerPlugin'],
+        },
+        {
+          // Inbound webhook/HTTP trigger (ADR-0041 Tier 1) — arms
+          // `type: 'api'` flows with HMAC-verified, queue-backed hooks.
+          pkg: '@objectstack/trigger-api',
+          export: 'ApiTriggerPlugin',
+          nameMatch: ['trigger-api', 'ApiTriggerPlugin'],
+        },
+      ],
+    },
+    realtime: {
+      pkg: '@objectstack/service-realtime',
+      export: 'RealtimeServicePlugin',
+      nameMatch: ['service-realtime', 'RealtimeServicePlugin'],
+    },
+    // `feed` removed (ADR-0052 §5): `sys_comment`/`sys_activity` (durable,
+    // default-loaded, UI-wired) is the canonical record collaboration +
+    // timeline backend. `@objectstack/service-feed` was an in-memory,
+    // non-durable, UI-unconsumed parallel implementation — retired to end
+    // the split-brain. The unified typed timeline lives on `sys_activity`.
+    mcp: {
+      pkg: '@objectstack/mcp',
+      export: 'MCPServerPlugin',
+      nameMatch: ['mcp-server', 'MCPServerPlugin', 'mcp'],
+    },
+    marketplace: {
+      pkg: '@objectstack/service-package',
+      export: 'PackageServicePlugin',
+      nameMatch: ['service-package', 'PackageServicePlugin'],
+    },
+    email: {
+      pkg: '@objectstack/plugin-email',
+      export: 'EmailServicePlugin',
+      nameMatch: ['plugin-email', 'EmailServicePlugin'],
+    },
+    sms: {
+      // #2780 — backs phone-number OTP sign-in/reset (plugin-auth) and
+      // the messaging `sms` channel. Provider config lives in the `sms`
+      // settings namespace (OS_SMS_* env keys win at the resolver);
+      // unconfigured ⇒ dev LogSmsTransport (no real send).
+      pkg: '@objectstack/service-sms',
+      export: 'SmsServicePlugin',
+      nameMatch: ['service-sms', 'SmsServicePlugin'],
+    },
+    sharing: {
+      pkg: '@objectstack/plugin-sharing',
+      export: 'SharingServicePlugin',
+      nameMatch: ['plugin-sharing', 'SharingServicePlugin', 'SharingPlugin'],
+    },
+    // #2486 — auto-required above when resolveSearchPinyinEnabled()
+    // (explicit env, else any configured zh-* locale) says on.
+    'pinyin-search': {
+      pkg: '@objectstack/plugin-pinyin-search',
+      export: 'PinyinSearchPlugin',
+      nameMatch: ['plugin-pinyin-search', 'PinyinSearchPlugin'],
+    },
+    reports: {
+      pkg: '@objectstack/plugin-reports',
+      export: 'ReportsServicePlugin',
+      nameMatch: ['plugin-reports', 'ReportsServicePlugin'],
+    },
+    approvals: {
+      pkg: '@objectstack/plugin-approvals',
+      export: 'ApprovalsServicePlugin',
+      nameMatch: ['plugin-approvals', 'ApprovalsServicePlugin'],
+    },
+    settings: {
+      pkg: '@objectstack/service-settings',
+      export: 'SettingsServicePlugin',
+      nameMatch: ['service-settings', 'SettingsServicePlugin'],
+    },
+    webhooks: {
+      pkg: '@objectstack/plugin-webhooks',
+      export: 'WebhookOutboxPlugin',
+      nameMatch: ['plugin-webhook-outbox', 'WebhookOutboxPlugin'],
+    },
   };
 
   async run(): Promise<void> {
@@ -468,9 +694,29 @@ export default class Serve extends Command {
       // instance wins over the auto-loader).
       const presetName = flags.preset ?? (isDev ? 'default' : 'default');
       const presetTiers = Serve.TIER_PRESETS[presetName] ?? Serve.TIER_PRESETS.default;
-      const requires: string[] = Array.isArray((config as any).requires)
+      const rawRequires: string[] = Array.isArray((config as any).requires)
         ? (config as any).requires.filter((c: unknown) => typeof c === 'string')
         : [];
+      // Canonicalize deprecated capability spellings (aiStudio → ai-studio, …)
+      // so artifacts compiled by an older spec keep booting; `defineStack`
+      // already rewrites + warns on the source path, this covers raw artifact
+      // JSON (framework#3265). Dedupe after mapping (Set keeps first-seen order).
+      const requires: string[] = [...new Set(rawRequires.map((c: string) => {
+        const canonical = canonicalizePlatformCapability(c);
+        if (canonical !== c) {
+          console.warn(chalk.yellow(
+            `  ⚠ requires: '${c}' is a deprecated spelling — use '${canonical}' (framework#3265)`,
+          ));
+        }
+        return canonical;
+      }))];
+      // Snapshot the app's EXPLICIT capability declarations BEFORE the platform
+      // appends its own convenience defaults (auth→email, mcp, pinyin-search,
+      // ALWAYS_ON_CAPABILITIES, queue/job). Only these explicit declarations carry
+      // "required" INTENT (#1597): a declared capability whose provider package is
+      // absent is a hard boot error, whereas an auto-injected default that happens
+      // to be absent stays best-effort (warn + continue).
+      const declaredRequires = new Set<string>(requires);
       // Auth callbacks (password-reset, email-verification, magic-link,
       // invitation) depend on the email service. Auto-pull `email` when
       // `auth` is required so transactional mail works out of the box
@@ -529,16 +775,11 @@ export default class Serve extends Command {
         if (!requires.includes('job')) requires.unshift('job');
       }
       // Capability → tier: any capability that is gated by a tier
-      // here automatically opens that tier when listed in `requires`.
-      // Capabilities NOT in this map (e.g. `automation`, `analytics`,
-      // `audit`) bypass tier gating and are loaded directly by the
-      // capability-resolver block further down.
-      const CAPABILITY_TO_TIER: Record<string, string> = {
-        ai: 'ai',
-        i18n: 'i18n',
-        ui: 'ui',
-        auth: 'auth',
-      };
+      // (Serve.CAPABILITY_TO_TIER) automatically opens that tier when listed
+      // in `requires`. Capabilities NOT in that map (e.g. `automation`,
+      // `analytics`, `audit`) bypass tier gating and are loaded directly by
+      // the capability-resolver block further down.
+      const CAPABILITY_TO_TIER = Serve.CAPABILITY_TO_TIER;
       const requiredTiers = requires
         .map((c) => CAPABILITY_TO_TIER[c])
         .filter((t): t is string => typeof t === 'string');
@@ -1497,7 +1738,7 @@ export default class Serve extends Command {
           }
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : String(err);
-          if (!msg.includes('Cannot find module') && !msg.includes('ERR_MODULE_NOT_FOUND')) {
+          if (!Serve.isModuleNotFoundError(err)) {
             console.warn(chalk.yellow(`  ⚠ AuthPlugin failed to load: ${msg}`));
           }
           // @objectstack/plugin-auth not installed — login/register endpoints unavailable
@@ -1650,216 +1891,131 @@ export default class Serve extends Command {
           return false;
         }
       };
-      // AI Studio (`@objectstack/service-ai-studio`) attaches its personas via the
-      // `ai:ready` hook the base service fires, so declaring Studio implies the base
-      // service — load it even when only Studio is in the deps (the base is a
-      // transitive dep of Studio, so it stays resolvable).
+      // `wantsAiService` is the AUTO (opt-in) signal: the host app listed the base
+      // AI service — or the Studio that builds on it — in its OWN package.json. This
+      // is a package.json READ (a deliberate authoring act), not a speculative
+      // import: gating on a *declared* dep, not mere resolvability, is reliable in a
+      // workspace/monorepo where a package stays hoist-resolvable when undeclared.
+      // Studio implies the base service (it attaches via the `ai:ready` hook the base
+      // fires; the base is a transitive dep of Studio, so it stays resolvable).
       const wantsAiService =
         hostDeclaresDependency('@objectstack/service-ai')
         || hostDeclaresDependency('@objectstack/service-ai-studio');
-      if (!hasAIPlugin && tierEnabled('ai') && wantsAiService) {
+
+      // Load an optional, separately-published service plugin by INTENT (#1597).
+      // `required` (from an explicit `requires: [...]` capability) makes a missing
+      // OR crashing package a HARD boot error — a declared-but-broken capability
+      // must fail-fast, never boot silently degraded (the outer boot catch prints
+      // the message and exits 1). `auto` (the package is merely DECLARED as a dep)
+      // is best-effort: a genuine crash is surfaced loudly, an absent package is the
+      // expected quiet skip. Presence is never inferred by importing-and-catching —
+      // the caller already decided to attempt this from intent, so the module-not-
+      // found test only WORDS the failure, it never decides whether to load.
+      // Returns true when the plugin was registered.
+      const loadOptionalServicePlugin = async (
+        pkg: string,
+        exportName: string,
+        opts: { required: boolean; label: string; track: string },
+      ): Promise<boolean> => {
         try {
-          const aiPkg = '@objectstack/service-ai';
-          const { AIServicePlugin } = await importFromHost(aiPkg);
-
-          // AIServicePlugin will auto-detect LLM provider from environment variables
-          // (AI_GATEWAY_MODEL, OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_GENERATIVE_AI_API_KEY)
-          // No need to manually construct the adapter here.
-          await kernel.use(new AIServicePlugin());
-          trackPlugin('AIService');
-        } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : String(err);
-          const code = (err as { code?: string })?.code;
-          const missing = code === 'ERR_MODULE_NOT_FOUND'
-            || msg.includes('Cannot find module')
-            || msg.includes('Cannot find package');
-          if (!missing) {
-            console.error('[AI] AIServicePlugin failed to start:', msg);
-          }
-          // @objectstack/service-ai not installed — AI features unavailable
-        }
-
-        // 4b. Auto-register AI Studio (AI-driven metadata authoring / "online
-        // development") when the private @objectstack/service-ai-studio package
-        // is installed. It is NOT part of the open-source framework: the dynamic
-        // import below silently skips when absent, so open-source installs get
-        // the generic AI runtime only. Enterprise installs that ship the package
-        // get full AI authoring. AIStudioPlugin attaches via the `ai:ready` hook.
-        const hasAIStudio = plugins.some(
-          (p: any) => p.name === 'com.objectstack.service-ai-studio'
-              || p.constructor?.name === 'AIStudioPlugin'
-        );
-        if (!hasAIStudio) {
-          try {
-            const studioPkg = '@objectstack/service-ai-studio';
-            const { AIStudioPlugin } = await importFromHost(studioPkg);
-            await kernel.use(new AIStudioPlugin());
-            trackPlugin('AIStudio');
-          } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : String(err);
-            const code = (err as { code?: string })?.code;
-            const missing = code === 'ERR_MODULE_NOT_FOUND'
-              || msg.includes('Cannot find module')
-              || msg.includes('Cannot find package');
-            if (!missing) {
-              console.error('[AI Studio] AIStudioPlugin failed to start:', msg);
+          const mod: any = await importFromHost(pkg);
+          const Ctor = mod[exportName];
+          if (typeof Ctor !== 'function') {
+            const detail = `${pkg} did not export ${exportName}`;
+            if (opts.required) {
+              throw new Error(`[${opts.label}] required but ${detail}.`);
             }
-            // @objectstack/service-ai-studio not installed — AI authoring unavailable
+            console.warn(chalk.yellow(`  ⚠ ${opts.label}: ${detail} — skipping`));
+            return false;
+          }
+          await kernel.use(new Ctor());
+          trackPlugin(opts.track);
+          return true;
+        } catch (err: unknown) {
+          if (opts.required) {
+            const msg = err instanceof Error ? err.message : String(err);
+            throw new Error(
+              Serve.isModuleNotFoundError(err)
+                ? `[${opts.label}] required but ${pkg} is not installed. `
+                    + `Add it to the app's dependencies, or drop the capability from \`requires\`.`
+                : `[${opts.label}] failed to start: ${msg}`,
+            );
+          }
+          // auto (opt-in): non-fatal. A real crash is surfaced; a missing package is
+          // the expected "not installed" path and stays quiet.
+          if (!Serve.isModuleNotFoundError(err)) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.error(`[${opts.label}] failed to start: ${msg}`);
+          }
+          return false;
+        }
+      };
+
+      // Base AI service — enable from declared INTENT, not package presence (#1597):
+      //   • `requires: ['ai']` (or `['ai-studio']`, which implies the base) ⇒ required
+      //     → a missing/broken package aborts startup (fail-fast).
+      //   • package declared in the app's package.json (but not required) ⇒ auto
+      //     → load best-effort.
+      //   • otherwise ⇒ skip, with NO speculative import.
+      // The `ai` tier is the orthogonal DENY: a Community-Edition deployment whose
+      // `tiers` omit `ai` never loads it, whatever the intent — so a CE app that
+      // omits AI gets no AI service, no agents, and no `services.ai` in discovery
+      // (the console hides its AI surface), while every other capability is unaffected.
+      const aiRequired =
+        declaredRequires.has('ai') || declaredRequires.has('ai-studio');
+      const aiDecision = Serve.resolveOptionalPluginLoad({
+        tierAllowed: tierEnabled('ai'),
+        required: aiRequired,
+        declared: wantsAiService,
+      });
+      if (!hasAIPlugin && aiDecision !== 'off') {
+        // AIServicePlugin auto-detects its LLM provider from environment
+        // (AI_GATEWAY_MODEL, OPENAI_API_KEY, ANTHROPIC_API_KEY,
+        // GOOGLE_GENERATIVE_AI_API_KEY) — no adapter to construct here.
+        const aiLoaded = await loadOptionalServicePlugin(
+          '@objectstack/service-ai',
+          'AIServicePlugin',
+          { required: aiDecision === 'required', label: 'AI', track: 'AIService' },
+        );
+
+        // AI Studio (AI-driven metadata authoring / "online development") builds on
+        // the base service and attaches via its `ai:ready` hook, so only attempt it
+        // once the base actually loaded. It is NOT part of the open-source framework:
+        //   • `requires: ['ai-studio']` ⇒ required → fail-fast if the private package
+        //     is absent (an app that advertises Studio must ship it).
+        //   • package declared but not required ⇒ auto (best-effort).
+        //   • otherwise ⇒ skip — this is the control-plane host path (apps/cloud ships
+        //     no Studio and MUST boot clean, cloud#107): not declared + not required
+        //     ⇒ no import, no error.
+        if (aiLoaded) {
+          const hasAIStudio = plugins.some(
+            (p: any) => p.name === 'com.objectstack.service-ai-studio'
+                || p.constructor?.name === 'AIStudioPlugin'
+          );
+          if (!hasAIStudio) {
+            const studioDecision = Serve.resolveOptionalPluginLoad({
+              tierAllowed: tierEnabled('ai'),
+              required: declaredRequires.has('ai-studio'),
+              declared: hostDeclaresDependency('@objectstack/service-ai-studio'),
+            });
+            if (studioDecision !== 'off') {
+              await loadOptionalServicePlugin(
+                '@objectstack/service-ai-studio',
+                'AIStudioPlugin',
+                { required: studioDecision === 'required', label: 'AI Studio', track: 'AIStudio' },
+              );
+            }
           }
         }
       }
 
       // 5. Capability resolver — auto-load service plugins declared in
-      // `requires: [...]` that are NOT tier-gated. Each entry maps to a
-      // package + factory; if the user already provided an explicit
-      // instance via `plugins: [...]` we skip (explicit wins).
-      //
-      // Adding a new built-in capability is a one-line change here.
-      type CapabilitySpec = {
-        pkg: string;
-        export: string;            // named export to import
-        nameMatch: string[];       // plugin.name / constructor.name fragments to detect dupes
-        configKey?: string;        // optional config field passed as constructor arg
-        extras?: Array<{ pkg: string; export: string; nameMatch: string[] }>;
-      };
-      const CAPABILITY_PROVIDERS: Record<string, CapabilitySpec> = {
-        automation: {
-          // Self-contained: AutomationServicePlugin seeds all built-in node
-          // executors itself (ADR-0018), so flows have executors with no
-          // companion node-pack plugins.
-          pkg: '@objectstack/service-automation',
-          export: 'AutomationServicePlugin',
-          nameMatch: ['service-automation', 'AutomationServicePlugin'],
-        },
-        analytics: {
-          pkg: '@objectstack/service-analytics',
-          export: 'AnalyticsServicePlugin',
-          nameMatch: ['service-analytics', 'AnalyticsServicePlugin'],
-          configKey: 'analyticsCubes',
-        },
-        audit: {
-          pkg: '@objectstack/plugin-audit',
-          export: 'AuditPlugin',
-          nameMatch: ['audit', 'AuditPlugin'],
-        },
-        cache: {
-          pkg: '@objectstack/service-cache',
-          export: 'CacheServicePlugin',
-          nameMatch: ['service-cache', 'CacheServicePlugin'],
-        },
-        storage: {
-          pkg: '@objectstack/service-storage',
-          export: 'StorageServicePlugin',
-          nameMatch: ['service-storage', 'StorageServicePlugin'],
-        },
-        queue: {
-          pkg: '@objectstack/service-queue',
-          export: 'QueueServicePlugin',
-          nameMatch: ['service-queue', 'QueueServicePlugin'],
-        },
-        job: {
-          pkg: '@objectstack/service-job',
-          export: 'JobServicePlugin',
-          nameMatch: ['service-job', 'JobServicePlugin'],
-        },
-        messaging: {
-          // Backs the `notify` flow node (ADR-0012): delivers to a user's
-          // channels (inbox by default → `sys_inbox_message` rows). Without
-          // this the notify node degrades to a logged no-op.
-          pkg: '@objectstack/service-messaging',
-          export: 'MessagingServicePlugin',
-          nameMatch: ['service-messaging', 'MessagingServicePlugin'],
-        },
-        triggers: {
-          // Makes autolaunched flows actually fire. The automation engine ships
-          // the `FlowTrigger` wiring; these plugins are the concrete triggers:
-          // record-change (ObjectQL lifecycle hooks) + schedule (cron/interval
-          // via the job service — so pair `triggers` with `job`).
-          pkg: '@objectstack/trigger-record-change',
-          export: 'RecordChangeTriggerPlugin',
-          nameMatch: ['trigger-record-change', 'RecordChangeTriggerPlugin'],
-          extras: [
-            {
-              pkg: '@objectstack/trigger-schedule',
-              export: 'ScheduleTriggerPlugin',
-              nameMatch: ['trigger-schedule', 'ScheduleTriggerPlugin'],
-            },
-            {
-              // Inbound webhook/HTTP trigger (ADR-0041 Tier 1) — arms
-              // `type: 'api'` flows with HMAC-verified, queue-backed hooks.
-              pkg: '@objectstack/trigger-api',
-              export: 'ApiTriggerPlugin',
-              nameMatch: ['trigger-api', 'ApiTriggerPlugin'],
-            },
-          ],
-        },
-        realtime: {
-          pkg: '@objectstack/service-realtime',
-          export: 'RealtimeServicePlugin',
-          nameMatch: ['service-realtime', 'RealtimeServicePlugin'],
-        },
-        // `feed` removed (ADR-0052 §5): `sys_comment`/`sys_activity` (durable,
-        // default-loaded, UI-wired) is the canonical record collaboration +
-        // timeline backend. `@objectstack/service-feed` was an in-memory,
-        // non-durable, UI-unconsumed parallel implementation — retired to end
-        // the split-brain. The unified typed timeline lives on `sys_activity`.
-        mcp: {
-          pkg: '@objectstack/mcp',
-          export: 'MCPServerPlugin',
-          nameMatch: ['mcp-server', 'MCPServerPlugin', 'mcp'],
-        },
-        marketplace: {
-          pkg: '@objectstack/service-package',
-          export: 'PackageServicePlugin',
-          nameMatch: ['service-package', 'PackageServicePlugin'],
-        },
-        email: {
-          pkg: '@objectstack/plugin-email',
-          export: 'EmailServicePlugin',
-          nameMatch: ['plugin-email', 'EmailServicePlugin'],
-        },
-        sms: {
-          // #2780 — backs phone-number OTP sign-in/reset (plugin-auth) and
-          // the messaging `sms` channel. Provider config lives in the `sms`
-          // settings namespace (OS_SMS_* env keys win at the resolver);
-          // unconfigured ⇒ dev LogSmsTransport (no real send).
-          pkg: '@objectstack/service-sms',
-          export: 'SmsServicePlugin',
-          nameMatch: ['service-sms', 'SmsServicePlugin'],
-        },
-        sharing: {
-          pkg: '@objectstack/plugin-sharing',
-          export: 'SharingServicePlugin',
-          nameMatch: ['plugin-sharing', 'SharingServicePlugin', 'SharingPlugin'],
-        },
-        // #2486 — auto-required above when resolveSearchPinyinEnabled()
-        // (explicit env, else any configured zh-* locale) says on.
-        'pinyin-search': {
-          pkg: '@objectstack/plugin-pinyin-search',
-          export: 'PinyinSearchPlugin',
-          nameMatch: ['plugin-pinyin-search', 'PinyinSearchPlugin'],
-        },
-        reports: {
-          pkg: '@objectstack/plugin-reports',
-          export: 'ReportsServicePlugin',
-          nameMatch: ['plugin-reports', 'ReportsServicePlugin'],
-        },
-        approvals: {
-          pkg: '@objectstack/plugin-approvals',
-          export: 'ApprovalsServicePlugin',
-          nameMatch: ['plugin-approvals', 'ApprovalsServicePlugin'],
-        },
-        settings: {
-          pkg: '@objectstack/service-settings',
-          export: 'SettingsServicePlugin',
-          nameMatch: ['service-settings', 'SettingsServicePlugin'],
-        },
-        webhooks: {
-          pkg: '@objectstack/plugin-webhooks',
-          export: 'WebhookOutboxPlugin',
-          nameMatch: ['plugin-webhook-outbox', 'WebhookOutboxPlugin'],
-        },
-      };
+      // `requires: [...]` that are NOT tier-gated. Each entry of
+      // Serve.CAPABILITY_PROVIDERS maps a token to a package + factory; if the
+      // user already provided an explicit instance via `plugins: [...]` we
+      // skip (explicit wins). Adding a new built-in capability = one entry on
+      // the static registry + its token in the spec vocabulary (#3265).
+      const CAPABILITY_PROVIDERS = Serve.CAPABILITY_PROVIDERS;
 
       const hasPluginMatching = (fragments: string[]) =>
         plugins.some((p: any) => {
@@ -1870,7 +2026,22 @@ export default class Serve extends Command {
 
       for (const cap of requires) {
         const spec = CAPABILITY_PROVIDERS[cap];
-        if (!spec) continue; // tier-gated capabilities (ai/i18n/ui/auth) handled above
+        if (!spec) {
+          // No provider in this runtime. Tier-gated tokens (ai/ai-studio/i18n/
+          // ui/auth) are handled by their dedicated blocks above; other KNOWN
+          // vocabulary tokens are provided elsewhere (`hierarchy-security` via
+          // an explicit enterprise plugin in `plugins[]`, `ai-seat`/`governance`
+          // by cloud's objectos-runtime) — stay quiet for those. An UNKNOWN
+          // declared token is a typo that was previously ignored SILENTLY
+          // (#3265) — warn loudly. Warn-first: intended to become a hard error
+          // once the vocabulary proves complete (Prime Directive #12).
+          if (declaredRequires.has(cap) && !PLATFORM_CAPABILITY_TOKENS.includes(cap)) {
+            console.warn(chalk.yellow(
+              `  ⚠ requires: "${cap}" is not a known platform capability — check for a typo. It was ignored.`,
+            ));
+          }
+          continue;
+        }
         if (hasPluginMatching(spec.nameMatch)) continue;
 
         try {
@@ -1994,10 +2165,26 @@ export default class Serve extends Command {
           }
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : String(err);
-          if (!msg.includes('Cannot find module') && !msg.includes('ERR_MODULE_NOT_FOUND')) {
+          const missing = Serve.isModuleNotFoundError(err);
+          // Fail-fast (#1597) for capabilities the app EXPLICITLY declared in
+          // `requires`: one that can't be provided — its provider package absent, or
+          // its plugin throwing while it starts — is a hard boot error, not a warning
+          // to scroll past (declared ≠ enforced, Prime Directive #10). The outer boot
+          // catch prints the message and exits 1. Platform-injected convenience
+          // defaults (ALWAYS_ON, mcp, pinyin-search, auth→email, queue/job) stay
+          // best-effort: absent ⇒ warn, crash ⇒ error, boot continues.
+          if (declaredRequires.has(cap)) {
+            throw new Error(
+              missing
+                ? `Capability "${cap}" is required but ${spec.pkg} is not installed. `
+                    + `Add it to the app's dependencies, or remove "${cap}" from \`requires\`.`
+                : `Capability "${cap}" (${spec.pkg}) failed to start: ${msg}`,
+            );
+          }
+          if (!missing) {
             console.error(`[Capability:${cap}] failed to load ${spec.pkg}: ${msg}`);
           } else {
-            console.warn(chalk.yellow(`  ⚠ Capability "${cap}" required but ${spec.pkg} is not installed`));
+            console.warn(chalk.yellow(`  ⚠ Capability "${cap}" (auto-enabled default) not installed — skipping ${spec.pkg}`));
           }
         }
       }
@@ -2037,7 +2224,7 @@ export default class Serve extends Command {
         }
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
-        if (!msg.includes('Cannot find module') && !msg.includes('ERR_MODULE_NOT_FOUND')) {
+        if (!Serve.isModuleNotFoundError(err)) {
           console.error(`[Datasource] federation wiring failed: ${msg}`);
         }
       }
@@ -2153,7 +2340,7 @@ export default class Serve extends Command {
         }
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
-        if (!msg.includes('Cannot find module') && !msg.includes('ERR_MODULE_NOT_FOUND')) {
+        if (!Serve.isModuleNotFoundError(err)) {
           console.error(`[Datasource] runtime-UI admin wiring failed: ${msg}`);
         }
       }
@@ -2322,6 +2509,11 @@ export default class Serve extends Command {
         multiTenant: resolveMultiOrgEnabled(),
         seededAdmin,
         automation: automationSummary,
+        // #3167 — surface the default-on MCP endpoint in the dev loop, where an
+        // AI client can connect to operate the running app. Same decision point
+        // that auto-loads the plugin + gates the route, so the banner never
+        // advertises an endpoint that isn't served.
+        mcpEnabled: isMcpServerEnabled(),
       });
 
       // ── Publish the actually-bound port ────────────────────────────

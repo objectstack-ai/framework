@@ -237,7 +237,8 @@ migrations) that genuinely need full authority opt in explicitly with
 never the consequence of a forgotten field.
 
 ```typescript
-await aiService.chatWithTools(messages, tools, {
+await aiService.chatWithTools(messages, {
+  tools,
   toolExecutionContext: {
     actor: {
       id: currentUser.id,

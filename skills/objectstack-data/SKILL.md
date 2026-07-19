@@ -119,8 +119,9 @@ Organize fields into logical groups (e.g., "Contact Information", "Billing",
   modals, and detail pages; for a bespoke single-page layout assign a
   custom Page instead.
 
+<!-- os:check -->
 ```typescript
-import { ObjectSchema } from '@objectstack/spec';
+import { ObjectSchema } from '@objectstack/spec/data';
 
 export default ObjectSchema.create({
   name: 'account',
@@ -157,6 +158,7 @@ belongs to the data model and should apply everywhere the field is edited:
 default forms, Studio-authored forms, inline master-detail grids, public forms,
 and API-backed writes.
 
+<!-- os:check -->
 ```typescript
 import { P } from '@objectstack/spec';
 import { ObjectSchema, Field } from '@objectstack/spec/data';
@@ -214,8 +216,9 @@ For comprehensive documentation with incorrect/correct examples:
 
 ## Quick-Start Template
 
+<!-- os:check -->
 ```typescript
-import { ObjectSchema } from '@objectstack/spec';
+import { ObjectSchema } from '@objectstack/spec/data';
 
 export default ObjectSchema.create({
   name: 'support_case',
@@ -380,6 +383,7 @@ See [rules/indexing.md](./rules/indexing.md) for composite/partial/gin/gist inde
 
 Implement business logic at data operation lifecycle points:
 
+<!-- os:check -->
 ```typescript
 import { Hook, HookContext } from '@objectstack/spec/data';
 

@@ -483,6 +483,50 @@ describe('ObjectQL Engine', () => {
         });
     });
 
+    describe('organizationId exposed to hooks as the blessed org name (#3280)', () => {
+        beforeEach(async () => {
+            engine.registerDriver(mockDriver, true);
+            await engine.init();
+            vi.mocked(SchemaRegistry.getObject).mockReturnValue({ name: 'task', fields: {} } as any);
+        });
+
+        it('populates session.organizationId + user.organizationId, both equal to the resolved org', async () => {
+            let session: any, user: any;
+            engine.registerHook('beforeInsert', async (ctx: any) => { session = ctx.session; user = ctx.user; }, { object: 'task' });
+
+            await engine.insert('task', { title: 'x' }, { context: { userId: 'u1', tenantId: 'org_1' } as any });
+
+            // Blessed name and the deprecated alias carry the identical value.
+            expect(session.organizationId).toBe('org_1');
+            expect(session.tenantId).toBe('org_1');
+            expect(session.organizationId).toBe(session.tenantId);
+            // `ctx.user` shortcut carries the same org for zero-relearning filtering.
+            expect(user).toMatchObject({ id: 'u1', organizationId: 'org_1' });
+        });
+
+        it('unscoped (no org) call: session present, org fields undefined, user has no organizationId', async () => {
+            let session: any, user: any;
+            engine.registerHook('beforeInsert', async (ctx: any) => { session = ctx.session; user = ctx.user; }, { object: 'task' });
+
+            await engine.insert('task', { title: 'y' }, { context: { userId: 'u1' } as any });
+
+            expect(session).toBeDefined();
+            expect(session.organizationId).toBeUndefined();
+            expect(session.tenantId).toBeUndefined();
+            expect(user).toMatchObject({ id: 'u1' });
+            expect(user.organizationId).toBeUndefined();
+        });
+
+        it('system / no acting user: user shortcut is undefined (org read via session)', async () => {
+            let userSeen: any = 'unset';
+            engine.registerHook('beforeInsert', async (ctx: any) => { userSeen = ctx.user; }, { object: 'task' });
+
+            await engine.insert('task', { title: 'z' }, { context: { isSystem: true, tenantId: 'org_1' } as any });
+
+            expect(userSeen).toBeUndefined();
+        });
+    });
+
     describe('execution context via the trailing options arg (read methods)', () => {
         // Regression: reads took context inside the query while writes took it in
         // a trailing options arg — so `find(obj, q, { context })` silently dropped
@@ -527,6 +571,76 @@ describe('ObjectQL Engine', () => {
             (mockDriver.count as any).mockResolvedValue(0);
             await engine.count('task', {}, { context: { tenantId: 't-cnt' } as any });
             expect((mockDriver.count as any).mock.calls.at(-1)?.[2]).toMatchObject({ tenantId: 't-cnt' });
+        });
+    });
+
+    describe('tenancy.enabled:false objects are platform-global (#3249, ADR-0066)', () => {
+        // Regression: buildDriverOptions stamped execCtx.tenantId into driver
+        // options unconditionally, so a platform-global object (sys_license)
+        // got org-scoped at the driver and its NULL-org rows vanished for an
+        // authenticated org-context read while anonymous reads saw them.
+        beforeEach(async () => {
+            engine.registerDriver(mockDriver, true);
+            await engine.init();
+        });
+
+        const lastFindOpts = () => (mockDriver.find as any).mock.calls.at(-1)?.[2];
+
+        it('does not stamp execCtx.tenantId into driver options for a tenancy-disabled object', async () => {
+            vi.mocked(SchemaRegistry.getObject).mockReturnValue({
+                name: 'sys_license', tenancy: { enabled: false }, fields: {},
+            } as any);
+            await engine.find('sys_license', { filters: [] }, { context: { tenantId: 'org_admin' } as any });
+            expect(lastFindOpts()?.tenantId).toBeUndefined();
+        });
+
+        it('still stamps tenantId for objects without a tenancy declaration', async () => {
+            vi.mocked(SchemaRegistry.getObject).mockReturnValue({ name: 'task', fields: {} } as any);
+            await engine.find('task', { filters: [] }, { context: { tenantId: 'org_a' } as any });
+            expect(lastFindOpts()).toMatchObject({ tenantId: 'org_a' });
+        });
+
+        it('still stamps tenantId for an explicit tenancy.enabled:true object', async () => {
+            vi.mocked(SchemaRegistry.getObject).mockReturnValue({
+                name: 'task', tenancy: { enabled: true }, fields: {},
+            } as any);
+            await engine.find('task', { filters: [] }, { context: { tenantId: 'org_a' } as any });
+            expect(lastFindOpts()).toMatchObject({ tenantId: 'org_a' });
+        });
+
+        it('still threads timezone (and the rest of the context) while withholding tenantId', async () => {
+            vi.mocked(SchemaRegistry.getObject).mockReturnValue({
+                name: 'sys_license', tenancy: { enabled: false }, fields: {},
+            } as any);
+            await engine.find('sys_license', { filters: [] }, {
+                context: { tenantId: 'org_admin', timezone: 'Asia/Shanghai' } as any,
+            });
+            expect(lastFindOpts()).toMatchObject({ timezone: 'Asia/Shanghai' });
+            expect(lastFindOpts()?.tenantId).toBeUndefined();
+        });
+
+        it('an explicitly-passed base tenantId still reaches the driver (caller intent wins)', async () => {
+            vi.mocked(SchemaRegistry.getObject).mockReturnValue({
+                name: 'sys_license', tenancy: { enabled: false }, fields: {},
+            } as any);
+            // buildDriverOptions merges over the caller-supplied base options
+            // (for find: the query object) and never overwrites an explicit
+            // tenantId — deliberate cross-checks stay possible.
+            await engine.find(
+                'sys_license',
+                { filters: [], tenantId: 'org_explicit' } as any,
+                { context: { timezone: 'UTC' } as any },
+            );
+            expect(lastFindOpts()).toMatchObject({ tenantId: 'org_explicit' });
+        });
+
+        it('write path: insert on a tenancy-disabled object carries no tenantId to the driver', async () => {
+            vi.mocked(SchemaRegistry.getObject).mockReturnValue({
+                name: 'sys_license', tenancy: { enabled: false }, fields: {},
+            } as any);
+            await engine.insert('sys_license', { customer: 'ACME' }, { context: { tenantId: 'org_admin' } as any });
+            const createOpts = (mockDriver.create as any).mock.calls.at(-1)?.[2];
+            expect(createOpts?.tenantId).toBeUndefined();
         });
     });
 

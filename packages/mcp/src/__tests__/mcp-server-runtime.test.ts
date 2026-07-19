@@ -104,25 +104,6 @@ function createMockMetadataService() {
   };
 }
 
-function createMockDataEngine() {
-  const records: Record<string, Record<string, any>> = {
-    'account:abc123': { id: 'abc123', name: 'Acme Corp', status: 'active' },
-    'contact:xyz789': { id: 'xyz789', first_name: 'John', last_name: 'Doe' },
-  };
-
-  return {
-    find: vi.fn(async () => []),
-    findOne: vi.fn(async (objectName: string, options: any) => {
-      const recordId = options?.where?.id;
-      return records[`${objectName}:${recordId}`] ?? null;
-    }),
-    insert: vi.fn(),
-    update: vi.fn(),
-    delete: vi.fn(),
-    count: vi.fn(async () => 0),
-    aggregate: vi.fn(async () => []),
-  };
-}
 
 function createMockLogger() {
   return {
@@ -224,10 +205,10 @@ describe('MCPServerRuntime', () => {
       expect(mockLogger.info).toHaveBeenCalledWith('[MCP] Bridged 3 resource endpoints');
     });
 
-    it('should bridge record resources when DataEngine is available', () => {
+    it('should bridge record resources when a principal-bound reader is provided', () => {
       const metadataService = createMockMetadataService();
-      const dataEngine = createMockDataEngine();
-      runtime.bridgeResources(metadataService as any, dataEngine as any);
+      const getRecord = async () => null; // principal-bound reader (ADR-0101)
+      runtime.bridgeResources(metadataService as any, getRecord);
 
       // Should register: object_list, object_schema, record_by_id, metadata_types (4 resources)
       expect(mockLogger.info).toHaveBeenCalledWith('[MCP] Bridged 4 resource endpoints');

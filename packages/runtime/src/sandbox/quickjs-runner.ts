@@ -17,9 +17,16 @@
  *   `ctx.api.object('foo').count(...)` and the host method runs in node).
  *
  * Trade-offs:
- * - Per-invocation overhead is dominated by VM creation. We pool runtimes per
- *   `(origin.kind, capabilities-set)` to amortise startup. Pool size is bounded
- *   by `maxPooled` (default 8); evicted runtimes are disposed.
+ * - Per-invocation overhead is dominated by VM creation: every call compiles a
+ *   fresh WASM module via `newAsyncContext()` and disposes it on settle (see
+ *   {@link QuickJSScriptRunner.execute}). Runtimes are deliberately NOT pooled —
+ *   a shared module hit HostRef double-free crashes when contexts were disposed
+ *   concurrently, and the per-invocation isolate sidesteps that. The cost is
+ *   real, though: a nested hook compiles a SECOND module inside the parent's
+ *   budget, so on a loaded/slow host the fixed compile cost alone can trip the
+ *   hook timeout. The per-invocation timeout default is therefore env-overridable
+ *   via `OS_SANDBOX_HOOK_TIMEOUT_MS` / `OS_SANDBOX_ACTION_TIMEOUT_MS`
+ *   (framework#3259) so an operator can raise the floor without a code change.
  * - Memory caps are advisory under quickjs (engine has no hard MB cap); the
  *   runner uses `setMemoryLimit(memoryMb * 1MB)` which is best-effort.
  */
@@ -29,6 +36,7 @@ import {
   type QuickJSAsyncContext,
   type QuickJSHandle,
 } from 'quickjs-emscripten';
+import { resolveSandboxTimeoutMs } from '@objectstack/types';
 import type { HookBody, ScriptBody, ExpressionBody, HookBodyCapability } from '@objectstack/spec/data';
 import type {
   ScriptContext,
@@ -55,9 +63,15 @@ export class QuickJSScriptRunner implements ScriptRunner {
   private opts: Required<QuickJSScriptRunnerOptions>;
 
   constructor(opts: QuickJSScriptRunnerOptions = {}) {
+    // Precedence for the per-invocation timeout default: an explicit constructor
+    // option wins; else the deployment's `OS_SANDBOX_{HOOK,ACTION}_TIMEOUT_MS`
+    // env override (so a loaded/slow host — e.g. an oversubscribed CI runner —
+    // can raise the floor without a code change, framework#3259); else the
+    // built-in default. `resolveSandboxTimeoutMs` returns the built-in fallback
+    // untouched when the env var is unset, so default behaviour is unchanged.
     this.opts = {
-      hookTimeoutMs: opts.hookTimeoutMs ?? DEFAULT_HOOK_TIMEOUT_MS,
-      actionTimeoutMs: opts.actionTimeoutMs ?? DEFAULT_ACTION_TIMEOUT_MS,
+      hookTimeoutMs: opts.hookTimeoutMs ?? resolveSandboxTimeoutMs('hook', DEFAULT_HOOK_TIMEOUT_MS),
+      actionTimeoutMs: opts.actionTimeoutMs ?? resolveSandboxTimeoutMs('action', DEFAULT_ACTION_TIMEOUT_MS),
       memoryMb: opts.memoryMb ?? DEFAULT_MEMORY_MB,
     };
   }
@@ -104,10 +118,28 @@ export class QuickJSScriptRunner implements ScriptRunner {
     /* no-op — runtimes are per-invocation in v1 */
   }
 
-  /** Pick the smallest of body / opts / engine-default. */
+  /**
+   * Resolve the effective per-invocation timeout.
+   *
+   * The engine default (`hookTimeoutMs` / `actionTimeoutMs`) is a FALLBACK used
+   * only when the caller supplies no explicit timeout — it is NOT a hard
+   * ceiling. Whichever explicit timeout the caller *did* supply wins: the body's
+   * own `timeoutMs` (the spec permits up to 30_000ms — see `ScriptBody.timeoutMs`)
+   * and/or an enclosing hook/action timeout passed via `opts.timeoutMs`; when
+   * both are present the smaller wins, matching the spec's "smaller of this and
+   * the enclosing hook/action timeout wins".
+   *
+   * Previously the default was folded straight into `Math.min(...)`, so for
+   * hooks — whose default is 250ms — it *always* dominated: a body that declared
+   * `timeoutMs: 5000` to give a legitimate nested cross-object write room to
+   * settle was silently clamped back to 250ms and killed mid-flight. That made
+   * the spec's `ScriptBody.timeoutMs` a declared-but-unenforced knob for hooks
+   * and pushed template authors toward denormalized rollup workarounds (#1867).
+   */
   private resolveTimeout(opts: ScriptRunOptions, bodyTimeoutMs: number | undefined): number {
     const def = opts.origin.kind === 'hook' ? this.opts.hookTimeoutMs : this.opts.actionTimeoutMs;
-    return Math.min(...[def, opts.timeoutMs, bodyTimeoutMs].filter((n): n is number => typeof n === 'number'));
+    const explicit = [opts.timeoutMs, bodyTimeoutMs].filter((n): n is number => typeof n === 'number');
+    return explicit.length > 0 ? Math.min(...explicit) : def;
   }
 
   private async execute(args: {
@@ -203,10 +235,26 @@ export class QuickJSScriptRunner implements ScriptRunner {
       // are parked on a host promise, so this deadline check is the backstop).
       // The previous fixed `pumps < 1000` cap fired in ~tens of ms on legitimate
       // work and surfaced as "did not resolve after 1000 pump iterations".
+      // Adaptive idle backoff (#3233): while the script is progressing we pump
+      // on setImmediate (near-zero latency); once it is only *waiting* on an
+      // in-flight host promise — 0 VM jobs executed per pump — we ramp the yield
+      // up to a small capped setTimeout instead of spinning setImmediate
+      // ~200k×/s doing nothing. Any executed job (a settled host call, a resumed
+      // continuation) resets the fast path, so sequential host calls and
+      // multi-turn work keep their low latency; only a genuinely idle wait backs
+      // off, and by at most IDLE_BACKOFF_CAP_MS.
+      const FAST_PUMPS = 4;
+      const IDLE_BACKOFF_CAP_MS = 8;
       let pumps = 0;
+      let idle = 0;
       for (;;) {
-        // Yield to host event loop so any in-flight host promises resolve.
-        await new Promise<void>((resolve) => setImmediate(resolve));
+        // Yield to the host event loop so in-flight host promises can settle.
+        if (idle < FAST_PUMPS) {
+          await new Promise<void>((resolve) => setImmediate(resolve));
+        } else {
+          const backoffMs = Math.min(IDLE_BACKOFF_CAP_MS, 1 << Math.min(idle - FAST_PUMPS, 3));
+          await new Promise<void>((resolve) => setTimeout(resolve, backoffMs));
+        }
 
         const pending = runtime.executePendingJobs();
         if (pending.error) {
@@ -243,6 +291,9 @@ export class QuickJSScriptRunner implements ScriptRunner {
             `${args.origin.kind} '${args.origin.name}' exceeded timeout of ${args.timeoutMs}ms (after ${pumps} pump iterations)`,
           );
         }
+        // Progress this pump → reset to the fast path; genuinely idle → ramp the
+        // counter so the next yield backs off.
+        idle = pending.value > 0 ? 0 : idle + 1;
         pumps++;
       }
     } finally {

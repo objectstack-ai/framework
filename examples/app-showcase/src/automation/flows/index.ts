@@ -1379,8 +1379,60 @@ export const InquiryPurgeFlow = defineFlow({
   ],
 });
 
+/**
+ * Expense Sign-off (#3266) — a `per_group` approval demonstrating 会签: a
+ * MANAGER **and** a FINANCE/audit approver must EACH sign off (one from each
+ * group) before a submitted expense report is approved; either rejection
+ * vetoes. Where {@link BudgetApprovalFlow} chains position steps in series,
+ * this gates a SINGLE node on two groups at once — the node-internal parallel
+ * pattern (钉钉/Salesforce style) that needs no parallel branches. Set
+ * `minApprovals` > 1 for "two from each group"; use `behavior: 'quorum'` +
+ * `minApprovals` for M-of-N collective sign-off.
+ */
+export const ExpenseSignoffFlow = defineFlow({
+  name: 'showcase_expense_signoff',
+  label: 'Expense Report Sign-off',
+  description: 'Manager + finance per-group sign-off (会签) on a submitted expense report (#3266).',
+  type: 'autolaunched',
+  status: 'active',
+  nodes: [
+    {
+      id: 'start',
+      type: 'start',
+      label: 'On Submitted',
+      config: {
+        objectName: 'showcase_expense_report',
+        triggerType: 'record-after-update',
+        condition: 'status == "submitted" && previous.status != "submitted"',
+      },
+    },
+    {
+      id: 'dual_signoff',
+      type: 'approval',
+      label: 'Manager + Finance Sign-off',
+      config: {
+        approvers: [
+          { type: 'position', value: 'manager', group: 'manager' },
+          { type: 'position', value: 'auditor', group: 'finance' },
+        ],
+        behavior: 'per_group',
+        minApprovals: 1,
+        lockRecord: true,
+      },
+    },
+    { id: 'approved', type: 'end', label: 'Approved' },
+    { id: 'rejected', type: 'end', label: 'Rejected' },
+  ],
+  edges: [
+    { id: 'e1', source: 'start', target: 'dual_signoff' },
+    { id: 'e2', source: 'dual_signoff', target: 'approved', label: 'approve' },
+    { id: 'e3', source: 'dual_signoff', target: 'rejected', label: 'reject' },
+  ],
+});
+
 export const allFlows = [
   TaskCompletedFlow,
+  ExpenseSignoffFlow,
   ReassignWizardFlow,
   InquiryPurgeFlow,
   BudgetApprovalFlow,

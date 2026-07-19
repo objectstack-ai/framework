@@ -66,6 +66,33 @@ strict containment for scope grants), and everyone else is denied. The
 `everyone`/`guest` audience-anchor bindings reject high-privilege sets at the
 data layer for every caller.
 
+### The MCP execution surface (ADR-0096 / ADR-0101)
+
+The serve-side MCP server (`@objectstack/mcp`) is a first-class **execution
+surface**, not a side door around the chain above. Whatever an agent does over
+MCP reaches object data only through the **same** gates 3–6 as a REST request:
+a per-request, **principal-bound bridge** runs every tool through `callData`
+with the caller's `ExecutionContext`, so object CRUD, OWD/sharing, RLS, and FLS
+apply identically. Identity is admitted **fail-closed at each transport
+boundary**, and both transports hold an `enforced` row in the conformance
+matrix (`mcp-http-identity`, `mcp-stdio-authority`), so a fail-open regression
+breaks CI like any other surface.
+
+- **HTTP** (`/api/v1/mcp`, default-on — ADR-0096). The dispatcher resolves the
+  same `ExecutionContext` a REST call would; **no `userId` and not `isSystem` ⇒
+  401** (advertising RFC 9728 OAuth metadata in `WWW-Authenticate` when the
+  OAuth track is live, else a plain 401). An OAuth token additionally narrows
+  the exposed tool families to its granted scopes (`403` on none). Enforcement:
+  `packages/runtime/src/http-dispatcher.ts` `handleMcp` +
+  `buildMcpBridge(context)`.
+- **stdio** (opt-in — ADR-0101). The long-lived local transport has no ambient
+  identity: it mints its principal solely from `OS_MCP_STDIO_API_KEY`, resolved
+  through the **same** `resolveAuthzContext` chain and re-resolved per call
+  (revocation takes effect live). It is **fail-closed** — a missing / unknown /
+  revoked / expired / owner-less key refuses to start the transport — with **no
+  `system` bypass** (full authority means minting an admin or service key).
+  Enforcement: `packages/mcp/src/plugin.ts` `start()`.
+
 ## Combination semantics (the fixed order)
 
 From ADR-0066 *Precedence / combination semantics* — the contract, not an
@@ -79,9 +106,15 @@ implementation detail:
    Keys never collide across packages because object api names are
    package-namespaced.
 3. **RLS: OR within an object, AND with tenant-global.** Multiple row policies
-   for the same object/operation OR-combine; the wildcard tenant-isolation
-   policy ANDs on top. `viewAllRecords` / `modifyAllRecords` (super-user
-   bypass, posture-gated) short-circuit RLS for the object.
+   for the same object/operation OR-combine; the tenant wall (Layer 0, ADR-0095
+   D1) is a separate always-first AND conjunct, not an OR-mergeable policy.
+   `viewAllRecords` / `modifyAllRecords` (super-user bypass, posture-gated)
+   short-circuit the object's *business* RLS. Crossing the **tenant wall**,
+   though, requires the **`PLATFORM_ADMIN` posture** (ADR-0099 D1), which derives
+   only from an **unscoped `admin_full_access` grant** — a *scoped* grant, or
+   piecemeal platform capabilities (`studio.access`, `manage_users`, …), grant
+   Studio/admin *functions* but never widen the tenant data boundary. A tenant
+   `organization_admin` never crosses it (invariant I1).
 4. **Explicit deny — reserved.** There is no deny layer yet; the only implicit
    denies are the AND-gates in (1) and fail-closed defaults. Permission-set
    groups + subtractive *muting* (Salesforce-style) are the planned step 4
@@ -210,7 +243,7 @@ one of two doors, each writing only what it owns:
 | 2 · Distribution / install / upgrade / uninstall | Install-consent scopes (ADR-0025 — consent ≠ RBAC grants); namespaced, collision-free composition; provenance axis makes uninstall well-defined | ADR-0025/0028/0048/0086 |
 | 3 · Environment composition / assignment | Platform-owned assignment records (`sys_user_position` etc.); anti-escalation; union semantics | ADR-0057 D4 |
 | 4 · Runtime enforcement | The six-gate chain above; ~18 primitives enforced and CI-guarded | ADR-0056 D10 matrix |
-| 5 · Production / enterprise | ADR-0056 D8 dispositions settled (2026-07): compliance configs, data masking, and the global RLSConfig were **removed** (never enforced); field encryption stays honestly `[EXPERIMENTAL]` (roadmap); agent `visibility` is marked `[EXPERIMENTAL]` pending #1901. Enterprise authentication hardening staged per ADR-0069 | ADR-0049/0056 D8, ADR-0069 |
+| 5 · Production / enterprise | ADR-0056 D8 dispositions settled (2026-07): compliance configs, data masking, the global RLSConfig, and agent `visibility` were **removed** (never enforced — for `visibility`, correct owner/org enforcement is undesigned, so it was dropped rather than carried; re-introduce under #1901); field encryption stays honestly `[EXPERIMENTAL]` (roadmap — stable schema shape). Enterprise authentication hardening staged per ADR-0069 | ADR-0049/0056 D8, ADR-0069 |
 
 ## Explaining a decision (ADR-0090 D6)
 
@@ -377,13 +410,15 @@ The complete, prioritized gap map lives in issue **#2561** (the production
 | ADR | Owns |
 |---|---|
 | [0049](/adr/0049-no-unenforced-security-properties) | No unenforced security properties (enforce / mark / remove) |
-| [0054](/adr/0054-prove-it-runs) | Prove-it-runs — high-risk classes need runtime proofs |
+| [0054](/adr/0054-runtime-proof-for-authorable-surface) | Prove-it-runs — high-risk classes need runtime proofs |
 | [0056](/adr/0056-permission-model-landing-verification) | Permission-model landing: OWD, anonymous deny default, D10 matrix |
 | [0057](/adr/0057-erp-authorization-core-business-units-and-scope-depth) | Business units, scope depth, declarative RBAC seeding, platform-owned assignment |
 | [0066](/adr/0066-unified-authorization-model) | Unified model: capability registry, posture, precedence, future refinements |
-| [0068](/adr/0068-identity-roles) | Built-in identity positions (formerly "identity roles"), `EvalUser` |
+| [0068](/adr/0068-unified-user-context-and-built-in-identity-roles) | Built-in identity positions (formerly "identity roles"), `EvalUser` |
 | [0069](/adr/0069-enterprise-authentication-hardening) | Enterprise authentication hardening (phased) |
-| [0078](/adr/0078-no-inert-declarable-metadata) | No inert declarable metadata |
+| [0078](/adr/0078-no-silently-inert-metadata) | No inert declarable metadata |
 | [0086](/adr/0086-authz-metadata-config-boundary-and-cross-package-composition) | Metadata↔config boundary, package provenance, cross-package composition |
 | 0090 | Permission Model v2: position rename + vocabulary freeze, profile removal, fail-closed OWD default + external dial, audience anchors, principal taxonomy, publish linter, delegated administration, explain engine + access matrix |
 | 0091 | Grant lifecycle: validity windows + resolution-time filtering (L1, landed), delegation, break-glass, recertification substrate |
+| [0096](/adr/0096-execution-surface-identity-admission) | Execution-surface identity admission — no data-engine call without an explicit principal (the MCP HTTP surface admits identity here) |
+| [0101](/adr/0101-mcp-stdio-principal-admission) | MCP stdio principal admission — env-supplied API-key identity, fail-closed, no `system` bypass |

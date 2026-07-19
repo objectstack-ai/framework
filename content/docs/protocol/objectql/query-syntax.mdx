@@ -6,7 +6,7 @@ description: Database-agnostic query language with filtering, joins, aggregation
 import { Search, Filter, GitMerge, BarChart } from 'lucide-react';
 
 
-ObjectQL queries are expressed as **Abstract Syntax Trees (AST)** in JSON format. This enables database-agnostic querying—write once, compile to PostgreSQL, MongoDB, Redis, or any supported driver.
+ObjectQL queries are expressed as **Abstract Syntax Trees (AST)** in JSON format. This enables database-agnostic querying—write once, compile to PostgreSQL, MongoDB, SQLite, or any supported driver.
 
 All query syntax in this document follows the canonical **`QuerySchema`** defined in `@objectstack/spec` (`packages/spec/src/data/query.zod.ts`). Filtering uses the **`where` + MongoDB-style `$op` object syntax** from `FilterConditionSchema` (`packages/spec/src/data/filter.zod.ts`).
 
@@ -40,10 +40,10 @@ const query: QueryAST = {
 ```
 
 **Runtime compilation:**
-- PostgreSQL → Optimized SQL with JOINs
-- MongoDB → Aggregation pipeline with $lookup
-- Redis → Key pattern matching + Lua script
-- Excel → Filter + VLOOKUP formulas
+- PostgreSQL / MySQL → Optimized SQL with JOINs (`@objectstack/driver-sql`)
+- MongoDB → Native queries + aggregation pipeline (`@objectstack/driver-mongodb`)
+- SQLite → Portable SQL, in-process or in-browser via `@objectstack/driver-sqlite-wasm`
+- In-Memory → In-process evaluation, no external database (`@objectstack/driver-memory`)
 
 ---
 
@@ -606,8 +606,8 @@ const query: QueryAST = {
   limit: 10,
 };
 
-// PostgreSQL: Uses tsvector/tsquery
-// MongoDB: Uses $text index
+// The engine expands `search` into an `$or` of `$contains` across the object's
+// searchable fields (ADR-0061); every driver runs it as native $or/$contains.
 ```
 
 ### Joins
@@ -760,16 +760,17 @@ const monthlyRevenue: QueryAST = {
 
 ## 9. Error Handling
 
-### Invalid Query
+### Unknown Fields Are Tolerated
+
+Unknown field **names** are not rejected — a projected field that doesn't exist on the
+object is **silently dropped** (matching OData / `SELECT *` tolerance), so a stale field
+reference never fails the whole query:
 
 ```typescript
-try {
-  await engine.find('customer', {
-    where: { invalid_field: 'value' },  // Field doesn't exist
-  });
-} catch (error) {
-  // QueryValidationError: Field 'invalid_field' does not exist on object 'customer'
-}
+const rows = await engine.find('customer', {
+  fields: ['name', 'nonexistent'],  // `nonexistent` is not on the schema
+});
+// Returns each row with `name`; `nonexistent` is omitted — no error thrown.
 ```
 
 ### Security Violations
@@ -780,7 +781,7 @@ try {
     where: { owner_id: { $ne: currentUser.id } },
   });
 } catch (error) {
-  // PermissionError: Access denied to object 'account'
+  // PermissionDeniedError: [Security] Access denied to object 'account'
 }
 ```
 

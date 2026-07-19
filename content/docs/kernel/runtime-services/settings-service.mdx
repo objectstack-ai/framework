@@ -26,6 +26,7 @@ services.settings.subscribe(namespace: string | undefined, handler: SettingsChan
 - `SETTINGS_LOCKED` (`SettingsLockedError`)
 - `SETTINGS_UNKNOWN_NAMESPACE` (`UnknownNamespaceError`)
 - `SETTINGS_UNKNOWN_KEY` (`UnknownKeyError`)
+- `SETTINGS_VALIDATION` (`SettingsValidationError`) — thrown by `set` / `setMany` when a write would leave a visible `required` specifier empty or violate its `pattern`
 
 ## Notes
 

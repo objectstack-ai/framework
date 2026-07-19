@@ -570,7 +570,7 @@ new AuthPlugin({
 #### Send Magic Link
 
 ```typescript
-const response = await fetch('http://localhost:3000/api/v1/auth/magic-link/send', {
+const response = await fetch('http://localhost:3000/api/v1/auth/sign-in/magic-link', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
@@ -780,7 +780,9 @@ const response = await fetch('http://localhost:3000/api/v1/auth/sign-in/email', 
 });
 
 const data = await response.json();
-const token = data.data.token;
+// better-auth returns the bearer token at the top level of a direct
+// `/sign-in/email` response (the client SDK re-wraps it under `data`).
+const token = data.token;
 
 // Use token in subsequent requests
 const protectedResponse = await fetch('http://localhost:3000/api/v1/data/task', {
@@ -830,7 +832,7 @@ All endpoints are available under `/api/v1/auth/*`:
 
 #### Magic Links
 
-- `POST /api/v1/auth/magic-link/send` - Send magic link email
+- `POST /api/v1/auth/sign-in/magic-link` - Send magic link email
 - `GET /api/v1/auth/magic-link/verify` - Verify magic link
 
 #### Phone Number (requires `plugins.phoneNumber`)

@@ -30,8 +30,8 @@ Industry alignment: Salesforce Bulk API, Microsoft Dynamics Bulk Operations
 ## TypeScript Usage
 
 ```typescript
-import { BatchConfig, BatchOperationResult, BatchOperationType, BatchOptions, BatchRecord, BatchUpdateRequest, BatchUpdateResponse, DeleteManyRequest, UpdateManyRequest } from '@objectstack/spec/api';
-import type { BatchConfig, BatchOperationResult, BatchOperationType, BatchOptions, BatchRecord, BatchUpdateRequest, BatchUpdateResponse, DeleteManyRequest, UpdateManyRequest } from '@objectstack/spec/api';
+import { BatchConfig, BatchOperationResult, BatchOperationType, BatchOptions, BatchRecord, BatchUpdateRequest, BatchUpdateResponse, CrossObjectBatchOperation, CrossObjectBatchRequest, CrossObjectBatchResponse, DeleteManyRequest, UpdateManyRequest } from '@objectstack/spec/api';
+import type { BatchConfig, BatchOperationResult, BatchOperationType, BatchOptions, BatchRecord, BatchUpdateRequest, BatchUpdateResponse, CrossObjectBatchOperation, CrossObjectBatchRequest, CrossObjectBatchResponse, DeleteManyRequest, UpdateManyRequest } from '@objectstack/spec/api';
 
 // Validate data
 const result = BatchConfig.parse(data);
@@ -133,6 +133,43 @@ const result = BatchConfig.parse(data);
 | **succeeded** | `number` | ✅ | Number of records that succeeded |
 | **failed** | `number` | ✅ | Number of records that failed |
 | **results** | `{ id?: string; success: boolean; errors?: { code: string; message: string; category?: string; details?: any; … }[]; data?: Record<string, any>; … }[]` | ✅ | Detailed results for each record |
+
+
+---
+
+## CrossObjectBatchOperation
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **object** | `string` | ✅ | Target object (table) name |
+| **action** | `Enum<'create' \| 'update' \| 'delete'>` | ✅ | Operation to perform (default: create) |
+| **id** | `string` | optional | Target record id — required for update and delete |
+| **data** | `Record<string, any>` | optional | Record payload for create/update; a value may be `{ $ref: <opIndex> }` to reference an earlier op's created id |
+
+
+---
+
+## CrossObjectBatchRequest
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **operations** | `{ object: string; action: Enum<'create' \| 'update' \| 'delete'>; id?: string; data?: Record<string, any> }[]` | ✅ | Ordered operations executed in one transaction |
+| **atomic** | `boolean` | ✅ | Always true — the cross-object batch is all-or-nothing |
+
+
+---
+
+## CrossObjectBatchResponse
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **results** | `any[]` | ✅ | Per-operation result, index-aligned with the request operations |
 
 
 ---

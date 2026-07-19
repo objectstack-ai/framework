@@ -15,7 +15,7 @@ Instead of giving you infinite layout freedom (and infinite ways to break respon
 - **12-Column Grid:** All layouts use a 12-column responsive grid
 - **Section-Based:** Pages are composed of sections, sections contain fields/widgets
 - **Auto-Responsive:** Breakpoints applied automatically (no media queries)
-- **Platform-Agnostic:** Same DSL renders as CSS Grid (web), Auto Layout (iOS), ConstraintLayout (Android)
+- **Platform-Agnostic:** The DSL describes structure, not raw CSS — the web renderer maps it to CSS Grid today. Native iOS/Android renderers (Auto Layout / ConstraintLayout) are a design goal, not yet implemented.
 
 **Why Constraints?**
 - **Consistency:** All forms look professionally designed
@@ -726,12 +726,14 @@ interface Page {
   label: string;
   description?: string;
   icon?: string;
-  type?: 'record' | 'home' | 'app' | 'utility' | 'list'
-       | 'dashboard' | 'form' | 'record_detail'
-       | 'record_review' | 'overview' | 'blank';  // default 'record'
+  type?: 'record' | 'home' | 'app' | 'utility' | 'list';  // default 'record'
+  // NOTE: dashboard / form / record_detail / record_review / overview / blank
+  // were removed from the live enum (ADR-0049 enforce-or-remove — no renderer
+  // ever shipped). They live in PAGE_TYPE_ROADMAP; authoring one now fails
+  // validation. See page.zod.ts (PageTypeSchema / PAGE_TYPE_ROADMAP).
   object?: string;       // bound object for record pages
   template?: string;     // layout template name, default 'default'
-  regions: PageRegion[]; // named regions, each holding components
+  regions?: PageRegion[]; // named regions, each holding components (optional; defaults to [])
 }
 
 interface PageRegion {
@@ -794,7 +796,7 @@ interface ResponsiveColumns {
 ### Visibility Rule
 
 Visibility is a single **CEL expression** string, not a structured rule object.
-Since [ADR-0089](/docs/adr) the one canonical key is **`visibleWhen`** across every
+Since [ADR-0089](https://github.com/objectstack-ai/framework/blob/main/docs/adr/0089-unify-visibility-predicate-naming.md) the one canonical key is **`visibleWhen`** across every
 layer — data fields, view form sections/fields, and page components — aligning with
 the `readonlyWhen` / `requiredWhen` family. The element is shown only when the
 expression evaluates truthy.

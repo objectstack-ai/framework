@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import { ServiceObject, ObjectSchema, ObjectOwnership, provisionPrimary, resolveCrudAffordances } from '@objectstack/spec/data';
+import { ServiceObject, ObjectSchema, ObjectOwnership, provisionPrimary, resolveCrudAffordances, isTenancyDisabled } from '@objectstack/spec/data';
 import { resolveMultiOrgEnabled, resolveSearchPinyinEnabled } from '@objectstack/types';
 import { provisionSearchCompanion } from './search-companion.js';
 import { ObjectStackManifest, ManifestSchema, InstalledPackage, InstalledPackageSchema } from '@objectstack/spec/kernel';
@@ -247,7 +247,7 @@ export function applySystemFields(
   // registry would still inject `organization_id`, and the
   // SecurityPlugin's RLS layer would filter every cross-org read down
   // to 0 rows even though the schema explicitly disabled multi-tenancy.
-  const tenancyDisabled = (schema as any).tenancy?.enabled === false;
+  const tenancyDisabled = isTenancyDisabled(schema);
   // The `organization_id` COLUMN is provisioned unconditionally (subject only
   // to the explicit opt-outs above) — its existence no longer depends on the
   // global multi-tenant flag. Decoupling "does the column exist" from "is
@@ -1181,8 +1181,19 @@ export class SchemaRegistry {
         if (it && it._packageId && it._packageId !== 'sys_metadata') return item as T;
       }
     }
+    // Bare-key fallback: a runtime/DB overlay rehydrated under the plain name.
+    // ADR-0048 (#1828) — when the caller resolves *within a package*, only accept
+    // this entry if it belongs to that package. The bare slot holds a single
+    // row (last hydrate wins), so once the unscoped list stopped collapsing
+    // colliding rows, an overlay from package A hydrated here would otherwise be
+    // grafted as the "artifact" of package B's same-name row — mislabeling its
+    // `_packageId`/lock. A package-less caller (`currentPackageId` omitted) keeps
+    // the legacy best-effort first-match.
     const direct = collection.get(name) as any;
-    if (direct && direct._packageId && direct._packageId !== 'sys_metadata') {
+    if (
+      direct && direct._packageId && direct._packageId !== 'sys_metadata' &&
+      (!currentPackageId || direct._packageId === currentPackageId)
+    ) {
       return direct as T;
     }
     return undefined;

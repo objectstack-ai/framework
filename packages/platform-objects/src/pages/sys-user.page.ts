@@ -95,7 +95,7 @@ export const SysUserDetailPage: Page = {
     highlights: {
       type: 'record:highlights',
       properties: {
-        fields: ['email', 'email_verified', 'two_factor_enabled', 'role'],
+        fields: ['email', 'phone_number', 'email_verified', 'two_factor_enabled', 'role'],
       },
     },
 
@@ -110,6 +110,7 @@ export const SysUserDetailPage: Page = {
           'ban_expires',
           // already promoted to highlights:
           'email',
+          'phone_number',
           'email_verified',
           'two_factor_enabled',
           'role',

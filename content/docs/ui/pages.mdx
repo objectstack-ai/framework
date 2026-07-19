@@ -122,7 +122,7 @@ Components are the building blocks placed inside regions.
   events: {
     onClick: "navigate_to('opportunity_detail', { id: $event.id })",
   },
-  visibility: "os.user.profile == 'sales_manager'",
+  visibleWhen: "'sales_manager' in current_user.positions",
   style: { height: '400px' },
 }
 ```
@@ -137,7 +137,7 @@ Components are the building blocks placed inside regions.
 | `style` | `object` | optional | CSS styles |
 | `className` | `string` | optional | CSS class names |
 | `responsiveStyles` | `object` | optional | **Preferred** SDUI styling channel (ADR-0065): **desktop-first** per-breakpoint scoped style maps, compiled to id-scoped CSS at render. Keys are `large` (the unconditional base), then `medium` / `small` / `xsmall` as `max-width` overrides. Prefer design tokens, e.g. `{ large: { padding: 'var(--space-8)' }, small: { padding: 'var(--space-4)' } }`. Use over ad-hoc `style` / `className` for metadata-authored pages. |
-| `visibility` | `string` | optional | Visibility predicate (CEL expression) |
+| `visibleWhen` | `string` | optional | Visibility predicate (CEL) — component renders only when the expression is `true`. Binds `record`, `current_user`, and page state as `page.<var>`. (Legacy alias `visibility` is accepted but deprecated per ADR-0089.) |
 
 The `type` field is a union of the standard `PageComponentType` enum and any custom string. The standard (namespaced) component types include:
 

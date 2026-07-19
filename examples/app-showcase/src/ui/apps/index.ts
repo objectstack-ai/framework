@@ -52,6 +52,9 @@ export const ShowcaseApp = App.create({
         { id: 'nav_accounts', type: 'object', objectName: 'showcase_account', label: 'Accounts', icon: 'building' },
         { id: 'nav_contacts', type: 'object', objectName: 'showcase_contact', label: 'Contacts', icon: 'user' },
         { id: 'nav_invoices', type: 'object', objectName: 'showcase_invoice', label: 'Invoices', icon: 'receipt' },
+        // Filtered roll-up summary demo (framework#1868): one expense-line child
+        // feeds six parent totals, each aggregating only the lines a filter matches.
+        { id: 'nav_expense_reports', type: 'object', objectName: 'showcase_expense_report', label: 'Expense Reports', icon: 'wallet' },
         { id: 'nav_products', type: 'object', objectName: 'showcase_product', label: 'Products', icon: 'package' },
         { id: 'nav_teams', type: 'object', objectName: 'showcase_team', label: 'Teams', icon: 'users' },
         { id: 'nav_categories', type: 'object', objectName: 'showcase_category', label: 'Categories', icon: 'list-tree' },

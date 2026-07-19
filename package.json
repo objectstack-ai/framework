@@ -29,6 +29,7 @@
     "check:nul-bytes": "node scripts/check-nul-bytes.mjs",
     "check:doc-authoring": "node scripts/check-doc-authoring.mjs",
     "check:role-word": "node scripts/check-role-word.mjs",
+    "check:org-identifier": "node scripts/check-org-identifier.mjs",
     "check:authz-resolver": "node scripts/check-single-authz-resolver.mjs",
     "check:console-sha": "node scripts/check-console-sha.mjs",
     "check:release-notes": "node scripts/check-release-notes.mjs"

@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import { Plugin, PluginContext } from '@objectstack/core';
+import { Plugin, PluginContext, POSTURE_LADDER } from '@objectstack/core';
 import type { PermissionSet, RowLevelSecurityPolicy } from '@objectstack/spec/security';
 import { describeHighPrivilegeBits, describeAnchorForbiddenBits, PUBLIC_FORM_SERVER_MANAGED_FIELDS } from '@objectstack/spec/security';
 import { MCP_AGENT_PERMISSION_SET_RESTRICTED } from '@objectstack/spec/ai';
@@ -68,13 +68,16 @@ import {
  * `setup.write` are EXCLUDED on purpose: org admins hold them (they are the Setup
  * app shell + tenant-settings-write caps, not platform powers).
  *
- * NOTE: the fully-correct signal is the `PLATFORM_ADMIN` posture already derived
- * in `resolve-authz-context.ts` (`ctx.posture`), but that field is NOT plumbed
- * into the ExecutionContext the enforcement middleware receives (the REST/runtime
- * transports drop it), so consuming it here would silently no-op. This capability
- * probe reads the SAME resolved permission sets enforcement already uses, works on
- * every entry point, and — being a strict subset of the old superuser-bit gate —
- * can only NARROW the exemption, never widen it (fail-safe).
+ * [ADR-0099 D1 / P1] Since #2956 the resolver-derived `PLATFORM_ADMIN` rung
+ * rides the ExecutionContext (`ctx.posture`), so the Layer 0 exemption gate now
+ * reads the CARRIED rung as authoritative (see {@link isCarriedPosture} at the
+ * decision site in `computeLayeredRlsFilter`). This capability probe DEMOTES to
+ * a fallback: it applies only to contexts that never passed the shared resolver
+ * (delegated-admin bridge, sharing service, `getReadFilter` consumers — the
+ * hand-built-context population ADR-0096 D3 is eliminating). The probe stays a
+ * strict subset of the carried rung's derivation (the unscoped `admin_full_access`
+ * grant carries every capability below), so a disagreement can only NARROW the
+ * exemption, never widen it (fail-safe; ADR-0099 I3).
  */
 const PLATFORM_ADMIN_ONLY_CAPABILITIES: readonly string[] = [
   'manage_metadata',
@@ -82,6 +85,30 @@ const PLATFORM_ADMIN_ONLY_CAPABILITIES: readonly string[] = [
   'studio.access',
   'manage_users',
 ];
+
+/**
+ * [ADR-0099 D1] Is `v` a carried posture rung (one of the ladder's values)?
+ * Present ⇒ the value is authoritative for the Layer 0 tier decision; absent ⇒
+ * fall back to the capability probe. Sourced from core's `POSTURE_LADDER` so the
+ * enforcement gate and the resolver's derivation can never drift on the enum.
+ */
+function isCarriedPosture(v: unknown): boolean {
+  return typeof v === 'string' && (POSTURE_LADDER as readonly string[]).includes(v);
+}
+
+/**
+ * [ADR-0099 P0] Pure form of the platform-admin capability probe: does the held
+ * capability set contain any platform-EXCLUSIVE capability? Exported so the
+ * authz matrix gate (`authz-matrix-gate.test.ts`) can assert probe-vs-carried-rung
+ * equivalence against the EXACT predicate enforcement runs — the P0 gate the
+ * ADR-0099 P1 flip lands behind.
+ */
+export function hasPlatformAdminCapability(held: ReadonlySet<string>): boolean {
+  for (const cap of PLATFORM_ADMIN_ONLY_CAPABILITIES) {
+    if (held.has(cap)) return true;
+  }
+  return false;
+}
 
 /**
  * [ADR-0066 D3/⑤] Object `requiredPermissions` normalized into per-CRUD buckets.
@@ -2388,11 +2415,7 @@ export class SecurityPlugin implements Plugin {
    * the ONLY signal permitted to cross the Layer 0 tenant wall.
    */
   private hasPlatformAdminPosture(permissionSets: PermissionSet[]): boolean {
-    const held = this.permissionEvaluator.getSystemPermissions(permissionSets);
-    for (const cap of PLATFORM_ADMIN_ONLY_CAPABILITIES) {
-      if (held.has(cap)) return true;
-    }
-    return false;
+    return hasPlatformAdminCapability(this.permissionEvaluator.getSystemPermissions(permissionSets));
   }
 
   private async computeLayeredRlsFilter(
@@ -2418,12 +2441,33 @@ export class SecurityPlugin implements Plugin {
           ? this.permissionEvaluator.hasSuperuserWriteBypass(object, permissionSets, { isPrivate: meta.isPrivate })
           : this.permissionEvaluator.hasSuperuserReadBypass(object, permissionSets, { isPrivate: meta.isPrivate }))
       : false;
-    // [Finding 2 / #2937] The Layer 0 cross-tenant EXEMPTION is stricter: it
-    // requires a TRUE PLATFORM_ADMIN (the superuser bit AND a platform-exclusive
-    // capability), never merely the superuser bit an `organization_admin` also
-    // holds. This is the ONLY place the platform-admin posture gates crossing the
-    // tenant wall; a tenant org admin stays org-scoped even on private objects.
-    const isPlatformAdmin = superuserBypass && this.hasPlatformAdminPosture(permissionSets);
+    // [Finding 2 / #2937 / ADR-0099 D1 (P1)] The Layer 0 cross-tenant EXEMPTION
+    // is stricter than the superuser bit: it requires a TRUE PLATFORM_ADMIN, so a
+    // tenant `organization_admin` (which also holds the superuser bit via its `'*'`
+    // wildcard) stays org-scoped even on private objects (invariant I1). The tier
+    // signal is the CARRIED rung when the context passed the resolver (#2956); the
+    // capability probe is the fallback for hand-built contexts that carry no rung.
+    // Both are computed so a disagreement (only possible on the fallback-eligible
+    // divergence class — scoped `admin_full_access` / piecemeal platform caps) is
+    // logged as a defect (ADR-0099 I4) and the NARROWER rung verdict is enforced.
+    const carriedPosture = context?.posture;
+    const probePlatformAdmin = this.hasPlatformAdminPosture(permissionSets);
+    let platformPosture: boolean;
+    if (isCarriedPosture(carriedPosture)) {
+      platformPosture = carriedPosture === 'PLATFORM_ADMIN';
+      if (platformPosture !== probePlatformAdmin) {
+        // rung ⊆ probe (I3), so this only fires as probe=true / rung≠PLATFORM_ADMIN
+        // — the adjudicated narrowing (#3211 G1). A breadcrumb, never a throw.
+        this.logger.warn?.(
+          '[authz/ADR-0099] Layer 0 exemption: carried posture rung and capability probe disagree; ' +
+            'enforcing the (narrower) carried rung',
+          { object, operation, carriedPosture, probePlatformAdmin, userId: context?.userId },
+        );
+      }
+    } else {
+      platformPosture = probePlatformAdmin;
+    }
+    const isPlatformAdmin = superuserBypass && platformPosture;
 
     // Field set drives BOTH the Layer 1 field-existence net and the Layer 0
     // "is this a tenant object?" check.

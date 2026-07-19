@@ -56,7 +56,35 @@ export const fieldForm = defineForm({
       collapsed: true,
       fields: [
         { field: 'expression', widget: 'textarea', helpText: 'CEL expression to calculate this field (makes it read-only)' },
-        { field: 'summaryOperations', type: 'composite', helpText: 'Roll-up summary configuration (for parent-child relationships)' },
+        {
+          field: 'summaryOperations',
+          type: 'composite',
+          visibleWhen: "data.type == 'summary'",
+          helpText: 'Roll-up summary configuration (for parent-child relationships)',
+          // Declare the composite's inner shape so the protocol-driven form
+          // renders structured sub-fields (not a raw JSON blob). Mirrors the
+          // `summaryOperations` Zod schema in field.zod.ts; `filter` is bound to
+          // the FilterCondition widget so only matching child rows aggregate.
+          fields: [
+            { field: 'object', widget: 'ref:object', required: true, helpText: 'Child object to aggregate' },
+            {
+              field: 'function',
+              type: 'select',
+              required: true,
+              options: [
+                { label: 'Count', value: 'count' },
+                { label: 'Sum', value: 'sum' },
+                { label: 'Min', value: 'min' },
+                { label: 'Max', value: 'max' },
+                { label: 'Average', value: 'avg' },
+              ],
+              helpText: 'Aggregation function',
+            },
+            { field: 'field', required: true, helpText: 'Child field to aggregate (ignored for count)' },
+            { field: 'relationshipField', helpText: 'Child FK back to this parent (auto-detected when omitted)' },
+            { field: 'filter', widget: 'filter-condition', helpText: 'Only child rows matching this predicate are aggregated (e.g. status == received)' },
+          ],
+        },
       ],
     },
     {

@@ -15,7 +15,7 @@ ObjectStack is organized into **71 package manifests** across multiple categorie
 | **Client / DX** | 5 | `client`, `client-react`, `cli`, `create-objectstack`, `vscode-objectstack` |
 | **Framework adapters** | 1 | `hono` (other frameworks: build a thin adapter on `HttpDispatcher` — see below) |
 | **Drivers** | 4 | `driver-memory`, `driver-sql`, `driver-sqlite-wasm`, `driver-mongodb` |
-| **Plugins** | 18 | `plugin-auth`, `plugin-security`, `plugin-org-scoping`, `plugin-audit`, `plugin-approvals`, `plugin-sharing`, `plugin-email`, `plugin-webhooks`, `plugin-reports`, `plugin-hono-server`, `plugin-dev`, `mcp`, trigger plugins (`trigger-api`, `trigger-record-change`, `trigger-schedule`), and knowledge/embedder plugins (`knowledge-memory`, `knowledge-ragflow`, `embedder-openai`) |
+| **Plugins** | 18 | `plugin-auth`, `plugin-security`, `plugin-audit`, `plugin-approvals`, `plugin-sharing`, `plugin-email`, `plugin-webhooks`, `plugin-reports`, `plugin-hono-server`, `plugin-dev`, `plugin-pinyin-search`, `mcp`, trigger plugins (`trigger-api`, `trigger-record-change`, `trigger-schedule`), and knowledge/embedder plugins (`knowledge-memory`, `knowledge-ragflow`, `embedder-openai`) |
 | **Platform services** | 16 | `service-analytics`, `service-automation`, `service-cache`, `service-cluster`, `service-cluster-redis`, `service-datasource`, `service-i18n`, `service-job`, `service-knowledge`, `service-messaging`, `service-package`, `service-queue`, `service-realtime`, `service-settings`, `service-sms`, `service-storage` |
 
 
@@ -309,13 +309,12 @@ All services implement contracts from `@objectstack/spec/contracts` and are kern
 - **When to use**: Multi-user applications with access control requirements
 - **README**: [View README](https://github.com/objectstack-ai/framework/blob/main/packages/plugins/plugin-security/README.md)
 
-### @objectstack/plugin-org-scoping
+### @objectstack/organizations (enterprise)
 
-**Organization Scoping Plugin** — Multi-org (a.k.a. "soft" multi-tenant) row-level scoping built on top of `plugin-security`.
+**Organization Scoping** — Multi-org (a.k.a. "soft" multi-tenant) row-level scoping. Ships as a **separate, closed-source enterprise package** — it is not part of the open framework repo. It composes with the Layer 0 tenant wall in `plugin-security` (`tenant-layer.ts`).
 
-- **Features**: `organization_id` auto-stamp on insert, per-org seed-data replay, default-org bootstrap, orphan-row claim hook
-- **When to use**: Multi-organization SaaS where every row is scoped to an `sys_organization`. Enable by setting `OS_MULTI_ORG_ENABLED=true`; registered automatically before `plugin-security`
-- **README**: [View README](https://github.com/objectstack-ai/framework/blob/main/packages/plugins/plugin-org-scoping/README.md)
+- **Features**: `organization_id` auto-stamp on insert; every query is AND-composed against the tenant wall so rows never leak across organizations
+- **When to use**: Multi-organization SaaS where every row is scoped to an organization. Enable by setting `OS_MULTI_ORG_ENABLED=true` and installing `@objectstack/organizations`; if the flag is set but the package is missing, the platform refuses to boot (override with `OS_ALLOW_DEGRADED_TENANCY=1`)
 
 ### @objectstack/plugin-audit
 
@@ -353,7 +352,7 @@ All services implement contracts from `@objectstack/spec/contracts` and are kern
 
 **Approvals Plugin** — Contributes the `approval` flow node (ADR-0019): an approval runs on the one automation engine as a durable-pause node, backed by `sys_approval_request` / `sys_approval_action`.
 
-- **Features**: Approver resolution (user/role/team/department/manager/field/queue), `first_response` / `unanimous`, record lock, status mirror, per-node SLA escalation, audit trail
+- **Features**: Approver resolution (user/org_membership_level/position/team/department/manager/field/queue), `first_response` / `unanimous`, record lock, status mirror, per-node SLA escalation, audit trail
 - **When to use**: Any flow that needs human sign-off (expense, quote, contract, …) — add an `approval` node and branch on `approve` / `reject`
 
 ### @objectstack/plugin-sharing
@@ -413,7 +412,7 @@ The open edition ships the **Hono** adapter. Hono runs on Node.js, Bun, Deno, an
 npx os serve --dev
 ```
 
-### @objectstack/create-objectstack
+### create-objectstack
 
 **Project Scaffolding** — Create new ObjectStack projects.
 
@@ -425,7 +424,7 @@ npx os serve --dev
 npx create-objectstack my-app
 ```
 
-### @objectstack/vscode-objectstack
+### objectstack-vscode
 
 **VS Code Extension** — IDE support for ObjectStack.
 

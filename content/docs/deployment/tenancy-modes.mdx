@@ -77,7 +77,7 @@ Control auto-binding with the `membershipPolicy` auth option:
 | `'invite-only'` | Users are **never** auto-bound; membership comes only from invitations, `add-member`, SSO provisioning, or host hooks. Choose this for a deployment whose end-users are deliberately not teammates. |
 
 ```ts
-createAuthPlugin({ membershipPolicy: 'invite-only' /* … */ });
+new AuthPlugin({ membershipPolicy: 'invite-only' /* … */ });
 ```
 
 > **Note** — In single-org mode, membership does **not** gate data access (there

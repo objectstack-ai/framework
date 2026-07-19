@@ -165,6 +165,7 @@ To grant data exploration to your own (platform-internal) agent, add
 
 ### Agent Example
 
+<!-- os:check -->
 ```typescript
 import { defineAgent } from '@objectstack/spec';
 
@@ -224,6 +225,7 @@ trigger conditions.
 
 ### Skill Example
 
+<!-- os:check -->
 ```typescript
 import { defineSkill } from '@objectstack/spec';
 

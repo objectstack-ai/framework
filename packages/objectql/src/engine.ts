@@ -10,7 +10,7 @@ import {
   EngineAggregateOptions,
   EngineCountOptions
 } from '@objectstack/spec/data';
-import { parseAutonumberFormat, renderAutonumber, missingFieldValues } from '@objectstack/spec/data';
+import { parseAutonumberFormat, renderAutonumber, missingFieldValues, isTenancyDisabled } from '@objectstack/spec/data';
 import { ExecutionContext, ExecutionContextSchema } from '@objectstack/spec/kernel';
 import { IDataDriver, IDataEngine, Logger, createLogger, withTransientRetry, type RetryOptions } from '@objectstack/core';
 import { SummaryRecomputeError, type SummaryRecomputeFailure } from './summary-errors.js';
@@ -283,6 +283,12 @@ interface SummaryDescriptor {
   fn: 'count' | 'sum' | 'min' | 'max' | 'avg';
   /** Child field aggregated (unused for count). */
   sourceField: string;
+  /**
+   * Optional predicate (a query `where` FilterCondition) restricting which child
+   * rows are aggregated. ANDed with the parent-FK match when the aggregate runs.
+   * Undefined ⇒ aggregate every child of the parent.
+   */
+  filter?: Record<string, unknown>;
 }
 
 export class ObjectQL implements IDataEngine {
@@ -737,6 +743,12 @@ export class ObjectQL implements IDataEngine {
     if (!execCtx) return undefined;
     return {
       userId: execCtx.userId,
+      // `organizationId` is the blessed developer-facing name for the caller's
+      // active org (matches the `organization_id` column, `current_user`
+      // RLS shape, and seed rows). `tenantId` is kept as a deprecated alias
+      // carrying the IDENTICAL value — both come from `execCtx.tenantId`, which
+      // the kernel resolves from `session.activeOrganizationId` (#3280).
+      organizationId: execCtx.tenantId,
       tenantId: execCtx.tenantId,
       positions: execCtx.positions,
       accessToken: execCtx.accessToken,
@@ -773,19 +785,49 @@ export class ObjectQL implements IDataEngine {
   }
 
   /**
+   * Build the `HookContext.user` shortcut — the ergonomic "current user"
+   * object surfaced to JS hooks. Carries `organizationId` (the blessed name
+   * for the caller's active org, identical to `session.organizationId` and
+   * `current_user.organizationId`) so a hook author who needs "the current org
+   * to filter by" writes `ctx.user.organizationId` with zero relearning (#3280).
+   *
+   * Returns undefined for system / unauthenticated writes (no acting user) —
+   * hooks that need an org regardless of a resolved user read
+   * `ctx.session.organizationId`, which is populated whenever a session is.
+   */
+  private buildUser(execCtx?: ExecutionContext): HookContext['user'] {
+    if (!execCtx || execCtx.userId == null) return undefined;
+    return {
+      id: String(execCtx.userId),
+      ...(execCtx.email ? { email: execCtx.email } : {}),
+      // Always equals `session.organizationId` (both from `execCtx.tenantId`).
+      // Undefined on unscoped (platform/community) calls.
+      ...(execCtx.tenantId != null ? { organizationId: String(execCtx.tenantId) } : {}),
+    };
+  }
+
+  /**
    * Build the DriverOptions blob passed to every IDataDriver call.
    *
-   * Always carries `tenantId` from the active ExecutionContext so the
-   * driver can enforce per-tenant isolation (SQL driver auto-scopes reads
-   * and auto-injects the tenant column on writes). Existing user-supplied
-   * shapes (transactions, AST extras) are preserved by spreading them
-   * first.
+   * Carries `tenantId` from the active ExecutionContext so the driver can
+   * enforce per-tenant isolation (SQL driver auto-scopes reads and
+   * auto-injects the tenant column on writes) — EXCEPT for objects that
+   * declare `tenancy.enabled: false` (ADR-0066 platform-global posture,
+   * e.g. `sys_license`): stamping the caller's active-org tenantId there
+   * would org-scope a global catalog at the driver, and its NULL-org rows
+   * would vanish for authenticated org-context reads while anonymous
+   * reads still see them (#3249). The SQL driver has its own opt-out
+   * (sticky tenant-field cache), but withholding tenantId here protects
+   * every driver at the source. Existing user-supplied shapes
+   * (transactions, AST extras) are preserved by spreading them first — an
+   * explicitly-passed `base.tenantId` is deliberate caller intent and
+   * still wins.
    *
    * System / isSystem callers may still cross tenants by clearing
    * `tenantId` themselves on the resulting object; this helper does not
    * mask the system path.
    */
-  private buildDriverOptions(execCtx?: ExecutionContext, base?: any): any {
+  private buildDriverOptions(object: string, execCtx?: ExecutionContext, base?: any): any {
     // The open transaction may arrive explicitly via the context, or ambiently
     // via txStore when an internal query runs during a transactional write
     // (ADR-0034). Explicit wins; ambient is the safety net.
@@ -793,7 +835,9 @@ export class ObjectQL implements IDataEngine {
       ? execCtx.transaction
       : this.txStore.getStore()?.transaction;
     const hasTx = tx !== undefined;
-    const hasTenant = execCtx?.tenantId !== undefined;
+    const hasTenant =
+      execCtx?.tenantId !== undefined &&
+      !isTenancyDisabled(this._registry.getObject(object));
     const hasTz = execCtx?.timezone !== undefined;
     const isSystem = execCtx?.isSystem === true;
     if (!hasTx && !hasTenant && !isSystem && !hasTz) return base;
@@ -1841,8 +1885,14 @@ export class ObjectQL implements IDataEngine {
           }
         }
         if (!fkField) continue; // can't resolve the relationship — skip
+        // Optional per-summary predicate: only child rows matching it are
+        // aggregated (e.g. sum receipts where { status: 'received' }). ANDed with
+        // the parent-FK match at recompute time. Ignore a non-object filter.
+        const filter = so.filter && typeof so.filter === 'object' && !Array.isArray(so.filter)
+          ? so.filter as Record<string, unknown>
+          : undefined;
         const list = index.get(childObject) ?? [];
-        list.push({ parentObject: parent.name, summaryField, fkField, fn, sourceField: so.field });
+        list.push({ parentObject: parent.name, summaryField, fkField, fn, sourceField: so.field, filter });
         index.set(childObject, list);
       }
     }
@@ -1882,8 +1932,12 @@ export class ObjectQL implements IDataEngine {
           // aggregate/update) with backoff — a network blip here used to leave
           // the parent summary silently stale (framework#3147).
           await withTransientRetry(async () => {
+            // AND the parent-FK match with the optional per-summary filter so
+            // only matching child rows are aggregated (e.g. received receipts).
+            const fkMatch = { [desc.fkField]: parentId };
+            const where = desc.filter ? { $and: [fkMatch, desc.filter] } : fkMatch;
             const rows = await this.aggregate(childObject, {
-              where: { [desc.fkField]: parentId },
+              where,
               aggregations: [{
                 function: desc.fn,
                 ...(desc.fn === 'count' ? {} : { field: desc.sourceField }),
@@ -2162,12 +2216,13 @@ export class ObjectQL implements IDataEngine {
           event: 'beforeFind',
           input: { ast: opCtx.ast, options: opCtx.options },
           session: this.buildSession(opCtx.context),
+          user: this.buildUser(opCtx.context),
           api: this.buildHookApi(opCtx.context),
           transaction: opCtx.context?.transaction,
           ql: this
       };
       await this.triggerHooks('beforeFind', hookContext);
-      hookContext.input.options = this.buildDriverOptions(opCtx.context, hookContext.input.options as any);
+      hookContext.input.options = this.buildDriverOptions(object, opCtx.context, hookContext.input.options as any);
 
       try {
           let result = await driver.find(object, hookContext.input.ast as QueryAST, hookContext.input.options as any);
@@ -2244,12 +2299,13 @@ export class ObjectQL implements IDataEngine {
           event: 'beforeFind',
           input: { ast: opCtx.ast, options: opCtx.options },
           session: this.buildSession(opCtx.context),
+          user: this.buildUser(opCtx.context),
           api: this.buildHookApi(opCtx.context),
           transaction: opCtx.context?.transaction,
           ql: this
       };
       await this.triggerHooks('beforeFind', hookContext);
-      hookContext.input.options = this.buildDriverOptions(opCtx.context, hookContext.input.options as any);
+      hookContext.input.options = this.buildDriverOptions(objectName, opCtx.context, hookContext.input.options as any);
 
       let result = await driver.findOne(objectName, hookContext.input.ast as QueryAST, hookContext.input.options as any);
 
@@ -2330,6 +2386,7 @@ export class ObjectQL implements IDataEngine {
           event: 'beforeInsert',
           input: { data: row, options: opCtx.options },
           session: this.buildSession(opCtx.context),
+          user: this.buildUser(opCtx.context),
           api: this.buildHookApi(opCtx.context),
           transaction: opCtx.context?.transaction,
           ql: this,
@@ -2346,7 +2403,7 @@ export class ObjectQL implements IDataEngine {
       // Base the merge on the first row context's options: hooks share the
       // same underlying options object (in-place mutations are visible), and
       // for single inserts this is exactly the pre-#2922 behaviour.
-      const driverOptions = this.buildDriverOptions(opCtx.context, rowHookContexts[0]?.input.options as any);
+      const driverOptions = this.buildDriverOptions(object, opCtx.context, rowHookContexts[0]?.input.options as any);
       for (const rowCtx of rowHookContexts) {
         rowCtx.input.options = driverOptions;
       }
@@ -2599,12 +2656,13 @@ export class ObjectQL implements IDataEngine {
           event: 'beforeUpdate',
           input: { id, data: opCtx.data, options: opCtx.options },
           session: this.buildSession(opCtx.context),
+          user: this.buildUser(opCtx.context),
           api: this.buildHookApi(opCtx.context),
           transaction: opCtx.context?.transaction,
           ql: this
        };
        await this.triggerHooks('beforeUpdate', hookContext);
-       hookContext.input.options = this.buildDriverOptions(opCtx.context, hookContext.input.options as any);
+       hookContext.input.options = this.buildDriverOptions(object, opCtx.context, hookContext.input.options as any);
 
        try {
            let result;
@@ -2924,12 +2982,13 @@ export class ObjectQL implements IDataEngine {
           event: 'beforeDelete',
           input: { id, options: opCtx.options },
           session: this.buildSession(opCtx.context),
+          user: this.buildUser(opCtx.context),
           api: this.buildHookApi(opCtx.context),
           transaction: opCtx.context?.transaction,
           ql: this
       };
       await this.triggerHooks('beforeDelete', hookContext);
-      hookContext.input.options = this.buildDriverOptions(opCtx.context, hookContext.input.options as any);
+      hookContext.input.options = this.buildDriverOptions(object, opCtx.context, hookContext.input.options as any);
 
       try {
           let result;
@@ -3025,7 +3084,7 @@ export class ObjectQL implements IDataEngine {
      };
 
      await this.executeWithMiddleware(opCtx, async () => {
-       const countOpts = this.buildDriverOptions(opCtx.context);
+       const countOpts = this.buildDriverOptions(object, opCtx.context);
        if (driver.count) {
            return driver.count(object, opCtx.ast as QueryAST, countOpts);
        }
@@ -3133,7 +3192,7 @@ export class ObjectQL implements IDataEngine {
         const hasDateBucket = structuredItems.some((g: any) => !!g?.dateGranularity);
         const tzRequiresInMemory = !!tz && tz !== 'UTC' && hasDateBucket;
         if (typeof drv.aggregate === 'function' && allStructuredSupported && !tzRequiresInMemory) {
-            return drv.aggregate(object, ast, this.buildDriverOptions(opCtx.context));
+            return drv.aggregate(object, ast, this.buildDriverOptions(object, opCtx.context));
         }
         // In-memory fallback path: ask the driver for raw rows, then bucket +
         // aggregate here. This guarantees `groupBy` (incl. structured items
@@ -3141,7 +3200,7 @@ export class ObjectQL implements IDataEngine {
         // drivers that have no native aggregation support (driver-rest,
         // driver-memory, partial SQL drivers), and is the path that honours a
         // non-UTC reference timezone.
-        const raw = await driver.find(object, ast, this.buildDriverOptions(opCtx.context));
+        const raw = await driver.find(object, ast, this.buildDriverOptions(object, opCtx.context));
         return applyInMemoryAggregation(raw, ast, tz);
       });
 

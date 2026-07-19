@@ -99,7 +99,7 @@ Beyond the four CRUD flags, the schema also exposes lifecycle and super-user gra
 | Flag | Meaning |
 | --- | --- |
 | `allowCreate` / `allowRead` / `allowEdit` / `allowDelete` | Standard CRUD |
-| `allowTransfer` | Change record ownership — *operation pending (M2); RBAC gate pre-mapped (#1883)* |
+| `allowTransfer` | Change record ownership (assign/reassign/disown `owner_id`) — *enforced now via the insert/update `owner_id` guard (#3004); the dedicated `transfer` op is still M2* |
 | `allowRestore` | Restore from trash (undelete) — *operation pending (M2); RBAC gate pre-mapped (#1883)* |
 | `allowPurge` | Permanently delete (hard delete / GDPR) — *operation pending (M2); RBAC gate pre-mapped (#1883)* |
 | `viewAllRecords` | Read every record, bypassing sharing & ownership |
@@ -365,19 +365,20 @@ Set `deterministicEncryption: true` to allow equality queries on the ciphertext,
 
 Object- and field-level history is opt-in metadata, not a free-form `enable.audit` block.
 
-- **Field history** — set `trackHistory: true` on the object (`ObjectCapabilities` in `object.zod.ts`) to record per-field changes.
-- **Per-field audit trail** — set `auditTrail: true` on an individual field to track every change with user and timestamp.
+- **Object history tab** — set `enable.trackHistory: true` on the object (the `ObjectCapabilities` block in `object.zod.ts`) to surface the record History tab.
+- **Per-field history** — set `trackHistory: true` on an individual field to render that field's value changes on the record activity timeline. (The former per-field `auditTrail` flag was pruned in 2026-06 — it had no runtime consumer.)
 - **RLS audit** — removed (2026-07, ADR-0056 D8): the `RLSAuditConfigSchema`/`RLSAuditEventSchema` shapes were never emitted or read by the runtime RLS path and were deleted from the spec. Enforcement decisions surface today through the security plugin's fail-closed warnings and the standard audit log (`plugin-audit`), not a dedicated RLS event stream.
 
 ```yaml
 # account.object.yml
 name: account
-trackHistory: true
+enable:
+  trackHistory: true
 
 fields:
   annual_revenue:
     type: currency
-    auditTrail: true
+    trackHistory: true
 ```
 
 ---

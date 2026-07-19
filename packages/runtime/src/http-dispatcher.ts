@@ -1026,6 +1026,28 @@ export class HttpDispatcher {
      * audit-logged. Longer-term direction: an action-level `runAs: 'user'|'system'`
      * mirroring flows (ADR-0049) — tracked in #2849.
      */
+    /**
+     * Build the action-body `ctx.session` from the request ExecutionContext,
+     * mirroring the hook `ctx.session` shape (#3280) so an action author reads
+     * the caller's active org under the SAME blessed name as a hook author.
+     *
+     * `organizationId` is the blessed name for the caller's active org — the
+     * same value as the `organization_id` column and `current_user.organizationId`
+     * (RLS). `tenantId` is a deprecated alias carrying the identical value.
+     * Returns undefined for a genuinely context-less / self-invoked call so a
+     * body can distinguish "no session" the same way hooks do.
+     */
+    private buildActionSession(ec: any): any | undefined {
+        if (!ec || (ec.userId == null && ec.tenantId == null)) return undefined;
+        return {
+            ...(ec.userId != null ? { userId: String(ec.userId) } : {}),
+            ...(ec.tenantId != null
+                ? { organizationId: String(ec.tenantId), tenantId: String(ec.tenantId) }
+                : {}),
+            ...(Array.isArray(ec.positions) && ec.positions.length ? { roles: ec.positions } : {}),
+        };
+    }
+
     private buildActionEngineFacade(ql: any): any {
         return {
             async insert(object: string, data: Record<string, unknown>): Promise<{ id: string }> {
@@ -1130,7 +1152,15 @@ export class HttpDispatcher {
         if (record && (record as any).id == null && recordId) (record as any).id = recordId;
 
         const user = ec?.userId
-            ? { id: ec.userId, name: ec.userName ?? ec.userDisplayName ?? ec.userId }
+            ? {
+                id: ec.userId,
+                name: ec.userName ?? ec.userDisplayName ?? ec.userId,
+                // `organizationId` is the blessed name for the caller's active
+                // org (matches columns + `current_user.organizationId`); the
+                // action body executes TRUSTED (RLS-bypassing), so a body that
+                // wants to scope by org must read it here (#3280).
+                ...(ec.tenantId != null ? { organizationId: String(ec.tenantId) } : {}),
+              }
             : { id: 'system', name: 'system' };
 
         // ── flow dispatch ──
@@ -1176,6 +1206,7 @@ export class HttpDispatcher {
         const actionContext: any = {
             record,
             user,
+            session: this.buildActionSession(ec),
             engine: this.buildActionEngineFacade(ql),
             params: { ...params, recordId, objectName },
         };
@@ -3900,6 +3931,11 @@ export class HttpDispatcher {
                 roles: Array.isArray(ec.positions) ? ec.positions : [],
                 positions: Array.isArray(ec.positions) ? ec.positions : [],
                 permissions: Array.isArray(ec.permissions) ? ec.permissions : [],
+                // `organizationId` is the blessed developer-facing name for the
+                // caller's active org (matches columns + `current_user.organizationId`);
+                // `tenantId` is kept as a deprecated alias with the identical
+                // value (#3280).
+                organizationId: ec.tenantId,
                 tenantId: ec.tenantId,
               }
             : { id: 'system', name: 'system', roles: [], positions: [], permissions: [] };
@@ -3907,6 +3943,7 @@ export class HttpDispatcher {
         const actionContext: any = {
             record,
             user: userFromAuth,
+            session: this.buildActionSession(ec),
             engine: engineFacade,
             params: { ...reqParams, recordId, objectName },
         };

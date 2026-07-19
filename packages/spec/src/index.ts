@@ -120,6 +120,14 @@ export * from './migrations/index.js';
 
 export { type PluginContext } from './kernel/plugin.zod';
 
+// Platform SERVICE capability vocabulary for `requires: [...]` (framework#3265).
+export {
+  PLATFORM_CAPABILITY_TOKENS,
+  DEPRECATED_PLATFORM_CAPABILITY_ALIASES,
+  canonicalizePlatformCapability,
+  isKnownPlatformCapability,
+} from './kernel/platform-capabilities';
+
 // Expression Protocol (M9 — canonical wire format for formulas / predicates / conditions)
 export {
   ExpressionDialect,

@@ -15,6 +15,17 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+# The QuickJS sandbox compiles a fresh WASM module per hook/action invocation
+# (and a nested hook compiles another inside the parent's budget). Hosted runners
+# are 4-vCPU and the test job oversubscribes them (`turbo --concurrency=4` + each
+# vitest worker), so that fixed VM-creation cost alone intermittently tripped the
+# 250ms hook default even while the VM was progressing — a load flake unrelated to
+# the change under test (#3259). Raise the sandbox hook budget for the whole
+# workflow; production keeps the 250ms default (this only sets it in CI). Real
+# hangs are still bounded by each test's own vitest timeout.
+env:
+  OS_SANDBOX_HOOK_TIMEOUT_MS: '10000'
+
 jobs:
   filter:
     runs-on: ubuntu-latest

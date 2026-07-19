@@ -229,4 +229,62 @@ export const SysApprovalRequest = ObjectSchema.create({
     { fields: ['status', 'updated_at'] },
     { fields: ['submitter_id', 'status'] },
   ],
+
+  // Server-declared decision actions (objectui#2678 P2-4). The console's
+  // generic action runtime renders and executes these wherever this object is
+  // surfaced — the approvals inbox included — so new decision capabilities
+  // (and their params) ship as metadata, not as hand-written buttons. Each
+  // targets the existing approvals REST route; `{id}` resolves from the row
+  // and `actorId` defaults to the caller server-side. The service remains the
+  // authority on who may act (pending-approver check) — `visible` only trims
+  // the obvious non-pending case.
+  actions: [
+    {
+      name: 'approval_approve',
+      label: 'Approve',
+      icon: 'check-circle',
+      type: 'api',
+      method: 'POST',
+      target: '/api/v1/approvals/requests/{id}/approve',
+      params: [
+        { name: 'comment', label: 'Comment', type: 'textarea', required: false },
+      ],
+      visible: 'record.status == "pending"',
+      locations: ['record_section', 'list_item'],
+      successMessage: 'Approved.',
+      refreshAfter: true,
+    },
+    {
+      name: 'approval_reject',
+      label: 'Reject',
+      icon: 'x-circle',
+      type: 'api',
+      method: 'POST',
+      target: '/api/v1/approvals/requests/{id}/reject',
+      params: [
+        { name: 'comment', label: 'Comment', type: 'textarea', required: false },
+      ],
+      visible: 'record.status == "pending"',
+      confirmText: 'Reject this request? A rejection is final for every approver.',
+      locations: ['record_section', 'list_item'],
+      successMessage: 'Rejected.',
+      refreshAfter: true,
+    },
+    {
+      name: 'approval_reassign',
+      label: 'Reassign',
+      icon: 'arrow-right-left',
+      type: 'api',
+      method: 'POST',
+      target: '/api/v1/approvals/requests/{id}/reassign',
+      params: [
+        { name: 'to', label: 'New approver (user id)', type: 'text', required: true },
+        { name: 'comment', label: 'Comment', type: 'textarea', required: false },
+      ],
+      visible: 'record.status == "pending"',
+      locations: ['record_section'],
+      successMessage: 'Reassigned.',
+      refreshAfter: true,
+    },
+  ],
 });

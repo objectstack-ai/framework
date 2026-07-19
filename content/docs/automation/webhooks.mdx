@@ -94,16 +94,16 @@ in `definition_json`, a serialised `Webhook` JSON (canonical schema:
 | `name`            | text      | Unique snake_case name — referenced in logs and audit.                             |
 | `label`           | text      | Optional display label.                                                            |
 | `object_name`     | text      | Short object name whose record events fire this webhook.                           |
-| `triggers`        | text      | Comma-separated event list: `create,update,delete`.                                |
+| `triggers`        | select    | Multi-select of `create` / `update` / `delete`, stored as an array (the enqueuer also accepts a legacy comma-separated string). |
 | `url`             | text      | External endpoint that receives the POST.                                          |
-| `method`          | text      | HTTP method. Default `POST`.                                                        |
+| `method`          | select    | HTTP method — one of `GET` / `POST` / `PUT` / `PATCH` / `DELETE`. Default `POST`.   |
 | `description`     | textarea  | Free-text description.                                                              |
 | `active`          | boolean   | Inactive webhooks are skipped by the dispatcher. Default `true`.                    |
 | `definition_json` | textarea  | Serialised `Webhook` JSON (`WebhookSchema` from `@objectstack/spec/automation`) — carries the full headers / auth / retry / payload config, including the signing `secret`, custom `headers`, and `timeoutMs`. |
 | `created_at`      | datetime  | Standard audit columns.                                                            |
 | `updated_at`      | datetime  |                                                                                    |
 
-Matching at runtime is purely `object_name` + the comma-separated `triggers`
+Matching at runtime is purely `object_name` + the multi-select `triggers`
 list; the headers, signing secret, and per-attempt timeout are parsed out of
 `definition_json` when an event is enqueued. There is no per-row org/tenant
 column, no `events[]` glob field, no stored `retry_policy`, and no
@@ -167,7 +167,7 @@ Five stages, each implemented as a thin layer over an existing primitive.
 └──────────────────────────┬──────────────────────────────────────┘
                            ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│ 2. Match   subscriber filters sys_webhook by events[]/object,   │
+│ 2. Match   subscriber filters sys_webhook by triggers/object,   │
 │            multiplies one event into N delivery rows            │
 └──────────────────────────┬──────────────────────────────────────┘
                            ▼
@@ -231,7 +231,7 @@ For each incoming event the subscriber:
 
 1. Loads `sys_webhook` rows where `active = true` AND `object_name`
    matches the event's object AND the event's action is in the row's
-   comma-separated `triggers`.
+   `triggers`.
 2. For each match, builds the payload (§5).
 3. Enqueues a `sys_http_delivery` row (`source = 'webhook'`).
 
@@ -470,7 +470,7 @@ packages/plugins/plugin-webhooks/
     ├── sys-webhook.object.ts     # ObjectSchema.create() — sys_webhook config
     ├── auto-enqueuer.ts          # realtime data.record.* → enqueue onto outbox
     ├── auto-enqueuer.test.ts     # tests are colocated in src/, not a separate test/ dir
-    └── schema.ts                 # shared types
+    └── schema.ts                 # public re-export barrel (exports SysWebhook)
 ```
 
 The delivery runtime — `sys_http_delivery`, `HttpDispatcher`, the HTTP sender,

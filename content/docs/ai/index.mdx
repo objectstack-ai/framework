@@ -70,7 +70,7 @@ flowchart TD
 
 ✅ **DO:**
 - Declare knowledge sources via the Knowledge Protocol and pick the adapter (`memory`, `ragflow`, custom) that fits your data
-- Rely on the built-in data tools (`query_records` / `get_record` / `aggregate_data`) for live record access
+- Rely on the built-in data tools (`query_records` / `get_record` / `aggregate_records`) for live record access
 - Let permission-aware retrieval and RLS scope what each user's agent can see
 - Keep indexed objects in sync via the protocol's event sync
 
@@ -165,7 +165,7 @@ Server-side, the same flow runs through `chatWithTools`, threading the
 end-user's `ExecutionContext` so tool calls respect row-level security:
 
 ```typescript
-const reply = await aiService.chatWithTools(messages, tools, {
+const reply = await aiService.chatWithTools(messages, {
   toolExecutionContext: {
     actor: { id: currentUser.id, name: currentUser.displayName, positions: currentUser.positions, permissions: currentUser.permissions },
     conversationId,
