@@ -17,11 +17,11 @@
  *   `ctx.api.object('foo').count(...)` and the host method runs in node).
  *
  * Trade-offs:
- * - Per-invocation overhead is dominated by VM creation: every call compiles a
- *   fresh WASM module via `newAsyncContext()` and disposes it on settle (see
- *   {@link QuickJSScriptRunner.execute}). Runtimes are deliberately NOT pooled —
- *   a shared module hit HostRef double-free crashes when contexts were disposed
- *   concurrently, and the per-invocation isolate sidesteps that (ADR-0102 D4).
+ * - Per-invocation overhead is dominated by VM creation: every call instantiates
+ *   a fresh **sync** WASM module via `newQuickJSWASMModule()` (no asyncify) and
+ *   drops it on settle (see {@link QuickJSScriptRunner.execute}). Modules are
+ *   deliberately NOT shared — separate modules are physically memory-isolated, so
+ *   a QuickJS heap bug can't reach another invocation's data (ADR-0102 D2/D4).
  * - Budgeting is CPU-time, not wall-clock (ADR-0102 D1): the per-invocation
  *   `timeoutMs` bounds VM-active time (env defaults `OS_SANDBOX_HOOK_TIMEOUT_MS` /
  *   `OS_SANDBOX_ACTION_TIMEOUT_MS`; `OS_SANDBOX_WALL_CEILING_MS` the wall
@@ -33,8 +33,9 @@
  */
 
 import {
-  newAsyncContext,
-  type QuickJSAsyncContext,
+  newQuickJSWASMModule,
+  type QuickJSContext,
+  type QuickJSDeferredPromise,
   type QuickJSHandle,
 } from 'quickjs-emscripten';
 import { resolveSandboxTimeoutMs } from '@objectstack/types';
@@ -164,11 +165,14 @@ export class QuickJSScriptRunner implements ScriptRunner {
     ctx: ScriptContext;
     origin: ScriptOrigin;
   }): Promise<ScriptResult> {
-    // Each invocation gets its own WebAssembly module via newAsyncContext().
-    // This is the canonical "per-invocation isolate" model and avoids the
-    // shared-runtime HostRef double-free issues we hit with a singleton
-    // QuickJSAsyncWASMModule when contexts are disposed concurrently.
-    const vm = await newAsyncContext();
+    // Each invocation gets its OWN WebAssembly module (fresh linear memory) via
+    // newQuickJSWASMModule() — the sync release variant, no asyncify (ADR-0102
+    // D2). Separate modules are physically memory-isolated, so a QuickJS heap bug
+    // can't reach another invocation's marshalled data (D4). Asyncify was dropped
+    // because nothing suspends the WASM stack anymore: host calls are deferred
+    // QuickJS promises drained by the pump loop, never `newAsyncifiedFunction`.
+    const mod = await newQuickJSWASMModule();
+    const vm = mod.newContext();
     const runtime = vm.runtime;
     runtime.setMemoryLimit(args.memoryMb * 1024 * 1024);
     runtime.setMaxStackSize(512 * 1024);
@@ -221,8 +225,17 @@ export class QuickJSScriptRunner implements ScriptRunner {
     // its commit/rollback settled).
     const txState: TxState = { api: null, handle: null, open: false };
 
+    // Every host call hands the VM a `vm.newPromise()` deferred; the newPromise
+    // contract requires each be `dispose()`d. On the settled path the runner
+    // already lets them go, which the old asyncify build tolerated — but the sync
+    // variant's `JS_FreeRuntime` aborts (`Assertion failed: list_empty`) if the
+    // context is torn down while a deferred is still pending (a timed-out
+    // never-settling host call). We track them and dispose any survivors in the
+    // finally, before `vm.dispose()`.
+    const deferreds = new Set<QuickJSDeferredPromise>();
+
     try {
-      this.installCtx(vm, args.ctx, new Set(args.capabilities), args.origin, txState);
+      this.installCtx(vm, args.ctx, new Set(args.capabilities), args.origin, txState, deferreds);
 
       // L1 expressions are pure-sync: evaluate and read __result.
       if (args.isExpression) {
@@ -253,7 +266,7 @@ export class QuickJSScriptRunner implements ScriptRunner {
         return { value, durationMs: Date.now() - start };
       }
 
-      // L2 scripts: wrap as async IIFE and use side-channel + asyncified pump.
+      // L2 scripts: wrap as async IIFE and use a side-channel + pump loop.
       // Each pump iteration:
       //   1. yield to the host event loop (lets host promises settle)
       //   2. drain QuickJS pending jobs (advances the .then chain)
@@ -271,7 +284,7 @@ export class QuickJSScriptRunner implements ScriptRunner {
             );`;
 
       sliceStart = Date.now();
-      const evalRes = await vm.evalCodeAsync(wrapped);
+      const evalRes = vm.evalCode(wrapped);
       cpuMs += Date.now() - sliceStart;
       if (evalRes.error) {
         const budget = budgetError(0);
@@ -392,8 +405,25 @@ export class QuickJSScriptRunner implements ScriptRunner {
           }
         }
       }
-      // newAsyncContext() owns its WASM module; disposing the context disposes
-      // the runtime + module together.
+      // Free every host-side deferred (settled or not) — the `newPromise`
+      // contract, and mandatory before context teardown on the sync variant: a
+      // pending deferred left alive makes `JS_FreeRuntime` abort. Best-effort so
+      // one bad handle can't mask the real outcome.
+      for (const d of deferreds) {
+        if (d.alive) {
+          try {
+            d.dispose();
+          } catch {
+            /* already gone / VM aborted — ignore */
+          }
+        }
+      }
+      deferreds.clear();
+      // Dispose the context — this frees its runtime + all QuickJS allocations
+      // (QuickJSWASMModule.newContext: "the runtime will be disposed when the
+      // context is disposed"). The sync `QuickJSWASMModule` has no dispose();
+      // dropping `mod` at function scope lets GC reclaim its WebAssembly instance
+      // + linear memory, preserving per-invocation isolation (ADR-0102 D2).
       vm.dispose();
     }
   }
@@ -408,11 +438,12 @@ export class QuickJSScriptRunner implements ScriptRunner {
    * `find/count/insert/...` are async) without asyncify's single-unwind limit.
    */
   private installCtx(
-    vm: QuickJSAsyncContext,
+    vm: QuickJSContext,
     ctx: ScriptContext,
     caps: Set<HookBodyCapability>,
     origin: ScriptOrigin,
     txState: TxState,
+    deferreds: Set<QuickJSDeferredPromise>,
   ): void {
     setGlobalJson(vm, '__input', ctx.input);
     setGlobalJson(vm, '__previous', ctx.previous);
@@ -450,8 +481,8 @@ export class QuickJSScriptRunner implements ScriptRunner {
       const wrap = vm.newObject();
       const READ = ['find', 'findOne', 'count', 'aggregate'] as const;
       const WRITE = ['insert', 'update', 'delete', 'updateMany', 'deleteMany', 'upsert'] as const;
-      for (const m of READ) installApiMethod(vm, wrap, m, objectName, ctx, caps, 'api.read', origin, txState);
-      for (const m of WRITE) installApiMethod(vm, wrap, m, objectName, ctx, caps, 'api.write', origin, txState);
+      for (const m of READ) installApiMethod(vm, wrap, m, objectName, ctx, caps, 'api.read', origin, txState, deferreds);
+      for (const m of WRITE) installApiMethod(vm, wrap, m, objectName, ctx, caps, 'api.write', origin, txState, deferreds);
       return wrap;
     });
     vm.setProp(apiObj, 'object', objectFn);
@@ -477,6 +508,7 @@ export class QuickJSScriptRunner implements ScriptRunner {
           );
         }
         const deferred = vm.newPromise();
+        deferreds.add(deferred);
         void (async () => {
           try {
             await run();
@@ -615,26 +647,26 @@ interface TxState {
 /**
  * Host-bound API method, exposed to the VM as an async function.
  *
- * IMPORTANT: this deliberately does NOT use `newAsyncifiedFunction`. Asyncify
- * unwinds the WASM stack while a host call is in flight, and the engine forbids
- * one asyncified call from running while another is unwound ("the stack cannot
- * be unwound twice"). A script that awaits two host calls in sequence — e.g. the
- * real `lead_apply_convert` action doing `findOne()` then `update()` — trips
- * exactly that: the second call is driven from a resumed continuation inside
- * `executePendingJobs` (a non-async frame), which corrupted the wasm heap
- * (`memory access out of bounds` / `p->ref_count == 0`) and, when it limped
- * along, blew the pump budget ("did not resolve after 1000 pump iterations").
+ * IMPORTANT: host calls settle through a real QuickJS promise (a deferred), NOT
+ * an asyncified call. Asyncify unwound the WASM stack while a host call was in
+ * flight and forbade one asyncified call running while another was unwound ("the
+ * stack cannot be unwound twice"): a script awaiting two host calls in sequence —
+ * e.g. the real `lead_apply_convert` action doing `findOne()` then `update()` —
+ * tripped exactly that, corrupting the wasm heap (`memory access out of bounds` /
+ * `p->ref_count == 0`) and blowing the pump budget. Shedding that dependency is
+ * precisely what let the runner drop the asyncify build entirely and move to the
+ * sync variant (ADR-0102 D2).
  *
- * Instead we hand the VM a real QuickJS promise (a deferred) and settle it from
- * the host event loop. Sequential `await`s are then ordinary promises with no
- * stack unwinding, so any number of host calls compose safely; the pump loop in
+ * We hand the VM a deferred promise and settle it from the host event loop.
+ * Sequential `await`s are ordinary promises with no stack unwinding, so any
+ * number of host calls compose safely; the pump loop in
  * {@link QuickJSScriptRunner.execute} drains the resulting jobs.
  *
  * The capability check runs synchronously at call time and surfaces inside the
  * VM as a thrown error with a clear diagnostic.
  */
 function installApiMethod(
-  vm: QuickJSAsyncContext,
+  vm: QuickJSContext,
   parent: QuickJSHandle,
   method: string,
   objectName: string,
@@ -643,6 +675,7 @@ function installApiMethod(
   required: HookBodyCapability,
   origin: ScriptOrigin,
   txState: TxState,
+  deferreds: Set<QuickJSDeferredPromise>,
 ): void {
   const fn = vm.newFunction(method, (...argHandles) => {
     // Capability gate — throw synchronously so the VM sees a normal exception at
@@ -661,6 +694,7 @@ function installApiMethod(
     const args = argHandles.map((h) => vm.dump(h));
 
     const deferred = vm.newPromise();
+    deferreds.add(deferred);
     void (async () => {
       try {
         // While a transaction is open, resolve the repository from the
@@ -731,7 +765,7 @@ function safeJsonStringify(v: unknown): string {
 }
 
 /** Marshal a host JSON-serializable value into a QuickJS handle. */
-function jsonToHandle(vm: QuickJSAsyncContext, v: unknown): QuickJSHandle {
+function jsonToHandle(vm: QuickJSContext, v: unknown): QuickJSHandle {
   const json = safeJsonStringify(v);
   const r = vm.evalCode(`(${json})`);
   if (r.error) {
@@ -742,7 +776,7 @@ function jsonToHandle(vm: QuickJSAsyncContext, v: unknown): QuickJSHandle {
   return r.value;
 }
 
-function setGlobalJson(vm: QuickJSAsyncContext, name: string, v: unknown): void {
+function setGlobalJson(vm: QuickJSContext, name: string, v: unknown): void {
   const json = safeJsonStringify(v);
   const result = vm.evalCode(`(${json})`);
   if (result.error) {
@@ -753,7 +787,7 @@ function setGlobalJson(vm: QuickJSAsyncContext, name: string, v: unknown): void 
   result.value.dispose();
 }
 
-function setObjectJson(vm: QuickJSAsyncContext, parent: QuickJSHandle, key: string, v: unknown): void {
+function setObjectJson(vm: QuickJSContext, parent: QuickJSHandle, key: string, v: unknown): void {
   const json = safeJsonStringify(v);
   const result = vm.evalCode(`(${json})`);
   if (result.error) {
@@ -773,7 +807,7 @@ function setObjectJson(vm: QuickJSAsyncContext, parent: QuickJSHandle, key: stri
  * Returns `undefined` if the read fails for any reason — callers fall back to
  * the script's return value in that case.
  */
-function readCtxInputJson(vm: QuickJSAsyncContext): Record<string, unknown> | undefined {
+function readCtxInputJson(vm: QuickJSContext): Record<string, unknown> | undefined {
   try {
     const r = vm.evalCode(`JSON.stringify(globalThis.__ctx && globalThis.__ctx.input || null)`);
     if (r.error) {
