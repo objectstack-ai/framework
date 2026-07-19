@@ -2493,11 +2493,11 @@ export class ObjectStackClient {
      * Record an approve decision on a request. Finalises the request when the
      * node's behaviour is satisfied and resumes the owning flow run.
      */
-    approve: async (requestId: string, decision?: { actorId?: string; comment?: string }): Promise<ApprovalDecisionResult> => {
+    approve: async (requestId: string, decision?: { actorId?: string; comment?: string; attachments?: string[] }): Promise<ApprovalDecisionResult> => {
       const route = this.getRoute('approvals');
       const res = await this.fetch(`${this.baseUrl}${route}/requests/${encodeURIComponent(requestId)}/approve`, {
         method: 'POST',
-        body: JSON.stringify({ actorId: decision?.actorId, comment: decision?.comment })
+        body: JSON.stringify({ actorId: decision?.actorId, comment: decision?.comment, attachments: decision?.attachments })
       });
       return this.unwrapResponse<ApprovalDecisionResult>(res);
     },
@@ -2506,11 +2506,11 @@ export class ObjectStackClient {
      * Record a reject decision on a request. Resumes the owning flow run down
      * the `reject` edge.
      */
-    reject: async (requestId: string, decision?: { actorId?: string; comment?: string }): Promise<ApprovalDecisionResult> => {
+    reject: async (requestId: string, decision?: { actorId?: string; comment?: string; attachments?: string[] }): Promise<ApprovalDecisionResult> => {
       const route = this.getRoute('approvals');
       const res = await this.fetch(`${this.baseUrl}${route}/requests/${encodeURIComponent(requestId)}/reject`, {
         method: 'POST',
-        body: JSON.stringify({ actorId: decision?.actorId, comment: decision?.comment })
+        body: JSON.stringify({ actorId: decision?.actorId, comment: decision?.comment, attachments: decision?.attachments })
       });
       return this.unwrapResponse<ApprovalDecisionResult>(res);
     },

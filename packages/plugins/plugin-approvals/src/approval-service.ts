@@ -328,60 +328,83 @@ export class ApprovalService implements IApprovalService {
     step: any,
     record?: any,
     organizationId?: string | null,
-    opts?: { now?: number; substitutions?: OooSubstitution[] },
+    opts?: { now?: number; substitutions?: OooSubstitution[]; groups?: Record<string, string[]> },
   ): Promise<string[]> {
     if (!step || !Array.isArray(step.approvers)) return [];
     const now = opts?.now ?? this.clock.now().getTime();
     const out: string[] = [];
-    for (const a of step.approvers) {
+    const specs: any[] = step.approvers;
+    for (let idx = 0; idx < specs.length; idx++) {
+      const a = specs[idx];
       if (!a) continue;
-      // ADR-0090 D3: `role` is the deprecated spelling of
-      // `org_membership_level`. Resolve on the canonical type, but keep the
-      // AUTHORED spelling in the `type:value` fallback below — stored
-      // `sys_approval_approver` rows and `pending_approvers` slots from 15.x
-      // carry the old literal, and rewriting it here would orphan them.
-      const type = canonicalApproverType(String(a.type));
-      if (type !== a.type) {
-        this.logger?.warn?.(
-          `[approvals] approver type '${a.type}' is deprecated (ADR-0090 D3) — author '${type}' instead`,
-          { deprecated: a.type, canonical: type },
-        );
+      const ids = await this.resolveApproverSpec(a, record, organizationId, now, opts?.substitutions);
+      // per_group (#3266): tag each resolved id with this spec's group. An
+      // approver without an explicit `group` forms its own group keyed by
+      // position, so a plain per-approver list still behaves predictably.
+      const groupKey = a.group != null && String(a.group) !== '' ? String(a.group) : `#${idx}`;
+      for (const u of ids) {
+        if (!u) continue;
+        out.push(u);
+        if (opts?.groups) (opts.groups[u] ??= []).push(groupKey);
       }
-      if (type === 'user') {
-        for (const u of await this.applyOooDelegation(String(a.value), now, organizationId, opts?.substitutions)) out.push(u);
-        continue;
-      }
-      if (type === 'field' && record) {
-        for (const u of await this.applyOooDelegation(String((record as any)[a.value] ?? ''), now, organizationId, opts?.substitutions)) out.push(u);
-        continue;
-      }
-      try {
-        if (type === 'team') {
-          const users = await this.expandTeamUsers(String(a.value));
-          if (users.length) { for (const u of users) out.push(u); continue; }
-        } else if (type === 'department' || type === 'business_unit' || type === 'bu') {
-          const users = await this.expandBusinessUnitUsers(String(a.value), organizationId);
-          if (users.length) { for (const u of users) out.push(u); continue; }
-        } else if (type === 'position') {
-          const users = await this.expandPositionUsers(String(a.value), organizationId);
-          if (users.length) { for (const u of users) out.push(u); continue; }
-        } else if (type === 'org_membership_level') {
-          const users = await this.expandMembershipTierUsers(String(a.value), organizationId);
-          if (users.length) { for (const u of users) out.push(u); continue; }
-        } else if (type === 'manager' && record) {
-          const subject = (record as any)[a.value] ?? (record as any).owner_id;
-          if (subject) {
-            const mgr = await this.lookupManager(String(subject));
-            if (mgr) {
-              for (const u of await this.applyOooDelegation(mgr, now, organizationId, opts?.substitutions)) out.push(u);
-              continue;
-            }
-          }
-        }
-      } catch { /* fall through */ }
-      out.push(`${a.type}:${a.value}`);
     }
     return out.filter(Boolean);
+  }
+
+  /**
+   * Resolve ONE approver spec to concrete approver identities, applying OOO
+   * substitution (#1322) to individually-routed types. Extracted from
+   * {@link ApprovalService.expandApprovers} so the caller can tag each spec's
+   * resolved ids with a group (#3266) without duplicating the resolution logic.
+   * Returns the `type:value` literal as a single-element fallback when a graph
+   * lookup yields nothing — same behaviour as before the extraction.
+   */
+  private async resolveApproverSpec(
+    a: any,
+    record: any,
+    organizationId: string | null | undefined,
+    now: number,
+    substitutions?: OooSubstitution[],
+  ): Promise<string[]> {
+    // ADR-0090 D3: `role` is the deprecated spelling of `org_membership_level`.
+    // Resolve on the canonical type, but keep the AUTHORED spelling in the
+    // `type:value` fallback below — stored `sys_approval_approver` rows and
+    // `pending_approvers` slots from 15.x carry the old literal.
+    const type = canonicalApproverType(String(a.type));
+    if (type !== a.type) {
+      this.logger?.warn?.(
+        `[approvals] approver type '${a.type}' is deprecated (ADR-0090 D3) — author '${type}' instead`,
+        { deprecated: a.type, canonical: type },
+      );
+    }
+    if (type === 'user') {
+      return this.applyOooDelegation(String(a.value), now, organizationId, substitutions);
+    }
+    if (type === 'field' && record) {
+      return this.applyOooDelegation(String((record as any)[a.value] ?? ''), now, organizationId, substitutions);
+    }
+    try {
+      if (type === 'team') {
+        const users = await this.expandTeamUsers(String(a.value));
+        if (users.length) return users;
+      } else if (type === 'department' || type === 'business_unit' || type === 'bu') {
+        const users = await this.expandBusinessUnitUsers(String(a.value), organizationId);
+        if (users.length) return users;
+      } else if (type === 'position') {
+        const users = await this.expandPositionUsers(String(a.value), organizationId);
+        if (users.length) return users;
+      } else if (type === 'org_membership_level') {
+        const users = await this.expandMembershipTierUsers(String(a.value), organizationId);
+        if (users.length) return users;
+      } else if (type === 'manager' && record) {
+        const subject = (record as any)[a.value] ?? (record as any).owner_id;
+        if (subject) {
+          const mgr = await this.lookupManager(String(subject));
+          if (mgr) return this.applyOooDelegation(mgr, now, organizationId, substitutions);
+        }
+      }
+    } catch { /* fall through */ }
+    return [`${a.type}:${a.value}`];
   }
 
   /** Flat team — `sys_team` is better-auth's collaboration grouping (no hierarchy). */
@@ -626,8 +649,12 @@ export class ApprovalService implements IApprovalService {
     // OOO auto-skip (#1322 M1): reroute individually-routed approvers who are
     // out of office. Collected hops drive the audit + notification below (M4).
     const substitutions: OooSubstitution[] = [];
+    // Group membership per resolved approver (#3266) — snapshotted so quorum /
+    // per_group finalization is decided against the slate resolved at OPEN time
+    // (OOO-substituted), not re-resolved live at each decision.
+    const groups: Record<string, string[]> = {};
     const approvers = await this.expandApprovers(
-      { approvers: input.config.approvers }, input.record, ctxOrg, { now: nowDate.getTime(), substitutions },
+      { approvers: input.config.approvers }, input.record, ctxOrg, { now: nowDate.getTime(), substitutions, groups },
     );
 
     const now = nowDate.toISOString();
@@ -638,6 +665,10 @@ export class ApprovalService implements IApprovalService {
     const configSnapshot: any = { ...input.config };
     if (input.flowLabel) configSnapshot.__flowLabel = input.flowLabel;
     if (input.nodeLabel) configSnapshot.__nodeLabel = input.nodeLabel;
+    // Snapshot the resolved approver→group map for quorum/per_group tallying.
+    if (input.config.behavior === 'quorum' || input.config.behavior === 'per_group') {
+      configSnapshot.__approverGroups = groups;
+    }
     // ADR-0044 round numbering: rounds of a revise loop share the run — count
     // this (run, node)'s prior requests; the new one is round N+1. Stamped on
     // the snapshot (precedent: __flowLabel), so no schema migration.
@@ -720,15 +751,54 @@ export class ApprovalService implements IApprovalService {
   }
 
   /**
-   * Record a decision on a node-driven request. Honours the node's `unanimous`
-   * behavior (holds until every approver has approved). When the request
-   * finalizes, returns the suspended run id + node id so the caller (or
-   * {@link ApprovalService.decide}) can resume the flow down the matching
-   * branch.
+   * True when the approve tally satisfies the node's `behavior` (#3266):
+   *  - `unanimous` — every resolved approver approved.
+   *  - `quorum` — at least `minApprovals` distinct approvals (default = all).
+   *  - `per_group` — every group reached `minApprovals` approvals (default 1).
+   * Thresholds are clamped to the resolvable count / group size, so a mis-set
+   * value can never deadlock a request.
+   */
+  private isApprovalSatisfied(
+    behavior: string,
+    config: ApprovalNodeConfig,
+    original: string[],
+    groupMap: Record<string, string[]>,
+    approved: Set<string>,
+  ): boolean {
+    if (behavior === 'unanimous') {
+      return original.length > 0 && original.every(a => approved.has(a));
+    }
+    if (behavior === 'quorum') {
+      const n = original.length || 1;
+      const need = Math.min(Math.max(1, config.minApprovals ?? n), n);
+      // Count distinct approvals (robust to OOO/reassign changing who holds a slot).
+      return approved.size >= need;
+    }
+    if (behavior === 'per_group') {
+      const perGroupNeed = Math.max(1, config.minApprovals ?? 1);
+      const size: Record<string, number> = {};
+      for (const gs of Object.values(groupMap)) for (const g of gs) size[g] = (size[g] ?? 0) + 1;
+      const groups = Object.keys(size);
+      if (!groups.length) return true; // nothing to gate
+      const got: Record<string, number> = {};
+      for (const a of approved) for (const g of (groupMap[a] ?? [])) got[g] = (got[g] ?? 0) + 1;
+      return groups.every(g => (got[g] ?? 0) >= Math.min(perGroupNeed, size[g]));
+    }
+    return true; // first_response and unknown → first approval finalizes
+  }
+
+  /**
+   * Record a decision on a node-driven request. Honours the node's `behavior`
+   * (#3266): `first_response` finalizes on the first approval; `unanimous`,
+   * `quorum`, and `per_group` hold the request open until their tally is met
+   * (see {@link ApprovalService.isApprovalSatisfied}). A rejection always
+   * finalizes the node (one veto). When the request finalizes, returns the
+   * suspended run id + node id so the caller (or {@link ApprovalService.decide})
+   * can resume the flow down the matching branch.
    */
   async decideNode(
     requestId: string,
-    input: { decision: 'approve' | 'reject'; actorId: string; comment?: string },
+    input: { decision: 'approve' | 'reject'; actorId: string; comment?: string; attachments?: string[] },
     context: SharingExecutionContext,
   ): Promise<{ request: ApprovalRequestRow; runId: string | null; nodeId: string | null; finalized: boolean; decision: 'approve' | 'reject' }> {
     if (!requestId) throw new Error('VALIDATION_FAILED: requestId is required');
@@ -756,24 +826,43 @@ export class ApprovalService implements IApprovalService {
     const runId: string | null = raw.flow_run_id ?? null;
     const now = this.clock.now().toISOString();
 
-    // Audit the decision first so the unanimous tally below sees it.
+    // Audit the decision first so the quorum/per_group tally below sees it.
     await this.engine.insert('sys_approval_action', {
       id: uid('aact'), request_id: requestId, organization_id: org,
       step_name: nodeId, step_index: 0, action: input.decision,
-      actor_id: input.actorId, comment: input.comment ?? null, created_at: now,
+      actor_id: input.actorId, comment: input.comment ?? null,
+      attachments: input.attachments?.length ? input.attachments : null,
+      created_at: now,
     }, { context: SYSTEM_CTX });
 
-    // Unanimous approve: advance only once every approver has approved.
-    if (input.decision === 'approve' && config.behavior === 'unanimous') {
-      const original = await this.expandApprovers(
-        { approvers: config.approvers }, parseJson(raw.payload_json, undefined), org,
-      );
+    // Multi-approver aggregation on approve (#3266). A rejection always
+    // finalizes the node (one veto), so only the approve path can hold it open.
+    // `first_response` finalizes on the first approval (falls straight through).
+    const behavior = config.behavior ?? 'first_response';
+    if (input.decision === 'approve' && behavior !== 'first_response') {
       const acts = await this.engine.find('sys_approval_action', {
-        where: { request_id: requestId, step_index: 0, action: 'approve' }, limit: 500, context: SYSTEM_CTX,
+        where: { request_id: requestId, step_index: 0, action: 'approve' }, limit: 1000, context: SYSTEM_CTX,
       });
       const approved = new Set<string>((acts ?? []).map((a: any) => String(a.actor_id ?? '')).filter(Boolean));
-      const stillPending = original.filter(a => !approved.has(a));
-      if (stillPending.length > 0) {
+
+      // quorum / per_group tally against the OPEN-time snapshot (already
+      // OOO-substituted). unanimous re-resolves for back-compat with requests
+      // opened before the snapshot existed.
+      const snapshotGroups = (config as any).__approverGroups as Record<string, string[]> | undefined;
+      let original: string[];
+      let groupMap: Record<string, string[]>;
+      if (snapshotGroups && (behavior === 'quorum' || behavior === 'per_group')) {
+        groupMap = snapshotGroups;
+        original = Object.keys(snapshotGroups);
+      } else {
+        original = await this.expandApprovers(
+          { approvers: config.approvers }, parseJson(raw.payload_json, undefined), org,
+        );
+        groupMap = {};
+      }
+
+      if (!this.isApprovalSatisfied(behavior, config, original, groupMap, approved)) {
+        const stillPending = original.filter(a => !approved.has(a));
         await this.engine.update('sys_approval_request', {
           id: requestId, pending_approvers: stillPending.join(','), updated_at: now,
         }, { context: SYSTEM_CTX });
@@ -1216,8 +1305,21 @@ export class ApprovalService implements IApprovalService {
       step_name: raw.flow_node_id ?? raw.current_step ?? null, step_index: 0, action: 'reassign',
       actor_id: input.actorId, comment: input.comment ?? `${from} → ${to}`, created_at: now,
     }, { context: SYSTEM_CTX });
+    // per_group / quorum (#3266): carry the delegated slot's group membership to
+    // the new approver in the snapshot, so their approval still counts for the
+    // original group.
+    let configPatch: Record<string, unknown> = {};
+    try {
+      const cfg = parseJson<any>(raw.node_config_json, null);
+      const groups = cfg?.__approverGroups as Record<string, string[]> | undefined;
+      if (groups && groups[from] && !groups[to]) {
+        groups[to] = groups[from];
+        delete groups[from];
+        configPatch = { node_config_json: JSON.stringify(cfg) };
+      }
+    } catch { /* snapshot left untouched on parse failure */ }
     await this.engine.update('sys_approval_request', {
-      id: requestId, pending_approvers: next.join(','), updated_at: now,
+      id: requestId, pending_approvers: next.join(','), updated_at: now, ...configPatch,
     }, { context: SYSTEM_CTX });
     await this.syncApproverIndex(requestId, next, raw.organization_id ?? null, now);
 
@@ -1463,7 +1565,7 @@ export class ApprovalService implements IApprovalService {
   /** Free-form reply on the thread (submitter or any pending approver). */
   async comment(
     requestId: string,
-    input: { actorId: string; comment: string },
+    input: { actorId: string; comment: string; attachments?: string[] },
     context: SharingExecutionContext,
   ): Promise<{ request: ApprovalRequestRow }> {
     if (!input?.actorId) throw new Error('VALIDATION_FAILED: actorId is required');
@@ -1479,7 +1581,9 @@ export class ApprovalService implements IApprovalService {
     await this.engine.insert('sys_approval_action', {
       id: uid('aact'), request_id: requestId, organization_id: raw.organization_id ?? null,
       step_name: raw.flow_node_id ?? raw.current_step ?? null, step_index: 0, action: 'comment',
-      actor_id: input.actorId, comment: input.comment.trim(), created_at: now,
+      actor_id: input.actorId, comment: input.comment.trim(),
+      attachments: input.attachments?.length ? input.attachments : null,
+      created_at: now,
     }, { context: SYSTEM_CTX });
 
     // Notify the other side of the thread.

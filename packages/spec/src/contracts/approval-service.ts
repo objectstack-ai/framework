@@ -140,6 +140,12 @@ export interface ApprovalDecisionInput {
   decision: 'approve' | 'reject';
   actorId: string;
   comment?: string;
+  /**
+   * File references (already stored via the storage service) to attach to this
+   * decision — e.g. a signed contract or an evidence PDF (#3266). Recorded on
+   * the `sys_approval_action` audit row's `attachments` field.
+   */
+  attachments?: string[];
 }
 
 /** Input for recalling (withdrawing) a pending request. */

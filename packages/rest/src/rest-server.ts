@@ -5899,6 +5899,7 @@ export class RestServer {
                                 decision,
                                 actorId: body.actorId ?? body.actor_id ?? context?.userId,
                                 comment: body.comment,
+                                attachments: body.attachments,
                             }, context ?? {});
                             res.json(out);
                         } catch (err: any) {
@@ -6007,6 +6008,7 @@ export class RestServer {
             return svc.comment(id, {
                 actorId: body.actorId ?? body.actor_id ?? context?.userId,
                 comment: body.comment,
+                attachments: body.attachments,
             }, context);
         });
 

@@ -110,6 +110,14 @@ export const SysApprovalAction = ObjectSchema.create({
 
     comment: Field.textarea({ label: 'Comment', required: false, group: 'Action' }),
 
+    attachments: Field.file({
+      label: 'Attachments',
+      required: false,
+      multiple: true,
+      group: 'Action',
+      description: 'Files supporting this action — e.g. a signed contract or evidence (#3266).',
+    }),
+
     created_at: Field.datetime({
       label: 'Created At',
       required: true,

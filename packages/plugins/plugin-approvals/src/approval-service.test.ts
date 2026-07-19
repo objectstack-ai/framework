@@ -1287,3 +1287,106 @@ describe('sys_approval_delegation write guard (#1322)', () => {
     )).rejects.toThrow(/FORBIDDEN/);
   });
 });
+
+// ── Quorum & per-group sign-off (#3266) ───────────────────────────────
+//
+// quorum = M-of-N collective sign-off; per_group = one (or minApprovals) from
+// EACH group (会签). A single rejection is always a veto. Group membership is
+// snapshotted at open, so OOO-substituted approvers count for their group.
+describe('ApprovalService — quorum & per_group (#3266)', () => {
+  let engine: ReturnType<typeof makeFakeEngine>;
+  let svc: ApprovalService;
+  const base = new Date('2026-08-01T10:00:00Z').getTime();
+
+  beforeEach(() => {
+    engine = makeFakeEngine();
+    let n = 0;
+    svc = new ApprovalService({ engine: engine as any, clock: { now: () => new Date(base + (n++) * 1000) } });
+  });
+
+  // Build an openNodeRequest input with explicit approver specs + behavior.
+  const cfg = (approvers: any[], behavior: string, extra: Record<string, any> = {}) => ({
+    ...openInput([]),
+    config: { approvers, behavior, lockRecord: true, ...extra },
+  });
+  const U = (v: string, group?: string) => (group ? { type: 'user', value: v, group } : { type: 'user', value: v });
+
+  it('quorum: holds until minApprovals reached, then finalizes', async () => {
+    const req = await svc.openNodeRequest(cfg([U('u1'), U('u2'), U('u3')], 'quorum', { minApprovals: 2 }), CTX);
+    const a = await svc.decideNode(req.id, { decision: 'approve', actorId: 'u1' }, SYS);
+    expect(a.finalized).toBe(false);
+    expect(a.request.status).toBe('pending');
+    const b = await svc.decideNode(req.id, { decision: 'approve', actorId: 'u2' }, SYS);
+    expect(b.finalized).toBe(true);
+    expect(b.request.status).toBe('approved');
+  });
+
+  it('quorum: minApprovals clamps to the approver count (no deadlock)', async () => {
+    const req = await svc.openNodeRequest(cfg([U('u1'), U('u2')], 'quorum', { minApprovals: 5 }), CTX);
+    await svc.decideNode(req.id, { decision: 'approve', actorId: 'u1' }, SYS);
+    const b = await svc.decideNode(req.id, { decision: 'approve', actorId: 'u2' }, SYS);
+    expect(b.finalized).toBe(true);
+  });
+
+  it('quorum: any reject is a veto', async () => {
+    const req = await svc.openNodeRequest(cfg([U('u1'), U('u2'), U('u3')], 'quorum', { minApprovals: 2 }), CTX);
+    const r = await svc.decideNode(req.id, { decision: 'reject', actorId: 'u1' }, SYS);
+    expect(r.finalized).toBe(true);
+    expect(r.request.status).toBe('rejected');
+  });
+
+  it('per_group: advances only when EACH group approves', async () => {
+    const req = await svc.openNodeRequest(cfg([U('l1', 'legal'), U('f1', 'finance')], 'per_group'), CTX);
+    const a = await svc.decideNode(req.id, { decision: 'approve', actorId: 'l1' }, SYS);
+    expect(a.finalized).toBe(false); // finance still pending
+    const b = await svc.decideNode(req.id, { decision: 'approve', actorId: 'f1' }, SYS);
+    expect(b.finalized).toBe(true);
+    expect(b.request.status).toBe('approved');
+  });
+
+  it('per_group: two approvals in ONE group do not satisfy another group', async () => {
+    const req = await svc.openNodeRequest(
+      cfg([U('l1', 'legal'), U('l2', 'legal'), U('f1', 'finance')], 'per_group'), CTX);
+    await svc.decideNode(req.id, { decision: 'approve', actorId: 'l1' }, SYS);
+    const b = await svc.decideNode(req.id, { decision: 'approve', actorId: 'l2' }, SYS);
+    expect(b.finalized).toBe(false); // finance still missing
+  });
+
+  it('per_group: minApprovals=2 needs two from each group', async () => {
+    const req = await svc.openNodeRequest(cfg(
+      [U('l1', 'legal'), U('l2', 'legal'), U('f1', 'finance'), U('f2', 'finance')],
+      'per_group', { minApprovals: 2 }), CTX);
+    for (const u of ['l1', 'f1', 'l2']) {
+      const r = await svc.decideNode(req.id, { decision: 'approve', actorId: u }, SYS);
+      expect(r.finalized).toBe(false);
+    }
+    const done = await svc.decideNode(req.id, { decision: 'approve', actorId: 'f2' }, SYS);
+    expect(done.finalized).toBe(true);
+  });
+
+  it('per_group: reject is a veto', async () => {
+    const req = await svc.openNodeRequest(cfg([U('l1', 'legal'), U('f1', 'finance')], 'per_group'), CTX);
+    const r = await svc.decideNode(req.id, { decision: 'reject', actorId: 'l1' }, SYS);
+    expect(r.request.status).toBe('rejected');
+  });
+
+  it('per_group: an OOO-substituted member still counts for their group', async () => {
+    engine._tables['sys_approval_delegation'] = [
+      { id: 'd', delegator_id: 'l1', delegate_id: 'lb', organization_id: 't1', valid_from: null, valid_until: null, reason: 'leave' },
+    ];
+    const req = await svc.openNodeRequest(cfg([U('l1', 'legal'), U('f1', 'finance')], 'per_group'), CTX);
+    expect(req.pending_approvers).toContain('lb');
+    expect(req.pending_approvers).not.toContain('l1');
+    const a = await svc.decideNode(req.id, { decision: 'approve', actorId: 'lb' }, SYS); // delegate covers legal
+    expect(a.finalized).toBe(false);
+    const b = await svc.decideNode(req.id, { decision: 'approve', actorId: 'f1' }, SYS);
+    expect(b.finalized).toBe(true);
+  });
+
+  it('records decision attachments on the audit row', async () => {
+    const req = await svc.openNodeRequest(openInput(['u9']), CTX);
+    await svc.decideNode(req.id, { decision: 'approve', actorId: 'u9', attachments: ['file_1', 'file_2'] }, SYS);
+    const act = engine._tables['sys_approval_action'].find((a: any) => a.action === 'approve');
+    expect(act.attachments).toEqual(['file_1', 'file_2']);
+  });
+});

@@ -142,6 +142,14 @@ export const ApprovalNodeApproverSchema = lazySchema(() => z.object({
       },
     },
   }),
+  /**
+   * Optional group label (#3266). With `behavior: 'per_group'`, approvers that
+   * share a label form one group and the node advances only once EACH group has
+   * `minApprovals` approvals — e.g. one legal AND one finance sign-off. Ignored
+   * by other behaviors. Approvers without a label each form their own group
+   * (keyed by position), so a plain per-approver list still behaves sensibly.
+   */
+  group: z.string().optional().describe('Group label for per_group sign-off (e.g. "legal", "finance")'),
 }));
 export type ApprovalNodeApprover = z.infer<typeof ApprovalNodeApproverSchema>;
 
@@ -188,9 +196,27 @@ export const ApprovalNodeConfigSchema = lazySchema(() => z.object({
   /** Who may act on this step. */
   approvers: z.array(ApprovalNodeApproverSchema).min(1).describe('Allowed approvers for this node'),
 
-  /** How multiple approvers combine. (Enterprise adds quorum/weighted — ADR-0019 tiering.) */
-  behavior: z.enum(['first_response', 'unanimous']).default('first_response')
+  /**
+   * How multiple approvers combine (#3266):
+   *  - `first_response` — any one approval (or rejection) finalizes the node.
+   *  - `unanimous` — every resolved approver must approve.
+   *  - `quorum` — `minApprovals` of N approvals finalize (M-of-N collective sign-off).
+   *  - `per_group` — each `group` (see approver `group`) must reach `minApprovals`
+   *    approvals (default 1), i.e. one-from-each-group sign-off (会签).
+   * In every mode a single rejection finalizes the node as `rejected` (one veto).
+   * Weighted voting and approval-matrix governance are enterprise
+   * (objectstack-ai/cloud#861), not here.
+   */
+  behavior: z.enum(['first_response', 'unanimous', 'quorum', 'per_group']).default('first_response')
     .describe('How to combine multiple approvers'),
+
+  /**
+   * Threshold for `quorum` (total approvals required, M of N) and `per_group`
+   * (approvals required from EACH group). Defaults to 1. Clamped at runtime so
+   * it can never exceed the resolvable approver count (no deadlock).
+   */
+  minApprovals: z.number().int().min(1).optional()
+    .describe('Approvals required — total (quorum) or per group (per_group). Default 1'),
 
   /** Lock the triggering record from edits while this node is pending. */
   lockRecord: z.boolean().default(true).describe('Lock the record from editing while pending'),
