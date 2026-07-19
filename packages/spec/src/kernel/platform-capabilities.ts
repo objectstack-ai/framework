@@ -20,10 +20,13 @@
  * Growing the platform: when a new `requires`-resolvable service ships, add
  * its token HERE as well as to the runtime's provider registry — the CLI's
  * vocabulary-drift test fails if the registries and this list fall out of
- * sync. Unknown tokens are warn-only for now (`defineStack` and the serve
- * resolver both warn) so third-party experimentation isn't bricked; once the
- * vocabulary has proven complete the warn is intended to become a reject
- * (Prime Directive #12: surface producer mistakes at authoring, loudly).
+ * sync. An unknown token is REJECTED by `defineStack` at authoring time
+ * (framework#3265) — the vocabulary is the union of every token the framework
+ * CLI and cloud's objectos-runtime resolve, so a token outside it is a typo or
+ * stale reference no runtime provides (Prime Directive #12: surface producer
+ * mistakes at authoring, loudly). The serve resolver still only WARNS on an
+ * unknown token in a raw artifact — a pre-built/older-spec artifact must not
+ * crash-boot a running server over a no-op token; authoring is the gate.
  */
 export const PLATFORM_CAPABILITY_TOKENS: readonly string[] = Object.freeze([
   // Tier-gated capabilities (framework `serve.ts` CAPABILITY_TO_TIER)

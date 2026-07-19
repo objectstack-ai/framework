@@ -427,6 +427,12 @@ export const ObjectStackDefinitionSchema = lazySchema(() => z.object({
    * intent). Use this for the AI service too: `requires: ['ai']` makes a missing
    * `@objectstack/service-ai` a hard boot error rather than a broken-but-booted app.
    *
+   * Tokens must be canonical members of the platform vocabulary
+   * (`PLATFORM_CAPABILITY_TOKENS`; deprecated aliases like `aiStudio` are
+   * rewritten with a warning). An UNKNOWN token — a typo or stale reference no
+   * runtime provides — is a `defineStack` **error**, not a silent no-op
+   * (framework#3265).
+   *
    * If a capability is also provided explicitly via `plugins[]`, the
    * explicit instance wins (and the resolver does not double-register).
    *
@@ -439,7 +445,7 @@ export const ObjectStackDefinitionSchema = lazySchema(() => z.object({
    * });
    * ```
    */
-  requires: z.array(z.string()).optional().describe('Capability names this stack requires from the platform (canonical kebab-case tokens from PLATFORM_CAPABILITY_TOKENS; declared-but-missing ⇒ fail-fast at startup)'),
+  requires: z.array(z.string()).optional().describe('Capability names this stack requires from the platform (canonical kebab-case tokens from PLATFORM_CAPABILITY_TOKENS; an unknown token is a defineStack error, declared-but-missing ⇒ fail-fast at startup)'),
 
   /**
    * Plugin tier presets to auto-register (e.g. `core`, `ai`, `ui`, `auth`).
@@ -993,21 +999,13 @@ function validateHierarchyScopeCapability(data: unknown): string[] {
 }
 
 /**
- * Canonicalize `requires` tokens and warn-validate them against the platform
- * capability vocabulary (framework#3265).
- *
- * - Deprecated alias spellings (`aiStudio` → `ai-studio`, `aiSeat` →
- *   `ai-seat`) are REWRITTEN to canonical at authoring time — the producer is
- *   fixed, so every consumer (serve resolver, cloud loader, discovery) sees
- *   one spelling (Prime Directive #12).
- * - Tokens outside the vocabulary get a console warning. Warn-only for now —
- *   both runtimes previously ignored unknown tokens silently, so a hard reject
- *   could brick working stacks; once the vocabulary proves complete this is
- *   intended to become a defineStack error.
- *
- * Returns the (possibly rewritten) definition; emits warnings via
- * `console.warn`. Strict mode only — non-strict mode skips all validation by
- * contract.
+ * Canonicalize `requires` tokens against the platform capability vocabulary
+ * (framework#3265): deprecated alias spellings (`aiStudio` → `ai-studio`,
+ * `aiSeat` → `ai-seat`) are REWRITTEN to canonical at authoring time — the
+ * producer is fixed, so every consumer (serve resolver, cloud loader,
+ * discovery) sees one spelling (Prime Directive #12). Emits a deprecation
+ * warning per rewritten token. Unknown tokens are NOT handled here — they are
+ * rejected by {@link validateKnownCapabilities}. Strict mode only.
  */
 function canonicalizeStackRequires(config: ObjectStackDefinition): ObjectStackDefinition {
   const raw = config.requires;
@@ -1028,18 +1026,39 @@ function canonicalizeStackRequires(config: ObjectStackDefinition): ObjectStackDe
       changed = true;
       return mapped;
     }
-    if (!PLATFORM_CAPABILITY_TOKENS.includes(token) && !warned.has(token)) {
-      warned.add(token);
-      console.warn(
-        `[defineStack] requires: '${token}' is not a known platform capability — ` +
-          `check for a typo (known tokens are kebab-case, e.g. 'ai-studio', 'pinyin-search'). ` +
-          `Unknown tokens are ignored by the runtime today; this will become a validation error (framework#3265).`,
-      );
-    }
     return token;
   });
 
   return changed ? { ...config, requires: canonical } : config;
+}
+
+/**
+ * Reject `requires` tokens that are not part of the platform capability
+ * vocabulary (framework#3265). Runs AFTER {@link canonicalizeStackRequires}, so
+ * deprecated aliases have already resolved to canonical tokens — an unknown
+ * token here is a genuine typo or a stale reference that NO runtime provides, so
+ * every runtime would otherwise SILENTLY ignore it (declared ≠ enforced). Fail
+ * at the producer, loudly (Prime Directive #12): the warn-first grace period
+ * this replaced is over — the vocabulary is the union of every token the
+ * framework CLI and cloud's objectos-runtime resolve, plus the enterprise
+ * plugin-provided ones (`hierarchy-security` / `ai-seat` / `governance`).
+ * Returns one error per distinct unknown token.
+ */
+function validateKnownCapabilities(config: ObjectStackDefinition): string[] {
+  const raw = config.requires;
+  if (!raw || raw.length === 0) return [];
+  const seen = new Set<string>();
+  const errors: string[] = [];
+  for (const token of raw) {
+    if (PLATFORM_CAPABILITY_TOKENS.includes(token) || seen.has(token)) continue;
+    seen.add(token);
+    errors.push(
+      `requires: '${token}' is not a known platform capability — check for a typo ` +
+        `(known tokens are kebab-case, e.g. 'ai-studio', 'pinyin-search', 'automation'). ` +
+        `No runtime provides it, so it would be silently ignored.`,
+    );
+  }
+  return errors;
 }
 
 export function defineStack(
@@ -1066,9 +1085,18 @@ export function defineStack(
     throw new Error(formatZodError(result.error, 'defineStack validation failed'));
   }
 
-  // Canonicalize `requires` (deprecated aliases → kebab canon) and warn on
-  // unknown capability tokens BEFORE the validators below read the definition.
+  // Canonicalize `requires` (deprecated aliases → kebab canon) BEFORE the
+  // validators below read the definition, then REJECT any unknown capability
+  // token (framework#3265): no runtime provides it, so it would otherwise be
+  // silently ignored (declared ≠ enforced, Prime Directive #12).
   const data = canonicalizeStackRequires(result.data);
+
+  const capErrors = validateKnownCapabilities(data);
+  if (capErrors.length > 0) {
+    const header = `defineStack capability validation failed (${capErrors.length} issue${capErrors.length === 1 ? '' : 's'}):`;
+    const lines = capErrors.map((e) => `  ✗ ${e}`);
+    throw new Error(`${header}\n\n${lines.join('\n')}`);
+  }
 
   const crossRefErrors = validateCrossReferences(data);
   if (crossRefErrors.length > 0) {
