@@ -6,6 +6,7 @@ import {
   readEnvWithDeprecation,
   resolveAllowDegradedTenancy,
   resolveSearchPinyinEnabled,
+  resolveSandboxTimeoutMs,
   isMcpServerEnabled,
   resolveMcpStdioAutoStart,
 } from './env.js';
@@ -235,5 +236,51 @@ describe('MCP switches — HTTP surface vs stdio auto-start are decoupled (#3167
     process.env.OS_MCP_STDIO_ENABLED = 'true';
     process.env.OS_MCP_SERVER_ENABLED = 'true';
     expect(resolveMcpStdioAutoStart()).toEqual({ enabled: true, viaDeprecatedAlias: false });
+  });
+});
+
+describe('resolveSandboxTimeoutMs (#3259)', () => {
+  const HOOK = 'OS_SANDBOX_HOOK_TIMEOUT_MS';
+  const ACTION = 'OS_SANDBOX_ACTION_TIMEOUT_MS';
+  const origHook = process.env[HOOK];
+  const origAction = process.env[ACTION];
+  afterEach(() => {
+    if (origHook === undefined) delete process.env[HOOK];
+    else process.env[HOOK] = origHook;
+    if (origAction === undefined) delete process.env[ACTION];
+    else process.env[ACTION] = origAction;
+  });
+
+  it('returns the fallback unchanged when the var is unset', () => {
+    delete process.env[HOOK];
+    delete process.env[ACTION];
+    expect(resolveSandboxTimeoutMs('hook', 250)).toBe(250);
+    expect(resolveSandboxTimeoutMs('action', 5000)).toBe(5000);
+  });
+
+  it('reads the kind-specific var and parses a positive integer', () => {
+    process.env[HOOK] = '10000';
+    process.env[ACTION] = '20000';
+    expect(resolveSandboxTimeoutMs('hook', 250)).toBe(10000);
+    expect(resolveSandboxTimeoutMs('action', 5000)).toBe(20000);
+  });
+
+  it('does not cross the wires between the hook and action vars', () => {
+    process.env[HOOK] = '999';
+    delete process.env[ACTION];
+    expect(resolveSandboxTimeoutMs('hook', 250)).toBe(999);
+    expect(resolveSandboxTimeoutMs('action', 5000)).toBe(5000); // action unset → fallback
+  });
+
+  it('ignores empty / non-numeric / non-positive values and keeps the fallback', () => {
+    for (const bad of ['', '   ', 'abc', '0', '-5', 'NaN']) {
+      process.env[HOOK] = bad;
+      expect(resolveSandboxTimeoutMs('hook', 250), `value=${JSON.stringify(bad)}`).toBe(250);
+    }
+  });
+
+  it('tolerates a leading integer with trailing junk (parseInt semantics, as resolveOrgLimit)', () => {
+    process.env[HOOK] = '3000ms';
+    expect(resolveSandboxTimeoutMs('hook', 250)).toBe(3000);
   });
 });

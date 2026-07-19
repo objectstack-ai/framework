@@ -240,6 +240,39 @@ export function resolveSearchPinyinEnabled(opts?: { locales?: readonly string[] 
 }
 
 /**
+ * SINGLE decision point for the sandbox script-runner's DEFAULT per-invocation
+ * timeout (ms), for a given origin kind, from the environment (framework#3259).
+ *
+ * The QuickJS sandbox enforces a wall-clock deadline on every hook/action
+ * invocation. The built-in defaults (250ms hooks / 5000ms actions) suit a warm,
+ * idle host — but every invocation compiles a fresh WASM module, and a nested
+ * hook compiles ANOTHER one inside the parent's budget, so on a heavily loaded
+ * or slow host (an oversubscribed CI runner, constrained production hardware)
+ * that fixed VM-creation cost alone can trip the hook default even while the VM
+ * is still making progress. That surfaced as an intermittent CI flake ("hook
+ * '…' exceeded timeout of 250ms"). This lets an operator raise the floor once,
+ * deployment-wide, instead of re-tuning every call site.
+ *
+ * Canonical vars (OS_{DOMAIN}_{NAME}, DOMAIN=SANDBOX):
+ *   - hook   → `OS_SANDBOX_HOOK_TIMEOUT_MS`
+ *   - action → `OS_SANDBOX_ACTION_TIMEOUT_MS`
+ *
+ * Only a positive integer is honored; unset / empty / non-numeric / non-positive
+ * falls back to `fallback`, so behaviour is byte-for-byte unchanged when the var
+ * is absent. This is a FALLBACK default ONLY: an explicit `hookTimeoutMs` /
+ * `actionTimeoutMs` passed to the runner constructor still wins over it, and a
+ * body's own declared `timeoutMs` still wins over the resolved default per the
+ * runner's timeout-resolution rule (the smaller of the explicit values).
+ */
+export function resolveSandboxTimeoutMs(kind: 'hook' | 'action', fallback: number): number {
+  const name = kind === 'hook' ? 'OS_SANDBOX_HOOK_TIMEOUT_MS' : 'OS_SANDBOX_ACTION_TIMEOUT_MS';
+  const raw = readEnvWithDeprecation(name, [], { silent: true });
+  if (raw == null || String(raw).trim() === '') return fallback;
+  const n = Number.parseInt(String(raw).trim(), 10);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
+/**
  * Internal: clear the dedupe set. Test-only; exposed so suite-wide
  * deprecation warnings don't bleed between tests.
  *

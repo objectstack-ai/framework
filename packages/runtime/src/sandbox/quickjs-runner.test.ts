@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { QuickJSScriptRunner, SandboxError } from './quickjs-runner.js';
 import type { ScriptContext, ScriptRunOptions } from './script-runner.js';
 
@@ -370,9 +370,13 @@ describe('QuickJSScriptRunner — nested sandbox re-entrancy (#1867)', () => {
 // the 250ms hook default and killed mid-flight.
 // ---------------------------------------------------------------------------
 describe('QuickJSScriptRunner — timeout resolution honors body.timeoutMs (#1867)', () => {
-  // Stock engine defaults (250ms hooks) — these tests assert the default budget
-  // itself, so they must NOT use the generous shared `runner` above.
-  const defaultRunner = new QuickJSScriptRunner();
+  // Pin the hook default to 250ms EXPLICITLY (not the bare stock constructor) so
+  // these assertions on the effective budget stay independent of any ambient
+  // `OS_SANDBOX_HOOK_TIMEOUT_MS` the environment/CI may set (#3259). They assert
+  // the resolution logic — body.timeoutMs vs the runner default — which is
+  // identical whether that default came from the built-in constant or an
+  // explicit option. (A dedicated suite below covers the env override itself.)
+  const defaultRunner = new QuickJSScriptRunner({ hookTimeoutMs: 250 });
 
   it('honors a hook body timeoutMs above the 250ms hook default', async () => {
     // Host call settles at ~600ms — comfortably past the old 250ms hook cap but
@@ -420,6 +424,60 @@ describe('QuickJSScriptRunner — timeout resolution honors body.timeoutMs (#186
         hookOpts,
       ),
     ).rejects.toThrow(/timeout of 50ms/);
+  }, 10000);
+});
+
+// ---------------------------------------------------------------------------
+// Env-overridable timeout defaults (#3259). Every invocation compiles a fresh
+// WASM module, and a nested hook compiles another inside the parent's budget, so
+// on a loaded/slow host (an oversubscribed CI runner) the 250ms hook default can
+// trip even while the VM is making progress. `OS_SANDBOX_HOOK_TIMEOUT_MS` lets an
+// operator raise the FALLBACK default without a code change; an explicit
+// constructor option still wins over the env, and a body's own timeoutMs still
+// wins over the resolved default. Each test constructs its runner AFTER setting
+// the env (the constructor reads it once), and the env is saved/restored so a
+// CI-wide value doesn't leak in or out.
+// ---------------------------------------------------------------------------
+describe('QuickJSScriptRunner — env-overridable timeout defaults (#3259)', () => {
+  const HOOK_ENV = 'OS_SANDBOX_HOOK_TIMEOUT_MS';
+  let saved: string | undefined;
+  beforeEach(() => {
+    saved = process.env[HOOK_ENV];
+    delete process.env[HOOK_ENV];
+  });
+  afterEach(() => {
+    if (saved === undefined) delete process.env[HOOK_ENV];
+    else process.env[HOOK_ENV] = saved;
+  });
+
+  // A never-settling host call forces the deadline path; the SandboxError embeds
+  // the RESOLVED budget, so asserting on the message proves which timeout applied
+  // without a flaky wall-clock measurement.
+  const neverSettles = { object: () => ({ update: () => new Promise<never>(() => {}) }) };
+  const runHook = (r: QuickJSScriptRunner) =>
+    r.runScript(
+      { language: 'js', source: "return await ctx.api.object('x').update({});", capabilities: ['api.write'] },
+      ctx({ api: neverSettles }),
+      hookOpts,
+    );
+
+  it('falls back to the built-in 250ms hook default when the env var is unset', async () => {
+    await expect(runHook(new QuickJSScriptRunner())).rejects.toThrow(/timeout of 250ms/);
+  }, 10000);
+
+  it('uses OS_SANDBOX_HOOK_TIMEOUT_MS as the default when set', async () => {
+    process.env[HOOK_ENV] = '150';
+    await expect(runHook(new QuickJSScriptRunner())).rejects.toThrow(/timeout of 150ms/);
+  }, 10000);
+
+  it('lets an explicit constructor option win over the env var', async () => {
+    process.env[HOOK_ENV] = '150';
+    await expect(runHook(new QuickJSScriptRunner({ hookTimeoutMs: 50 }))).rejects.toThrow(/timeout of 50ms/);
+  }, 10000);
+
+  it('ignores a non-numeric / non-positive env value and keeps the built-in default', async () => {
+    process.env[HOOK_ENV] = 'not-a-number';
+    await expect(runHook(new QuickJSScriptRunner())).rejects.toThrow(/timeout of 250ms/);
   }, 10000);
 });
 

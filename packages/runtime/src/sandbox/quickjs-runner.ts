@@ -17,9 +17,16 @@
  *   `ctx.api.object('foo').count(...)` and the host method runs in node).
  *
  * Trade-offs:
- * - Per-invocation overhead is dominated by VM creation. We pool runtimes per
- *   `(origin.kind, capabilities-set)` to amortise startup. Pool size is bounded
- *   by `maxPooled` (default 8); evicted runtimes are disposed.
+ * - Per-invocation overhead is dominated by VM creation: every call compiles a
+ *   fresh WASM module via `newAsyncContext()` and disposes it on settle (see
+ *   {@link QuickJSScriptRunner.execute}). Runtimes are deliberately NOT pooled —
+ *   a shared module hit HostRef double-free crashes when contexts were disposed
+ *   concurrently, and the per-invocation isolate sidesteps that. The cost is
+ *   real, though: a nested hook compiles a SECOND module inside the parent's
+ *   budget, so on a loaded/slow host the fixed compile cost alone can trip the
+ *   hook timeout. The per-invocation timeout default is therefore env-overridable
+ *   via `OS_SANDBOX_HOOK_TIMEOUT_MS` / `OS_SANDBOX_ACTION_TIMEOUT_MS`
+ *   (framework#3259) so an operator can raise the floor without a code change.
  * - Memory caps are advisory under quickjs (engine has no hard MB cap); the
  *   runner uses `setMemoryLimit(memoryMb * 1MB)` which is best-effort.
  */
@@ -29,6 +36,7 @@ import {
   type QuickJSAsyncContext,
   type QuickJSHandle,
 } from 'quickjs-emscripten';
+import { resolveSandboxTimeoutMs } from '@objectstack/types';
 import type { HookBody, ScriptBody, ExpressionBody, HookBodyCapability } from '@objectstack/spec/data';
 import type {
   ScriptContext,
@@ -55,9 +63,15 @@ export class QuickJSScriptRunner implements ScriptRunner {
   private opts: Required<QuickJSScriptRunnerOptions>;
 
   constructor(opts: QuickJSScriptRunnerOptions = {}) {
+    // Precedence for the per-invocation timeout default: an explicit constructor
+    // option wins; else the deployment's `OS_SANDBOX_{HOOK,ACTION}_TIMEOUT_MS`
+    // env override (so a loaded/slow host — e.g. an oversubscribed CI runner —
+    // can raise the floor without a code change, framework#3259); else the
+    // built-in default. `resolveSandboxTimeoutMs` returns the built-in fallback
+    // untouched when the env var is unset, so default behaviour is unchanged.
     this.opts = {
-      hookTimeoutMs: opts.hookTimeoutMs ?? DEFAULT_HOOK_TIMEOUT_MS,
-      actionTimeoutMs: opts.actionTimeoutMs ?? DEFAULT_ACTION_TIMEOUT_MS,
+      hookTimeoutMs: opts.hookTimeoutMs ?? resolveSandboxTimeoutMs('hook', DEFAULT_HOOK_TIMEOUT_MS),
+      actionTimeoutMs: opts.actionTimeoutMs ?? resolveSandboxTimeoutMs('action', DEFAULT_ACTION_TIMEOUT_MS),
       memoryMb: opts.memoryMb ?? DEFAULT_MEMORY_MB,
     };
   }
