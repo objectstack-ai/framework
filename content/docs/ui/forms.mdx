@@ -56,9 +56,8 @@ Only the spec'd whitelist of form fields is accepted; everything else (status, o
 import { defineView } from '@objectstack/spec';
 
 export default defineView({
-  name: 'lead_views',
-  object: 'lead',
-  /* ... internal listViews etc. ... */
+  /* ...default `list` / named `listViews` for `lead` live here too â€” the
+     container's target object is derived from a view's `data.object`... */
   formViews: {
     web_to_lead: {
       type: 'simple',
@@ -263,11 +262,10 @@ Sometimes you want the same FormView metadata to power an authed operator flow â
 ```ts
 // hotcrm/src/views/lead.view.ts (internal form variant)
 export default defineView({
-  name: 'lead_views',
-  object: 'lead',
   formViews: {
     quick_create: {
       type: 'simple',
+      data: { provider: 'object', object: 'lead' },
       sections: [
         {
           label: 'Lead',
