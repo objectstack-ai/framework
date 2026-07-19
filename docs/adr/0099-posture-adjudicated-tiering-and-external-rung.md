@@ -1,6 +1,6 @@
 # ADR-0099: Posture-Adjudicated Tiering — one axis for tier decisions, the EXTERNAL rung's enforcement path, no explicit deny
 
-**Status**: Accepted (2026-07-18; proposed 2026-07-17) — P0 equivalence gate landed with the acceptance (see the Acceptance addendum); P1/P2 flips gated on the #3211 G1 delta adjudication
+**Status**: Accepted (2026-07-18; proposed 2026-07-17) — P0 equivalence gate landed with the acceptance (see the Acceptance addendum); P1 shipped (#3226). Amended 2026-07-18: **two-axis correction** — D2's Layer 1 tier input corrected to the per-object scope bits, original P2 superseded by P2′ (see the Amendment)
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: [ADR-0095](./0095-authz-kernel-tenant-layer-and-posture-ladder.md) (the posture ladder + Layer 0 — Accepted, implemented; this ADR is its adjudication follow-through), [ADR-0066](./0066-unified-authorization-model.md) (superuser bypass ①; precedence), [ADR-0090](./0090-permission-model-v2-concept-convergence.md) (D10 principal taxonomy / `audience`, D11 external OWD), [ADR-0093](./0093-tenancy-mode-and-membership-lifecycle.md) (membership lifecycle — where an external principal type would come from), [ADR-0094](./0094-sys-permission-set-pure-projection.md) (one-authority precedent)
 **Composes with**: [ADR-0096](./0096-execution-surface-identity-admission.md) — 0096 governs **admission** (may this call reach the engine, as whom); this ADR governs **tiering** (given an admitted principal, which tier of rows each layer grants). Orthogonal axes, deliberately separate ADRs.
@@ -121,9 +121,13 @@ Every enforcement-time **tier** decision reads `ctx.posture`:
   ADR-0096 D3 is progressively eliminating). When both signals are present
   the carried rung wins; a disagreement is logged as a defect signal, and the
   **narrower** verdict is enforced (fail-safe).
-- **Layer 1 short-circuit**: the *tier* question ("does business RLS apply at
-  all inside the org") reads posture (`>= TENANT_ADMIN` short-circuits, per
-  today's semantics); the *side* question keeps its per-side capability bit —
+- **Layer 1 short-circuit** *(superseded by the two-axis Amendment below)*: the
+  original text read the tier from posture (`>= TENANT_ADMIN`) and claimed
+  today's semantics. The pre-P2 verification (framework#3211) showed that is
+  NOT today's semantics: the tier input is the **per-object** super-bit, which
+  a custom set can delegate to a non-admin principal — a per-principal ×
+  per-object fact the per-principal posture cannot represent. Layer 1's tier
+  input therefore **stays the per-side, per-object capability bit**;
   `viewAllRecords` gates the read bypass, `modifyAllRecords` the write bypass,
   exactly as today. Posture never grants a side the bits don't.
 - **Explain** reports the carried rung it read — the same field, not a
@@ -147,6 +151,12 @@ it would have caught).
 | **OWD / sharing** | n/a (already all-rows in tier) | n/a within org | OWD baseline + shares + hierarchy widening | **explicit shares only — OWD and sharing *rules* never apply** |
 | **Write path** | tier does not bypass write guards: readonly strip (#2957), identity write guard (ADR-0092), Layer 0 write wall (#2946) all still apply | same | same | shares with edit access only |
 | **Explain** | reports the carried rung — identical input as enforcement, by construction | same | same | same |
+
+> **Amendment note (2026-07-18):** the **Layer 1** row above is corrected by
+> the two-axis Amendment — the tier at Layer 1 is *not* selected by posture;
+> it is selected by the per-object super-bits (a `MEMBER` holding a delegated
+> per-object `viewAllRecords` short-circuits business RLS on that object,
+> tenant-walled as ever). The Layer 0 and EXTERNAL rows stand as written.
 
 Invariants (each carries a matrix cell):
 
@@ -233,8 +243,11 @@ Strictly serial, each step behind the matrix:
   rung (probe demoted to fallback; stale comment at
   `security-plugin.ts:71-77` retired). Behavior-preserving under P0's gate.
   Unblocked today (#2956); small.
-- **P2** — Layer 1 short-circuit reads posture for tier (side bits unchanged).
-  Behavior-preserving under the gate.
+- **P2** *(superseded — rejected at adjudication, replaced by P2′; see the
+  Amendment)* — the original "Layer 1 short-circuit reads posture for tier"
+  turned out NOT to be behavior-preserving: it would inert the delegated
+  per-object super-bit for non-admin principals. P2′ is documentation cells
+  only (seeded-face agreement, the delegation cell, I7), zero behavior change.
 - **P3 (demand-gated)** — EXTERNAL derivation + injection when the external
   principal type ships (portal track). New behavior for a new principal type;
   no existing principal's visibility changes. If any breaking surface
@@ -333,3 +346,64 @@ D1's behavior contract with one finding:
   doing its job as specified ("any cell where they disagree … must be
   resolved before the flip") — the resolution is D1's rung authority, not a
   probe repair.
+
+## Amendment — the two-axis correction (2026-07-18)
+
+**Trigger.** P1 shipped behavior-preserving on the seeded face (#3226). The
+pre-P2 verification (framework#3211) then found that D2's Layer 1 tier claim
+was **not** behavior-preserving as written. Layer 1's tier input today is the
+per-object super-bit — a **per-principal × per-object delegation primitive**:
+a custom permission set may grant `viewAllRecords` on one object (all invoices
+to an auditor position) without granting any admin stature. This is the
+industry-standard shape (Salesforce object-level View All / Modify All,
+org-level per-entity access in comparable platforms). Posture is
+**per-principal** — one rung per principal — and structurally cannot carry
+per-object scope: a MEMBER with a delegated invoice view-all and a plain
+MEMBER sit on the same rung. Enforcing D2's MEMBER cell literally would have
+(a) made a declared, grantable bit conditionally inert — the
+declared-but-unenforced class ADR-0049 forbids and the silent-miss failure
+mode this platform removes everywhere else — and (b) deleted a mainstream
+delegation capability, forcing over-grants (promote the auditor to org admin)
+to recover it.
+
+**Decision (maintainer, 2026-07-18).** The model is corrected to **two
+orthogonal axes, each with a single authority** — the table's Layer 1 row is
+amended rather than enforced:
+
+- **Posture is the boundary axis** (per-principal). It exclusively governs the
+  ladder's *ends*: the Layer 0 cross-tenant exemption at `PLATFORM_ADMIN`
+  (P1, shipped) and the EXTERNAL rung's wholesale replacement of the member
+  pipeline (P3, demand-gated). No other enforcement site consults posture for
+  tiering.
+- **The per-object super-bits are the scope axis** (per-principal ×
+  per-object). `viewAllRecords` / `modifyAllRecords` remain the only Layer 1
+  tier input — per side, per object, delegable to any position; today's
+  semantics, unchanged.
+- **D1's "single adjudication input" refines to "single authority per
+  axis."** The disease this ADR treats — one fact re-derived at multiple
+  sites — stays dead: the boundary fact has one derivation (the resolver) and
+  one enforcement reader (the Layer 0 gate); the scope fact has one evaluator
+  (`PermissionEvaluator.hasSuperuser*Bypass`). Neither is derived anywhere
+  else.
+- **I7 (new — the I5 dual):** the scope axis never crosses a boundary the
+  posture axis has not opened. A super-bit holder below `PLATFORM_ADMIN`
+  stays tenant-walled (enforced by P1; pinned in the matrix), and an EXTERNAL
+  principal's explicit-share rule replaces Layer 1 regardless of any held
+  bits (pinned when P3 lands).
+- **I2 clarification:** nesting is a per-rung *floor* invariant. Additive
+  per-object grants widen visibility within a rung (two MEMBERs may differ)
+  without violating the ladder; no rung's floor exceeds the rung above.
+- **P2 → P2′.** The original P2 flip is rejected. P2′ lands documentation
+  cells only: the seeded-face agreement pin (every seeded super-bit holder
+  sits ≥ `TENANT_ADMIN`, so the axes agree on the seeded surface), the
+  **delegation cell** (a MEMBER holding a custom per-object `viewAllRecords`
+  on a private object sees all rows in-org and remains tenant-walled — the
+  pattern is load-bearing and must not be "cleaned up" by a future
+  convergence attempt), and the I7 cells. Zero behavior change. An
+  authoring-time advisory for high-privilege bit grants (via
+  `describeHighPrivilegeBits`) is tracked separately.
+
+The AI-authoring rule this yields is one sentence — *bits pick your row scope
+on an object; posture picks which tenant boundaries exist for you at all* —
+which is the smallest mental model the platform can offer an agent writing
+permissions, with no conditionally-dead declarations.
