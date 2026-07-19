@@ -445,8 +445,8 @@ account_id:
   label: Account
   reference: account
   required: true
-  referenceFilters:
-    - "is_active = true"  # Only show active accounts
+  lookupFilters:
+    - { field: is_active, operator: eq, value: true }  # Only show active accounts
 
 project_id:
   type: master_detail
@@ -539,7 +539,7 @@ Optimize query performance with indexes:
 
 ```yaml
 indexes:
-  # Single-field index (also via field.index: true)
+  # Single-field unique index
   - fields: [email]
     unique: true
   
@@ -665,7 +665,7 @@ Tenant A cannot see Tenant B's records.
 
 Schema changes flow through the `os` CLI: validate the config against the protocol
 schema, compile it to a JSON artifact, compare it against the previously deployed
-config to surface breaking changes, then publish the artifact to ObjectOS Cloud.
+config to surface breaking changes, then publish the artifact to ObjectStack Cloud.
 
 ```bash
 # 1. Validate the config against the protocol schema
@@ -677,7 +677,7 @@ os build
 # 3. Compare two configs to detect breaking changes
 os diff ./before.json ./after.json
 
-# 4. Publish the compiled artifact as a versioned package to ObjectOS Cloud
+# 4. Publish the compiled artifact as a versioned package to ObjectStack Cloud
 os package publish
 
 # 5. Roll back / forward by installing a prior package version
@@ -744,10 +744,10 @@ fields:
 ### Performance Optimization
 
 ```yaml
-# Index frequently queried fields
+# Enforce uniqueness on frequently queried fields; declare additional
+# query indexes in the object-level `indexes[]` array
 email:
   type: text
-  index: true
   unique: true
 
 # Use appropriate field types
@@ -759,8 +759,6 @@ status:
 attachment:
   type: file
   label: Attachment
-  fileAttachmentConfig:
-    storageProvider: s3  # Offload to object storage
 ```
 
 ## Examples: Real-World Schemas

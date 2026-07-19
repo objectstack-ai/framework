@@ -154,7 +154,6 @@ email:
   label: Email Address
   required: true
   unique: true
-  index: true
 ```
 
 **Validation:**
@@ -498,8 +497,10 @@ account_id:
   label: Account
   reference: account
   required: true
-  referenceFilters:
-    - "is_active = true"
+  lookupFilters:
+    - field: is_active
+      operator: eq
+      value: true
   deleteBehavior: set_null  # or restrict, cascade
 ```
 
@@ -507,10 +508,9 @@ account_id:
 
 **Query behavior:**
 ```typescript
-// Automatic JOIN
-const opportunities = await ObjectQL.query({
-  object: 'opportunity',
-  fields: ['name', 'account.company_name']  // Joins account
+// Expand the account lookup
+const opportunities = await engine.find('opportunity', {
+  fields: ['name', 'account.company_name']  // Expands account
 });
 ```
 
@@ -754,11 +754,8 @@ metadata:
 **Query support:**
 ```typescript
 // Query JSON properties
-const products = await ObjectQL.query({
-  object: 'product',
-  filters: [
-    ['metadata.color', '=', 'red']
-  ]
+const products = await engine.find('product', {
+  where: { 'metadata.color': 'red' }
 });
 ```
 
@@ -798,7 +795,6 @@ Structured address with geocoding.
 billing_address:
   type: address
   label: Billing Address
-  allowGeocoding: true  # Allow address-to-coordinate conversion
 ```
 
 **Structure:**
@@ -837,16 +833,15 @@ office_location:
 }
 ```
 
-**Query:**
-```typescript
-// Find nearby locations (within 10 miles)
-const nearby = await ObjectQL.query({
-  object: 'store',
-  filters: [
-    ['location', 'near', { lat: 37.7749, lng: -122.4194, distance: 10, unit: 'miles' }]
-  ]
-});
-```
+<Callout type="warn">
+Proximity / radius ("near") search is **not** a built-in filter operator.
+ObjectQL's filter language exposes only `$eq`, `$ne`, `$gt`, `$gte`, `$lt`,
+`$lte`, `$in`, `$nin`, `$between`, `$contains`, `$notContains`, `$startsWith`,
+`$endsWith`, `$null`, and `$exists`. A `location` field stores coordinates;
+geospatial querying is not part of ObjectQL's portable filter language — it would
+rely on the underlying database's native geospatial support (e.g. MongoDB
+geospatial indexes), which the SQL and in-memory drivers do not provide.
+</Callout>
 
 **Database mapping:**
 - PostgreSQL: `POINT` or `GEOGRAPHY`
@@ -861,10 +856,7 @@ File attachment reference.
 avatar:
   type: file
   label: Profile Picture
-  fileAttachmentConfig:
-    allowedMimeTypes: [image/png, image/jpeg]
-    maxSize: 5242880  # 5MB
-    storageProvider: s3
+  multiple: false  # set true to store an array of file references
 ```
 
 **Storage:**
@@ -880,7 +872,7 @@ avatar:
 **Storage backends:**
 - `local`: Server filesystem
 - `s3`: Amazon S3
-- `azure`: Azure Blob Storage
+- `azure_blob`: Azure Blob Storage
 - `gcs`: Google Cloud Storage
 
 **Features:**
@@ -898,21 +890,15 @@ Image file with transformations.
 product_image:
   type: image
   label: Product Image
-  fileAttachmentConfig:
-    allowedMimeTypes: [image/png, image/jpeg, image/webp]
-    imageValidation:
-      maxWidth: 4096
-      maxHeight: 4096
-      generateThumbnails: true
-      thumbnailSizes:
-        - { name: thumbnail, width: 150, height: 150, crop: true }
-        - { name: large, width: 1200, height: 800, crop: false }
 ```
 
 **Features:**
-- Image dimension validation (`minWidth`/`maxWidth`/`minHeight`/`maxHeight`, `aspectRatio`)
-- Thumbnail generation (`generateThumbnails`, `thumbnailSizes`)
-- EXIF handling (`preserveMetadata`, `autoRotate`)
+
+Per-field image-processing options (thumbnail generation, dimension validation,
+EXIF handling) are **not** Field-schema properties. Those capabilities are
+configured on the file-storage connector's `contentProcessing`
+(`generateThumbnails`, `thumbnailSizes`, …). The `image` field type itself stores
+the uploaded file reference.
 
 ---
 

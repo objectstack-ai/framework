@@ -69,6 +69,15 @@ i18n.t('messages.welcome', 'en', { name: 'John' }); // Translation + interpolati
 
 ObjectStack automatically determines the user's locale using a **fallback chain**:
 
+<Callout type="warn">
+**Partial implementation.** The server resolves the *request* locale from the
+`Accept-Language` header (highest-priority entry), then a `?locale=` query
+parameter, then the i18n service's default locale — see `extractLocale` in
+`packages/rest/src/rest-server.ts`. The DB-persisted **user preference**,
+**tenant default**, and **IP geolocation** steps shown below are design intent:
+there is no geolocation or tenant-locale resolution in the runtime today.
+</Callout>
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │ 1. USER PREFERENCE                                          │
@@ -618,7 +627,10 @@ export const Account = ObjectSchema.create({
     
     industry: Field.select({
       label: 'account.fields.industry',
-      options: 'account.industries',  // Translation key for options array
+      options: [
+        { value: 'technology', label: 'account.industries.technology' },
+        { value: 'finance', label: 'account.industries.finance' },
+      ],
     }),
   },
 });
@@ -633,10 +645,10 @@ export const Account = ObjectSchema.create({
     "name": "Account Name",
     "industry": "Industry"
   },
-  "industries": [
-    { "value": "technology", "label": "Technology" },
-    { "value": "finance", "label": "Finance" }
-  ]
+  "industries": {
+    "technology": "Technology",
+    "finance": "Finance"
+  }
 }
 ```
 
@@ -651,25 +663,16 @@ locale.
 ObjectUI automatically translates labels, placeholders, and error messages:
 
 ```typescript
-// View definition
+// View definition — `defineView` takes a container of named views
+// ({ list, form, listViews, formViews }); a flat { name, type, ... }
+// object is rejected at build time.
 export default defineView({
-  name: 'account_list',
-  object: 'account',
-  type: 'list',
-  
-  layout: {
-    title: 'account.list.title',  // Translation key
+  list: {
+    type: 'grid',
+    label: 'account.list.title', // Translation key (i18n label)
+    data: { provider: 'object', object: 'account' },
     columns: [
-      {
-        field: 'name',
-        // Label auto-translated from ObjectQL field definition
-      },
-    ],
-    actions: [
-      {
-        type: 'create',
-        label: 'account.actions.create',  // Translation key
-      },
+      'name', // Column label auto-translated from the ObjectQL field definition
     ],
   },
 });
@@ -763,6 +766,13 @@ Output:
 ```
 
 ### Translation Service Integration
+
+<Callout type="warn">
+**Design intent — not yet implemented.** `i18n.translationService` is **not** a
+recognized key on `TranslationConfigSchema`
+(`packages/spec/src/system/translation.zod.ts`), and no auto-translate provider
+integration ships today. The snippet below describes planned behaviour.
+</Callout>
 
 ObjectStack integrates with professional translation services:
 

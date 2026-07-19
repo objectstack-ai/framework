@@ -25,7 +25,7 @@ The types you'll actually use:
 The schema also accepts `api` and `form` types, but they have **no runtime
 executor / renderer today** — stick to the four above. Likewise prefer
 `confirmText`/`params` over schema properties that are not yet wired
-(`shortcut`, `bulkEnabled`, `timeout`).
+(`shortcut`, `bulkEnabled`).
 </Callout>
 
 ## Define your first action
@@ -186,9 +186,10 @@ engine still requires the action to declare the matching location (that's why
   Unset means no gate beyond object CRUD permissions. Referenced capabilities
   must exist — `os lint` checks that.
 - **`visible`** is a CEL predicate evaluated **fail-closed**: an expression
-  that throws hides the action silently. Two rules save real debugging time:
-  always prefix record fields (`record.status != "closed"`, never a bare
-  `status`), and keep it to a single operand — see the
+  that throws hides the action silently. The rule that saves real debugging
+  time: always prefix record fields (`record.status != "closed"`, never a bare
+  `status`, which faults as an undeclared identifier). Compound `&&` / `||`
+  predicates are fully supported — see the
   [formulas guide](/docs/data-modeling/formulas) for CEL syntax.
 - **`requiresFeature`** ties visibility to a feature flag (compiled into a
   `visible` predicate).
@@ -230,7 +231,7 @@ and [Connect an MCP Client](/docs/ai/connect-mcp).
 
 | Symptom | Cause → fix |
 |:---|:---|
-| Button doesn't appear | `locations` doesn't include the surface; or the `visible` CEL throws (bare field name, multiple operands) and fail-closed hides it; or the user fails `requiredPermissions` |
+| Button doesn't appear | `locations` doesn't include the surface; or the `visible` CEL throws (e.g. a bare, unprefixed field name) and fail-closed hides it; or the user fails `requiredPermissions` |
 | Click → `Action 'x' … not found` | `target`-style script with no registered handler — add the `registerAction` call in `onEnable` (Path B above) |
 | Appears in UI, missing from `list_actions` (MCP) | `ai.exposed` not `true`, `ai.description` under 40 characters, or the type isn't headless-callable |
 | Runs but the list looks stale | Add `refreshAfter: true` |

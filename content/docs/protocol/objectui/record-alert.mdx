@@ -28,7 +28,7 @@ Common use cases:
     action?: {
       actionName: string,                                   // resolves from the object's actions[]
       label?: string,                                       // overrides action.label
-      variant?: 'default' | 'destructive' | 'outline' | 'ghost' | 'link',
+      variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'link',
     },
     dismissible?: boolean,                                  // X button in top-right
     dismissKey?: string,                                    // localStorage key suffix; defaults to title
@@ -145,7 +145,6 @@ Pick a stable `dismissKey` when the title is i18n'd — otherwise translation ch
 | One-line warning at the top of a record page | **`record:alert`** |
 | Toolbar/menu with multiple related actions | `record:quick_actions` |
 | Read-only status badge in the header | `record:highlights` |
-| Validation error on a specific field | `field:*` `errors` slot |
 | App-wide notice (across all pages) | App-level banner plugin (not metadata-driven) |
 
 ## Related

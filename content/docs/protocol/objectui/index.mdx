@@ -224,25 +224,18 @@ actions:
 
 ### FormView: Record Editing
 
-```yaml
-FormView.create({
-  object: 'project',
-  layout: {
-    type: 'tabbed',  # or 'simple' | 'wizard' | 'split' | 'drawer' | 'modal'
-    tabs: [
-      {
-        label: 'Details',
-        sections: [
-          { label: 'Basic Info', columns: 2, fields: ['name', 'status'] },
-          { label: 'Dates', columns: 2, fields: ['start_date', 'end_date'] }
-        ]
-      },
-      {
-        label: 'Team',
-        sections: [
-          { label: 'Members', fields: ['manager', 'team_lead'] }
-        ]
-      }
+```typescript
+import { defineView } from '@objectstack/spec/ui';
+
+defineView({
+  form: {
+    type: 'tabbed', // or 'simple' | 'wizard' | 'split' | 'drawer' | 'modal'
+    data: { provider: 'object', object: 'project' },
+    // In tabbed forms each section renders as its own tab.
+    sections: [
+      { label: 'Basic Info', columns: 2, fields: ['name', 'status'] },
+      { label: 'Dates', columns: 2, fields: ['start_date', 'end_date'] },
+      { label: 'Team', fields: ['manager', 'team_lead'] }
     ]
   }
 });
@@ -255,22 +248,24 @@ FormView.create({
 
 ### ListView: Data Tables
 
-```yaml
-ListView.create({
-  object: 'project',
-  type: 'grid',  # or 'kanban' | 'gallery' | 'calendar' | 'timeline' | 'gantt' | 'map' | 'chart'
-  columns: [
-    { field: 'name', width: 200, sortable: true },
-    { field: 'status', width: 120, filter: true },
-    { field: 'due_date', width: 150, sortable: true }
-  ],
-  filters: {
-    default: [{ field: 'status', operator: 'in', value: ['active', 'pending'] }]
-  },
-  actions: [
-    { type: 'standard_new', label: 'New Project' },
-    { type: 'standard_edit', label: 'Edit' }
-  ]
+```typescript
+import { defineView } from '@objectstack/spec/ui';
+
+defineView({
+  list: {
+    type: 'grid', // or 'kanban' | 'gallery' | 'calendar' | 'timeline' | 'gantt' | 'map' | 'chart' | 'tree'
+    data: { provider: 'object', object: 'project' },
+    columns: [
+      { field: 'name', width: 200, sortable: true },
+      { field: 'status', width: 120 },
+      { field: 'due_date', width: 150, sortable: true }
+    ],
+    filter: [{ field: 'status', operator: 'in', value: ['active', 'pending'] }],
+    // Actions reference registered Action IDs. Row actions are top-level;
+    // toolbar buttons live under `userActions`.
+    userActions: { buttons: ['new_project'] },
+    rowActions: ['edit']
+  }
 });
 ```
 
@@ -282,41 +277,36 @@ ListView.create({
 
 ### Dashboard: Analytics Composition
 
-```yaml
+```typescript
+import { Dashboard } from '@objectstack/spec/ui';
+
 Dashboard.create({
   name: 'sales_overview',
   label: 'Sales Overview',
-  layout: {
-    rows: [
-      {
-        widgets: [
-          { type: 'metric', title: 'Revenue', value: '$1.2M', span: 3 },
-          { type: 'metric', title: 'Deals', value: '47', span: 3 },
-          { type: 'metric', title: 'Win Rate', value: '68%', span: 3 },
-          { type: 'metric', title: 'Avg Deal', value: '$25K', span: 3 }
-        ]
-      },
-      {
-        widgets: [
-          { type: 'chart', chartType: 'line', title: 'Revenue Trend', span: 8 },
-          { type: 'chart', chartType: 'pie', title: 'By Stage', span: 4 }
-        ]
-      },
-      {
-        widgets: [
-          { type: 'list', object: 'opportunity', view: 'closing_soon', span: 12 }
-        ]
-      }
-    ]
-  }
+  columns: 12,          // 12-column grid
+  gap: 4,
+  // Flat widget list. Each widget binds to a semantic-layer `dataset`
+  // (ADR-0021) and picks its `dimensions`/`values` by name; position via
+  // `layout: { x, y, w, h }` (omit to auto-flow).
+  widgets: [
+    // Row 1: KPI metric cards
+    { id: 'revenue', type: 'metric', title: 'Revenue', dataset: 'sales_summary', values: ['revenue'], layout: { x: 0, y: 0, w: 3, h: 2 } },
+    { id: 'deals', type: 'metric', title: 'Deals', dataset: 'sales_summary', values: ['deal_count'], layout: { x: 3, y: 0, w: 3, h: 2 } },
+    { id: 'win_rate', type: 'metric', title: 'Win Rate', dataset: 'sales_summary', values: ['win_rate'], layout: { x: 6, y: 0, w: 3, h: 2 } },
+    { id: 'avg_deal', type: 'metric', title: 'Avg Deal', dataset: 'sales_summary', values: ['avg_deal'], layout: { x: 9, y: 0, w: 3, h: 2 } },
+    // Row 2: charts
+    { id: 'revenue_trend', type: 'line', title: 'Revenue Trend', dataset: 'sales_by_month', dimensions: ['month'], values: ['revenue'], layout: { x: 0, y: 2, w: 8, h: 4 } },
+    { id: 'by_stage', type: 'pie', title: 'By Stage', dataset: 'pipeline_by_stage', dimensions: ['stage'], values: ['amount'], layout: { x: 8, y: 2, w: 4, h: 4 } },
+    // Row 3: tabular block
+    { id: 'closing_soon', type: 'table', title: 'Closing Soon', dataset: 'opportunities_closing_soon', dimensions: ['name'], values: ['amount'], layout: { x: 0, y: 6, w: 12, h: 4 } }
+  ]
 });
 ```
 
-**Widget Types:**
-- **Metric:** KPI cards with trend indicators
-- **Chart:** Bar, line, pie, donut, area, scatter
-- **List:** Embedded list views
-- **Custom:** Register your own widget components
+**Widget Types** (each widget's `type` is a chart type):
+- **Metric / KPI:** single-value cards (`metric`, `kpi`, `gauge`, `bullet`)
+- **Chart:** `bar`, `column`, `line`, `area`, `pie`, `donut`, `funnel`, `scatter`, `radar`, `treemap`, `sankey`
+- **Tabular:** `table`, `pivot`
 
 ## Design Principles
 
@@ -339,9 +329,11 @@ function TaskList() {
 }
 
 // ✅ Declarative (ObjectUI)
-ListView.create({
-  object: 'task',
-  columns: [{ field: 'title' }, { field: 'status' }]
+defineView({
+  list: {
+    data: { provider: 'object', object: 'task' },
+    columns: [{ field: 'title' }, { field: 'status' }]
+  }
 });
 ```
 

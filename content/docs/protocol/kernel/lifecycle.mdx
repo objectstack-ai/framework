@@ -153,8 +153,8 @@ await kernel.bootstrap();
 ```
 
 **Resolution Strategy:**
-1. **failOnPluginError: true** (default): Boot fails, process exits with code 1
-2. **failOnPluginError: false**: Boot continues, failed plugin is disabled and logged
+1. **rollbackOnFailure: true** (default): Boot fails, already-started plugins roll back, process exits with code 1
+2. **rollbackOnFailure: false**: Boot continues, the failed plugin is skipped and logged
 
 ## Plugin Installation
 
@@ -275,61 +275,45 @@ async function resolveDependencies(
 Plugins can define hooks that run at specific lifecycle events:
 
 ```typescript
-// plugin.manifest.ts
-export default definePlugin({
+// plugin.ts — a plugin is a plain default-exported object (there is no
+// `definePlugin` helper). Lifecycle hooks are top-level methods, each
+// receiving a single PluginContext ({ ql, os, logger, config, pluginId }).
+export default {
   name: '@vendor/salesforce',
   version: '3.2.1',
-  
-  lifecycle: {
-    // Runs before installation begins
-    preInstall: async ({ context, transaction }) => {
-      // Validate environment
-      if (!context.config.get('salesforce.apiKey')) {
-        throw new Error('Salesforce API key not configured');
-      }
-    },
-    
-    // Runs after installation completes
-    postInstall: async ({ context, transaction }) => {
-      // Initialize default data
-      await context.db.insert('salesforce_settings', {
-        syncInterval: 3600, // 1 hour
-        enabled: true,
-      }, { transaction });
-      
-      // Schedule sync job
-      await context.scheduler.create({
-        name: 'salesforce-sync',
-        schedule: '0 * * * *', // Every hour
-        handler: 'salesforce.sync',
-      }, { transaction });
-    },
-    
-    // Runs when plugin is enabled
-    onEnable: async ({ context }) => {
-      logger.info('Salesforce sync enabled');
-      await context.eventBus.publish('salesforce.enabled');
-    },
-    
-    // Runs when plugin is disabled
-    onDisable: async ({ context }) => {
-      logger.info('Salesforce sync disabled');
-      await context.scheduler.pause('salesforce-sync');
-    },
-    
-    // Runs before uninstallation
-    preUninstall: async ({ context, transaction }) => {
-      // Clean up jobs
-      await context.scheduler.delete('salesforce-sync', { transaction });
-    },
-    
-    // Runs after uninstallation
-    postUninstall: async ({ context, transaction }) => {
-      // Optional: Remove plugin data
-      await context.db.delete('salesforce_settings', {}, { transaction });
-    },
+
+  // Runs once, when the plugin is installed
+  onInstall: async (context) => {
+    // Validate environment. `config` is a plain record, not a store.
+    if (!context.config['salesforce.apiKey']) {
+      throw new Error('Salesforce API key not configured');
+    }
+    context.logger.info('Salesforce plugin installed');
   },
-});
+
+  // Runs when the plugin is enabled (at startup or manually)
+  onEnable: async (context) => {
+    context.logger.info('Salesforce sync enabled');
+  },
+
+  // Runs when the plugin is disabled (at shutdown or manually)
+  onDisable: async (context) => {
+    context.logger.info('Salesforce sync disabled');
+  },
+
+  // Runs once, when the plugin is uninstalled
+  onUninstall: async (context) => {
+    context.logger.info('Removing Salesforce plugin data');
+  },
+
+  // Runs when the plugin version changes. Receives an UpgradeContext with
+  // previousVersion, newVersion, and isMajorUpgrade.
+  onUpgrade: async (context) => {
+    context.logger.info(
+      `Salesforce ${context.previousVersion} → ${context.newVersion}`,
+    );
+  },
+};
 ```
 
 ### Installation CLI
@@ -505,10 +489,13 @@ export async function down(db: any): Promise<void> {
 }
 ```
 
-Run migrations through your existing Knex / driver tooling — ObjectStack does not
-ship its own migration runner. The intent of `os generate migration` is to give
-you a hand-off file you can commit, review, and execute via the database tools
-your team already uses.
+Run the generated files through your existing Knex / driver tooling — ObjectStack
+does not execute these generated migration files for you. (To apply
+metadata-driven schema changes directly, without generating files, ObjectStack
+does ship first-party `os migrate plan` / `os migrate apply` commands that
+reconcile the physical database to your object definitions.) The intent of
+`os generate migration` is to give you a hand-off file you can commit, review,
+and execute via the database tools your team already uses.
 
 #### Schema safety
 
@@ -584,17 +571,21 @@ ObjectStack includes **built-in health monitoring** to validate system state.
 ### Health Check Endpoints
 
 ```
-GET /health/live
-  → 200 if process is alive
-  → 503 if process is dead/hung
+GET /health
+  → 200 with { status, version, uptime } if the process is alive (liveness)
 
-GET /health/ready
-  → 200 if ready to accept requests
-  → 503 if still booting or unhealthy
-
-GET /health/status
-  → Detailed health report (JSON)
+GET /ready
+  → 200 if the kernel is running and ready to accept requests (readiness)
+  → 503 while still booting or shutting down
 ```
+
+<Callout type="info">
+`GET /health` returns a compact liveness body (`status`, `version`, `uptime`) and
+`GET /ready` returns readiness. The richer per-subsystem report and the
+plugin-declared custom checks below describe the internal health-monitor model
+(`PluginHealthMonitor`) — they are **not yet** exposed as a dedicated HTTP
+endpoint or as a declarative plugin field.
+</Callout>
 
 ### Health Status Response
 
@@ -639,10 +630,10 @@ GET /health/status
 Plugins can register custom health checks:
 
 ```typescript
-// Plugin registers health check
-export default definePlugin({
+// Plugin registers a custom health check (internal health-monitor model)
+export default {
   name: '@vendor/salesforce',
-  
+
   healthChecks: {
     salesforce_connection: async ({ context }) => {
       try {
@@ -662,7 +653,7 @@ export default definePlugin({
       }
     },
   },
-});
+};
 ```
 
 ## Shutdown Sequence
@@ -761,7 +752,7 @@ Don't assume success. Monitor health checks for 5-10 minutes after upgrade.
 ```bash
 # Automated monitoring
 objectstack upgrade @vendor/salesforce --monitor --duration 300
-# Watches /health/status for 5 minutes, auto-rollback if unhealthy
+# Watches /health for 5 minutes, auto-rollback if unhealthy
 ```
 
 ### 5. Document Breaking Changes

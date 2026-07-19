@@ -14,7 +14,7 @@ Instead, the framework defines a thin **Knowledge Protocol** — a
 spec-level contract for knowledge sources, documents, hits, and the
 service that orchestrates them — and ships individual adapters as
 **plugins**. This mirrors the same pattern already proven by
-`IDataEngine` / driver plugins (`driver-sql`, `driver-turso`,
+`IDataEngine` / driver plugins (`driver-sql`, `driver-mongodb`,
 `driver-memory`) and `IStorageService` / S3 + local FS adapters.
 
 <Callout type="info">
@@ -82,7 +82,7 @@ delegates the rest to plugins.
 │  • Permission wrapper (RLS filter)   │    │  • knowledge-ragflow  │
 │  • Event sync (record.* → upsert)    │    │      (reference impl, REST)  │
 │  • Audit + metrics                   │    │                       │
-│                                      │    │  (turso / dify /       │
+│                                      │    │  (llamaindex / dify /  │
 │  Registers `knowledge` service       │    │   pgvector: planned)   │
 └──────────────────────────────────────┘    └──────────────────────────────┘
               ▲

@@ -32,9 +32,9 @@ is a **capability reference**, a permission-set name the reader must hold:
 
 ```ts
 // before
-book({ name: 'crm_admin_guide', audience: { profile: 'crm_admin' } })
+defineBook({ name: 'crm_admin_guide', audience: { profile: 'crm_admin' } })
 // after
-book({ name: 'crm_admin_guide', audience: { permissionSet: 'crm_admin' } })
+defineBook({ name: 'crm_admin_guide', audience: { permissionSet: 'crm_admin' } })
 ```
 
 Pre-launch one-step rename, no alias — the zod union rejects `{ profile }` at
@@ -88,9 +88,9 @@ defined enforcement contract — `ObjectCapabilities` is **100% live**:
 ### Approvals route to positions (14.0.0, ADR-0090 D3)
 
 A new `position` approver type — `{ type: 'position', value: '<name>' }` expands
-to the position's holders via `sys_user_position`. Keep `type: 'role'` only for
-membership tiers (owner/admin/member); the `department` approver type is now
-honored by its spec spelling. New lint rules (`approval-role-not-membership-tier`,
+to the position's holders via `sys_user_position`. Keep `type: 'org_membership_level'`
+only for membership tiers (owner/admin/member); the `department` approver type is now
+honored by its spec spelling. New lint rules (`approval-approver-not-membership-tier`,
 `approval-approver-type-unknown`, `approval-escalation-reassign-no-target`) catch
 the mismatches, and SLA escalation `escalateTo` is documented position-first
 (14.1.0).
@@ -119,7 +119,7 @@ capabilities land:
 
 The platform had no SMS delivery; this adds it end to end:
 
-- **New `@objectstack/plugin-sms`** — `ISmsService` / `ISmsTransport` contracts
+- **New `@objectstack/service-sms`** — `ISmsService` / `ISmsTransport` contracts
   with Aliyun SMS and Twilio transports plus a dev log fallback, configured
   through a new `sms` settings namespace. Deliberately no message persistence and
   no body logging (SMS bodies carry OTP codes).

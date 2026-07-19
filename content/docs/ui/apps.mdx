@@ -66,7 +66,7 @@ Links to an object's list view:
 { id: 'nav_accounts', type: 'object', label: 'Accounts', objectName: 'account', icon: 'building', viewName: 'all_accounts' }
 ```
 
-Three optional target fields refine where the entry lands (precedence: `recordId` → `filters` → `viewName`):
+Three optional target fields refine where the entry lands. They are **mutually exclusive** — combining `filters` with `recordId` or `viewName` is rejected at validation, and the only tolerated pairing is the legacy `recordId` + `viewName` (where `recordId` wins and `viewName` is ignored):
 
 - `viewName` — anchor the entry to a named list view.
 - `recordId` — deep-link straight to one record ("My Profile"); supports `{current_user_id}` / `{current_org_id}` template variables.
