@@ -891,6 +891,30 @@ describe('ObjectStackProtocolImplementation - Metadata Persistence', () => {
             expect(byPkg['com.globex.crm']).toBe('Globex (overlay)');
         });
 
+        it('keeps both colliding rows when NEITHER package ships an artifact — overlay-only (ADR-0048 #1828)', async () => {
+            // The case unit tests missed and dogfooding caught: two packages with
+            // ONLY a sys_metadata overlay each (NO registered artifact — registry
+            // stays empty for `page`). The list-decorate step grafts each row's
+            // artifact via getArtifactItem(type, name, <row's own package>); with no
+            // composite artifact it must NOT fall back to the OTHER package's
+            // bare-key hydrated overlay, or both rows get stamped with the
+            // last-hydrated package's `_packageId` (the exact provenance bug the
+            // getArtifactItem package-scope fix closes).
+            mockEngine.find.mockResolvedValue([
+                { type: 'page', name: 'home', state: 'active', package_id: 'com.acme.crm', metadata: JSON.stringify({ name: 'home', label: 'Acme home' }) },
+                { type: 'page', name: 'home', state: 'active', package_id: 'com.globex.crm', metadata: JSON.stringify({ name: 'home', label: 'Globex home' }) },
+            ]);
+
+            const result = await protocol.getMetaItems({ type: 'page' });
+            const homes = (result.items as any[]).filter((i) => i.name === 'home');
+
+            expect(homes).toHaveLength(2);
+            const byPkg = Object.fromEntries(homes.map((h: any) => [h._packageId, h.label]));
+            // Each row keeps its OWN package — not both stamped with one id.
+            expect(byPkg['com.acme.crm']).toBe('Acme home');
+            expect(byPkg['com.globex.crm']).toBe('Globex home');
+        });
+
         it('single-package env-wide (package-less) overlay still overlays the artifact (ADR-0005 unchanged, #1828)', async () => {
             // A package-less overlay (package_id IS NULL) must still WIN over the
             // one artifact it customizes and stay a single row — the package-aware
