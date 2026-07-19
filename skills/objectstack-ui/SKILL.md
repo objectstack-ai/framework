@@ -1661,6 +1661,31 @@ export const AddToCampaignAction = defineAction({
 });
 ```
 
+#### Action body context (`ctx`)
+
+A server-side action `body` (and a registered function `handler`) receives a
+`ctx` with `input` (the modal params), `record` (the target row, when a
+`recordId` is in scope), `api` (scoped cross-object CRUD), and the caller
+identity. Read the caller's active organization under the **blessed**
+`organizationId` name — the same value as the `organization_id` column and
+`current_user.organizationId` in RLS, so it matches hooks and seed data with
+zero relearning:
+
+```typescript
+// ✅ Blessed — identical to the hook surface (ctx.user / ctx.session)
+const org = ctx.user?.organizationId ?? ctx.session?.organizationId;
+
+// ⚠️ Deprecated alias — still works, carries the identical value
+const org = ctx.session?.tenantId;
+```
+
+Action bodies execute **trusted** (the `ctx.engine` / `ctx.api` facade bypasses
+RLS/FLS), so a body that must scope by org reads it from `ctx` explicitly.
+`ctx.user` is `undefined` for a context-less / self-invoked call; read
+`ctx.session?.organizationId` when the action must work regardless. (Same two
+isolation axes as hooks — `organization_id` row-scoping vs environment /
+database-per-tenant; see the objectstack-data hooks reference.)
+
 ### Opening in a New Tab (`openIn` / `opensInNewTab` / `newTabUrl`)
 
 There are **two** mechanisms here. Pick by whether the URL is static or computed:

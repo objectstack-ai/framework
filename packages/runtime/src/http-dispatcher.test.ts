@@ -2434,6 +2434,7 @@ describe('HttpDispatcher — action body ctx.user identity (#2701)', () => {
   };
 
   const actionUser = (executeAction: any) => executeAction.mock.calls[0]?.[2]?.user;
+  const actionSession = (executeAction: any) => executeAction.mock.calls[0]?.[2]?.session;
 
   it('forwards the session user id + business roles to the action body (not `system`)', async () => {
     const { dispatcher, executeAction, ctx } = captureCtx({
@@ -2450,7 +2451,24 @@ describe('HttpDispatcher — action body ctx.user identity (#2701)', () => {
     expect(user.positions).toEqual(['sales_rep', 'org_member']);
     expect(user.permissions).toEqual(['convert_lead']);
     expect(user.email).toBe('rep@acme.test');
+    // #3280 — `organizationId` is the blessed name; `tenantId` is the alias.
+    expect(user.organizationId).toBe('org_acme');
     expect(user.tenantId).toBe('org_acme');
+  });
+
+  it('exposes ctx.session.organizationId (blessed) + tenantId (deprecated alias) to the action body (#3280)', async () => {
+    const { dispatcher, executeAction, ctx } = captureCtx({
+      userId: 'user_42',
+      positions: ['sales_rep'],
+      tenantId: 'org_acme',
+    });
+    await dispatcher.handleActions('/lead/convert', 'POST', {}, ctx);
+    const session = actionSession(executeAction);
+    expect(session).toBeDefined();
+    expect(session.userId).toBe('user_42');
+    expect(session.organizationId).toBe('org_acme');
+    expect(session.tenantId).toBe('org_acme');
+    expect(session.organizationId).toBe(session.tenantId);
   });
 
   it('falls back to a `system` principal only when the request is anonymous', async () => {
@@ -2460,6 +2478,8 @@ describe('HttpDispatcher — action body ctx.user identity (#2701)', () => {
     expect(user.id).toBe('system');
     expect(user.roles).toEqual([]);
     expect(user.positions).toEqual([]);
+    // No resolved caller → no session (parity with the hook surface).
+    expect(actionSession(executeAction)).toBeUndefined();
   });
 
   it('sources identity from executionContext, ignoring a stray `_context.user` (regression guard)', async () => {
