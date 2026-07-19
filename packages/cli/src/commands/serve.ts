@@ -8,6 +8,7 @@ import chalk from 'chalk';
 import { bundleRequire } from 'bundle-require';
 import { loadConfig, BUNDLE_REQUIRE_EXTERNALS } from '../utils/config.js';
 import { isHostConfig, shouldBootWithLibrary } from '../utils/plugin-detection.js';
+import { resolveDriverType, createStorageDriver } from '../utils/storage-driver.js';
 import { readEnvWithDeprecation, resolveMultiOrgEnabled, resolveAllowDegradedTenancy, isMcpServerEnabled, resolveSearchPinyinEnabled, isModuleNotFoundError } from '@objectstack/types';
 import { PLATFORM_CAPABILITY_TOKENS, canonicalizePlatformCapability } from '@objectstack/spec/kernel';
 import { resolveObjectStackHome } from '@objectstack/runtime';
@@ -872,71 +873,48 @@ export default class Serve extends Command {
       //        postgres://, postgresql://       → postgres
       //        mysql://, mysql2://              → mysql
       //        libsql://, http(s):// + .turso.  → turso
-      //        file:, sqlite:, *.db, :memory:   → sqlite
-      //   3. Default: InMemoryDriver in dev mode
+      //        wasm-sqlite://, *.wasm.db        → sqlite-wasm
+      //        memory://, mingo://              → memory (mingo InMemoryDriver)
+      //        file:, sqlite:, *.db, :memory:   → sqlite (SQLite's own in-memory mode)
+      //   3. Default: dev SQLite (native → wasm → in-memory step-down); prod none
+      //
+      // Kind-resolution and construction live in utils/storage-driver.ts so the
+      // whole dispatch is unit-testable (storage-driver.test.ts). #3276: the
+      // `memory` kind now maps to the mingo InMemoryDriver instead of silently
+      // falling through to the dev SQLite `:memory:` default.
       const hasDriver = plugins.some((p: any) => p.name?.includes('driver') || p.constructor?.name?.includes('Driver'));
       if (!hasDriver && config.objects) {
-         const explicitDriver = (process.env.OS_DATABASE_DRIVER ?? '').toLowerCase().trim();
          const databaseUrl = process.env.OS_DATABASE_URL;
-
-         const inferDriverFromUrl = (url: string | undefined): string => {
-           if (!url) return '';
-           const u = url.trim();
-           if (/^mongodb(\+srv)?:\/\//i.test(u)) return 'mongodb';
-           if (/^postgres(ql)?:\/\//i.test(u)) return 'postgres';
-           if (/^mysql2?:\/\//i.test(u)) return 'mysql';
-           if (/^libsql:\/\//i.test(u)) return 'turso';
-           if (/^https?:\/\//i.test(u) && /\.turso\./i.test(u)) return 'turso';
-           if (/^wasm-sqlite:\/\//i.test(u) || /\.wasm\.db$/i.test(u)) return 'sqlite-wasm';
-           if (/^file:/i.test(u) || /^sqlite:/i.test(u) || u === ':memory:' || /\.(db|sqlite|sqlite3)$/i.test(u)) return 'sqlite';
-           return '';
-         };
-
-         const driverType = explicitDriver || inferDriverFromUrl(databaseUrl);
+         const driverType = resolveDriverType(process.env.OS_DATABASE_DRIVER, databaseUrl);
 
          try {
            const { DriverPlugin } = await import('@objectstack/runtime');
-
-           if (driverType === 'mongodb' || driverType === 'mongo') {
-             const { MongoDBDriver } = await import('@objectstack/driver-mongodb');
-             await kernel.use(new DriverPlugin(new MongoDBDriver({
-               url: databaseUrl ?? 'mongodb://localhost:27017/objectstack',
-             }) as any));
-             trackPlugin('MongoDBDriver');
-             resolvedDriverLabel = 'MongoDBDriver';
-             resolvedDatabaseUrl = databaseUrl ?? 'mongodb://localhost:27017/objectstack';
-           } else if (driverType === 'sqlite' || driverType === 'sql') {
-             const filePath = (databaseUrl ?? ':memory:').replace(/^file:/, '').replace(/^sqlite:/, '').replace(/^sql:\/\//, '');
-             // Probe-by-connect with a dev-only native → wasm → in-memory
-             // step-down (#2229). better-sqlite3 loads its native addon lazily
-             // (first query), so an ABI mismatch is invisible here and would
-             // otherwise surface much later as a runtime crash. resolveSqliteDriver
-             // forces the load and degrades gracefully in dev / fails loudly in prod.
-             const { resolveSqliteDriver } = await import('@objectstack/service-datasource');
-             const resolved = await resolveSqliteDriver({
-               filename: filePath,
-               dev: isDev,
-               // #2186: in dev, self-heal a persisted DB when a metadata change
-               // relaxes a constraint (loosen-only; never destructive / never in prod).
-               autoMigrate: isDev ? 'safe' : undefined,
-               warn: (m) => console.warn(chalk.yellow(m)),
-             });
-             await kernel.use(new DriverPlugin(resolved.driver));
-             trackPlugin(resolved.engine === 'memory' ? 'MemoryDriver' : resolved.engine === 'sqlite-wasm' ? 'SqliteWasmDriver' : 'SqlDriver');
-             resolvedDriverLabel = resolved.label;
-             resolvedDatabaseUrl = resolved.engine === 'memory' ? '(in-memory)' : (databaseUrl ?? ':memory:');
+           const resolution = await createStorageDriver(driverType, {
+             databaseUrl,
+             isDev,
+             warn: (m) => console.warn(chalk.yellow(m)),
+           });
+           if (resolution) {
+             await kernel.use(new DriverPlugin(resolution.driver as any));
+             trackPlugin(resolution.trackName);
+             resolvedDriverLabel = resolution.label;
+             resolvedDatabaseUrl = resolution.displayUrl;
 
              // ADR-0057 §3.6 (#2834 ②): provision the dedicated `telemetry`
              // datasource — a sibling SQLite file the engine routes every
              // telemetry/event/audit-classed object to, so platform-generated
              // growth can never again bloat the business DB. Dev default-on
              // for file-backed primaries; `OS_TELEMETRY_DB=0` opts out,
-             // `OS_TELEMETRY_DB=<path>` opts in anywhere (incl. serve).
-             if (resolved.engine !== 'memory') {
+             // `OS_TELEMETRY_DB=<path>` opts in anywhere (incl. serve). Gated on
+             // an explicit SQLite primary (`sqliteFilePath`, unset for the mingo
+             // memory driver AND the dev-default `:memory:` store) whose resolved
+             // engine is real SQLite — never mingo in-memory.
+             if (resolution.sqliteFilePath && resolution.engine !== 'memory') {
                const { resolveTelemetryDbPath } = await import('../utils/telemetry-datasource.js');
-               const telemetryPath = resolveTelemetryDbPath({ primaryPath: filePath, env: process.env, dev: isDev });
+               const telemetryPath = resolveTelemetryDbPath({ primaryPath: resolution.sqliteFilePath, env: process.env, dev: isDev });
                if (telemetryPath) {
                  try {
+                   const { resolveSqliteDriver } = await import('@objectstack/service-datasource');
                    const telemetry = await resolveSqliteDriver({
                      filename: telemetryPath,
                      dev: isDev,
@@ -957,59 +935,6 @@ export default class Serve extends Command {
                  }
                }
              }
-           } else if (driverType === 'sqlite-wasm' || driverType === 'wasm-sqlite' || driverType === 'wasm') {
-             const { SqliteWasmDriver } = await import('@objectstack/driver-sqlite-wasm');
-             const filePath = (databaseUrl ?? ':memory:').replace(/^file:/, '').replace(/^wasm-sqlite:\/\//, '').replace(/^sqlite:/, '');
-             await kernel.use(new DriverPlugin(new SqliteWasmDriver({
-               filename: filePath,
-               persist: 'on-disconnect',
-             }) as any));
-             trackPlugin('SqliteWasmDriver');
-             resolvedDriverLabel = 'SqliteWasmDriver';
-             resolvedDatabaseUrl = databaseUrl ?? ':memory:';
-           } else if (driverType === 'postgres' || driverType === 'postgresql' || driverType === 'pg') {
-             const { SqlDriver } = await import('@objectstack/driver-sql');
-             await kernel.use(new DriverPlugin(new SqlDriver({
-               client: 'pg',
-               connection: databaseUrl,
-               pool: { min: 0, max: 5 },
-               autoMigrate: isDev ? 'safe' : undefined, // #2186 dev loosen-only self-heal
-             }) as any));
-             trackPlugin('PostgresDriver');
-             resolvedDriverLabel = 'SqlDriver(pg)';
-             resolvedDatabaseUrl = databaseUrl;
-           } else if (driverType === 'mysql' || driverType === 'mysql2') {
-             const { SqlDriver } = await import('@objectstack/driver-sql');
-             await kernel.use(new DriverPlugin(new SqlDriver({
-               client: 'mysql2',
-               connection: databaseUrl,
-               pool: { min: 0, max: 5 },
-               autoMigrate: isDev ? 'safe' : undefined, // #2186 dev loosen-only self-heal
-             }) as any));
-             trackPlugin('MySQLDriver');
-             resolvedDriverLabel = 'SqlDriver(mysql2)';
-             resolvedDatabaseUrl = databaseUrl;
-           } else if (isDev) {
-             // Default in dev (no DB configured): prefer native SQLite for
-             // production-like SQL at native speed, with a graceful step-down to
-             // wasm SQLite (real SQL + on-disk persistence) then in-memory when the
-             // native better-sqlite3 binary is unavailable — not built, ABI mismatch
-             // after a Node upgrade (e.g. NODE_MODULE_VERSION change), or a blocked
-             // prebuild download. Shared with the explicit-file branch and the
-             // datasource factory via resolveSqliteDriver (#2229), which probes by
-             // actually opening a connection + running SELECT 1 (better-sqlite3 loads
-             // its native addon lazily at first query, not at construction).
-             const { resolveSqliteDriver } = await import('@objectstack/service-datasource');
-             const resolved = await resolveSqliteDriver({
-               filename: ':memory:',
-               dev: true,
-               autoMigrate: 'safe', // #2186 dev loosen-only self-heal
-               warn: (m) => console.warn(chalk.yellow(m)),
-             });
-             await kernel.use(new DriverPlugin(resolved.driver));
-             trackPlugin(resolved.engine === 'memory' ? 'MemoryDriver' : resolved.engine === 'sqlite-wasm' ? 'SqliteWasmDriver' : 'SqlDriver');
-             resolvedDriverLabel = resolved.label;
-             resolvedDatabaseUrl = resolved.engine === 'memory' ? '(in-memory)' : ':memory:';
            }
          } catch (e: any) {
            // silent
