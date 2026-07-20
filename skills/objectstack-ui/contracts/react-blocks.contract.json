@@ -1,7 +1,7 @@
 {
   "version": 2,
   "adr": "ADR-0081",
-  "source": "GENERATED from packages/spec/src/ui/react-blocks.ts — data props from the spec zod schemas, binding/controlled/callback from the React overlay.",
+  "source": "GENERATED from the REACT_BLOCKS definition in the '@objectstack/spec/ui' module — data props from the spec zod schemas, binding/controlled/callback from the React overlay.",
   "note": "Props each component accepts in kind:'react' page source. Reference blocks by their PascalCase tag. kind: data=declarative config (from the spec schema) · binding=connects to data · controlled=React state · callback=React function. These blocks are for DATA. Live data: const adapter = useAdapter(); adapter.find/findOne/create/update. STYLING (ADR-0065) — a page's source is runtime metadata, so the console's build-time Tailwind NEVER scans it: utility classNAMES silently produce no CSS. Do NOT use Tailwind className in page source. (a) Layout/chrome: inline style={} with hsl(var(--token)) theme colors — e.g. color:'hsl(var(--foreground))', background:'hsl(var(--card))', border:'1px solid hsl(var(--border))', and px/flex for layout. (b) Overlays: render <ObjectForm formType='drawer'|'modal' open onOpenChange> (a pre-styled Sheet/Dialog) — never hand-roll a fixed inset-0 backdrop.",
   "blocks": [
     {
@@ -321,13 +321,6 @@
           "description": "ObjectQL filter scoping the data; drive from React state."
         },
         {
-          "name": "showLegend",
-          "type": "boolean",
-          "kind": "data",
-          "required": true,
-          "description": "Display legend"
-        },
-        {
           "name": "title",
           "type": "string",
           "kind": "data",
@@ -361,6 +354,13 @@
           "kind": "data",
           "required": false,
           "description": "Color palette (string[]) or value→color map ({ value: color })"
+        },
+        {
+          "name": "showLegend",
+          "type": "boolean",
+          "kind": "data",
+          "required": false,
+          "description": "Display legend"
         }
       ]
     },
@@ -388,14 +388,14 @@
           "name": "columns",
           "type": "'1' | '2' | '3' | '4'",
           "kind": "data",
-          "required": true,
+          "required": false,
           "description": "Number of columns for field layout (1-4)"
         },
         {
           "name": "layout",
           "type": "'auto' | 'custom'",
           "kind": "data",
-          "required": true,
+          "required": false,
           "description": "Layout mode: auto uses object highlightFields, custom uses explicit sections"
         },
         {
@@ -445,7 +445,7 @@
           "name": "layout",
           "type": "'horizontal' | 'vertical'",
           "kind": "data",
-          "required": true,
+          "required": false,
           "description": "Layout orientation for highlight fields"
         }
       ]
@@ -481,22 +481,8 @@
           "name": "relationshipValueField",
           "type": "string",
           "kind": "data",
-          "required": true,
+          "required": false,
           "description": "Parent-record field whose value relationshipField stores (default 'id'; e.g. 'name' for name-keyed junctions)."
-        },
-        {
-          "name": "limit",
-          "type": "integer",
-          "kind": "data",
-          "required": true,
-          "description": "Number of records to display initially"
-        },
-        {
-          "name": "showViewAll",
-          "type": "boolean",
-          "kind": "data",
-          "required": true,
-          "description": "Show \"View All\" link to see all related records"
         },
         {
           "name": "columns",
@@ -513,6 +499,13 @@
           "description": "Sort order for related records"
         },
         {
+          "name": "limit",
+          "type": "integer",
+          "kind": "data",
+          "required": false,
+          "description": "Number of records to display initially"
+        },
+        {
           "name": "filter",
           "type": "object[]",
           "kind": "data",
@@ -525,6 +518,13 @@
           "kind": "data",
           "required": false,
           "description": "Custom title for the related list"
+        },
+        {
+          "name": "showViewAll",
+          "type": "boolean",
+          "kind": "data",
+          "required": false,
+          "description": "Show \"View All\" link to see all related records"
         },
         {
           "name": "actions",

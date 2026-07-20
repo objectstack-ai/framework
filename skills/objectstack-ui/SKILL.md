@@ -16,10 +16,10 @@ description: >
   ships with the platform). CEL expressions in
   visibility/conditional rules: load objectstack-formula alongside.
 license: Apache-2.0
-compatibility: Requires @objectstack/spec Zod schemas (v4+)
+compatibility: Requires @objectstack/spec 16.x (Zod v4 schemas)
 metadata:
   author: objectstack-ai
-  version: "1.1"
+  version: "1.2"
   domain: ui
   tags: view, app, page, dashboard, report, chart, action, widget, doc
 ---
@@ -38,7 +38,7 @@ App navigation, Dashboards, Reports, and Actions.
 - You are designing a **form layout** (simple, tabbed, wizard).
 - You are building an **app** with structured navigation menus.
 - You need a **dashboard** with widget grids.
-- You are adding **reports** (tabular, summary, matrix, chart).
+- You are adding **reports** (tabular, summary, matrix, joined).
 - You are configuring **actions** (buttons, URL jumps, screen flows).
 - You are writing **package documentation** (`src/docs/*.md`) that ships
   with the package and renders at `/docs/<name>`.
@@ -58,6 +58,8 @@ App navigation, Dashboards, Reports, and Actions.
 | `timeline` | Chronological activity stream |
 | `gantt` | Project management with dependency tracking |
 | `map` | Geospatial records with `location` fields |
+| `chart` | Aggregate visualisation over the object (mini chart view) |
+| `tree` | Self-referencing hierarchy (tree-grid) |
 
 ### Form Views
 
@@ -165,7 +167,7 @@ app-level default override, not an object key. For arrangements the
 relationship layer can't express — filtered splits (e.g. Open vs Closed tabs), a
 chart/report tab, exact tab ordering — assign the object a **custom record
 Page** and lay it out explicitly with `record:related_list` (or inline-editable
-`record:line_items`) blocks.
+`line_items`) blocks.
 
 ### Field Conditional Rules in Forms
 
@@ -213,8 +215,7 @@ export const CaseViews = defineView({
 > **Never export a bare flat view object** (`{ name, label, type, columns }`
 > at top level). It is not a valid view container — nothing registers and no
 > view appears in the switcher. Every view lives under `list` / `listViews` /
-> `formViews`. Full canonical reference:
-> `examples/app-showcase/src/ui/views/task.view.ts`.
+> `formViews`, exactly as in the `defineView` example above.
 
 ### Data Source (`data`)
 
@@ -520,12 +521,12 @@ export const CrmApp = App.create({
 | `object`    | `objectName`, `viewName?`, `recordId?`, `filters?`, `label`, `icon` | Link to an object list, a named view, a record deep-link, or a `filters` slice on the bare data surface. Target precedence: `recordId` → `filters` → `viewName` |
 | `dashboard` | `dashboardName`, `label`, `icon`              | Link to a dashboard |
 | `report`    | `reportName`, `label`, `icon`                 | Link to a report |
-| `page`      | `pageName`, `label`, `icon`                   | Link to a custom Page (`type: 'home' | 'app_launcher' | ...`) |
+| `page`      | `pageName`, `label`, `icon`                   | Link to a custom Page (`type: 'home' | 'list' | ...`) |
 | `url`       | `url`, `label`, `icon`                        | External or custom URL |
-| `divider`   | —                                             | Visual separator |
+| `separator` | —                                             | Visual separator |
 
-> **`requiresObject` / `requiresCapability`:** Use these on any item that
-> depends on an optional system object or capability so the nav item is
+> **`requiresObject` / `requiresService`:** Use these on any item that
+> depends on an optional system object or kernel service so the nav item is
 > automatically hidden when missing — never hard-code conditional UI.
 
 ---
@@ -539,13 +540,19 @@ selects named `dimensions` + `values`, picks a chart `type`, and sets a
 
 ### Widget Types
 
-| Type | Purpose |
-|:-----|:--------|
-| `metric` | Single KPI number (count, sum, avg) |
-| `chart` | Bar, line, pie, donut, area chart |
-| `list` | Embedded list view (mini table) |
-| `calendar` | Embedded calendar widget |
-| `custom` | Custom component (HTML / React) |
+A widget's `type` is its **chart type** (`ChartTypeSchema`; defaults to
+`metric`) — there are no separate `list` / `calendar` / `custom` widget kinds:
+
+| Family | `type` values |
+|:-------|:--------------|
+| Single value | `metric`, `kpi`, `gauge`, `solid-gauge`, `bullet` (all render the number today; gauge variants gain a dial when a gauge renderer lands) |
+| Comparison | `bar`, `horizontal-bar`, `column` |
+| Trend | `line`, `area` |
+| Distribution | `pie`, `donut`, `funnel` |
+| Relationship | `scatter` |
+| Composition | `treemap`, `sankey` |
+| Advanced | `radar` |
+| Tabular | `table`, `pivot` |
 
 See the **Production Pattern** section below for the full
 `Dashboard` shape with `refreshInterval`, header actions, date range,
@@ -562,8 +569,8 @@ allowed joins, intrinsic filter, dimensions, and certified measures. The legacy
 per-widget inline query (`object` + `categoryField` + `valueField` + `aggregate`)
 **was removed** — a widget now requires `dataset` + `values`; the inline fields are
 dropped and a widget lacking `dataset` fails `os validate`. Reports bind the same
-way (`dataset` + `rows` + `values` + `runtimeFilter`). Full guide: **Guides →
-Analytics Datasets** (`content/docs/data-modeling/analytics.mdx`).
+way (`dataset` + `rows` + `values` + `runtimeFilter`). The dataset shape is
+`DatasetSchema` — see `node_modules/@objectstack/spec/src/ui/dataset.zod.ts`.
 
 A widget's presentation-scope `filter` flows into the query as the runtime
 filter; keep `filter` on the widget when binding a dataset.
@@ -649,8 +656,10 @@ dataset, so Level B only surfaces in Studio previews and hand-coded react-page
 | `tabular` | Flat data table with columns and filters |
 | `summary` | Grouped data with subtotals (e.g., revenue by region) |
 | `matrix` | Cross-tab / pivot table (`rows` down × `columns` across) |
-| `chart` | Visual chart report |
 | `joined` | Multi-block analytic surface (combines several sub-reports) |
+
+There is no `chart` report type — a report *visualizes* via its embedded
+`chart:` config (see the example below).
 
 ### Report Configuration
 
@@ -695,7 +704,7 @@ Object list UI has **three run modes**, selected by the navigation item shape:
 
 | | Data mode (`type: 'object'`) | Bare slice (`type: 'object'` + `filters`) | Interface mode (`type: 'page'`) |
 |:--|:--|:--|:--|
-| What renders | ALL list views as switcher tabs | The URL-defined slice, no saved-view tabs | One curated page referencing ONE view |
+| What renders | ALL list views as switcher tabs | The URL-defined slice, no saved-view tabs | One curated page with its own list definition |
 | Anchored to | Saved views | **The URL itself** (`/:objectName/data?filter[...]`) | Page config |
 | User-created views | Allowed | "Save as view" exit only | Never |
 | Quick filters | Auto-derived (or view `userFilters` — `dropdown` only) | Auto-derived + removable URL chips | Only what the author enabled |
@@ -709,8 +718,8 @@ navigation pointing at objects. Escalate only on explicit signals:
   author a view for it; a slice graduates to a named view only when it is
   curated and reused. Values support `{current_user_id}` / `{current_org_id}`.
   Never treat it as security: the surface shows what row-level permissions
-  allow. (Canonical rules: objectui `skills/objectui/guides/app-composition.md`
-  + `docs/adr/0055-parameterized-bare-data-surface.md`.)
+  allow. (Canonical rules: objectui ADR-0055, "parameterized bare data
+  surface".)
 - **Interface page** — persona split ("sales reps see…", customer portal,
   给业务部门的简化界面); capability narrowing ("users must not change views",
   "only filter by X"); curation language (workspace / 工作台 / "Airtable
@@ -725,21 +734,29 @@ for a one-off slice) is a permanently-maintained duplicate asset.
 > prefer a named view over a page; use a page only for composition a single
 > object view cannot express. Every target appears exactly once.
 
-**The iron rule:** an interface page REFERENCES a view (`interfaceConfig.source`
-+ `sourceView`) and adds presentation policy only (`userFilters`,
-`appearance.allowedVisualizations`, `userActions`). It has NO columns/filter/sort
-of its own — never restate what the view already defines.
+**The iron rule (revised):** an interface page **IS the view definition**. It
+binds an object (`interfaceConfig.source`) and carries its **own** `columns` /
+`sort` / `filterBy` directly (Airtable parity — there is no "inherit from a
+named view" concept), plus presentation policy (`userFilters`,
+`appearance.allowedVisualizations`, `userActions`). The old
+`sourceView` ("inherit from a named object view") is **deprecated** legacy: it
+is still honored at runtime as a fallback when the page defines no `columns` of
+its own, but new pages define `columns`/`sort`/`filterBy` on the page.
 
+<!-- os:check -->
 ```typescript
 import { definePage } from '@objectstack/spec/ui';
 
 export const TaskWorkbenchPage = definePage({
   name: 'task_workbench',
+  label: 'Task Workbench',
   type: 'list',
   object: 'task',
   interfaceConfig: {
     source: 'task',
-    sourceView: 'default',                       // inherit columns/filter/sort
+    columns: ['subject', 'status', 'due_date'],  // the page IS the view definition
+    sort: [{ field: 'due_date', order: 'asc' }],
+    filterBy: [{ field: 'status', operator: 'not_equals', value: 'done' }],
     userFilters: { element: 'dropdown', fields: [{ field: 'status' }] },
     appearance: { allowedVisualizations: ['grid'] },  // locked
     userActions: { sort: true, search: true, filter: false },
@@ -791,12 +808,25 @@ Register under `defineStack({ pages: [...] })`.
 
 ### Page Types
 
-| `type`           | Purpose |
-|:-----------------|:--------|
-| `home`           | App home / landing page |
-| `record_detail`  | Object record detail layout (overrides the default form) |
-| `app_launcher`   | Tile grid for switching between apps |
-| `utility_bar`    | Persistent bottom-of-screen utilities (notes, tasks, calls) |
+`PageTypeSchema` has exactly **five** values — only types with a dedicated
+renderer are authorizable (ADR-0049 enforce-or-remove):
+
+| `type`    | Purpose |
+|:----------|:--------|
+| `record`  | Component-based record layout with regions (overrides the default record detail) |
+| `home`    | App home / landing page |
+| `app`     | App-level page with navigation context |
+| `utility` | Floating utility panel (e.g. notes, phone dialer) |
+| `list`    | Record list/grid interface page — configured via `interfaceConfig` (see the iron rule above) |
+
+Disambiguation: there is **no** `record_detail`, `app_launcher`, or
+`utility_bar` type — a record layout is `type: 'record'`, an app-level page is
+`type: 'app'`, a utility panel is `type: 'utility'`. Likewise
+grid/kanban/calendar/gallery/timeline are NOT page types — they are
+*visualizations* of a `list` page
+(`interfaceConfig.appearance.allowedVisualizations`). Former roadmap-only types
+(`dashboard`, `form`, `record_detail`, `record_review`, `overview`, `blank`)
+were removed from the enum because they never shipped a renderer.
 
 ### Templates & Regions
 
@@ -816,10 +846,10 @@ which contain components.
 | `element:button`     | Button — `properties.label` + `variant`/`size` + optional `action` |
 | `record:highlights`  | Salesforce highlights panel — strip of key fields |
 | `record:path`        | Stage progress bar driven by a status field |
-| `record:related`     | Related-list (child records via lookup) |
+| `record:related_list` | Related-list (child records via lookup) |
 | `nav:menu`           | Quick-create / nav menu bound to current context |
-| `widget:metric`      | Single KPI widget (count/sum/avg) |
-| `widget:chart`       | Embedded chart |
+| `object-metric`      | Single KPI widget (count/sum/avg) |
+| `object-chart`       | Embedded chart |
 
 ### Example — Record Detail Page
 
@@ -830,8 +860,8 @@ import { ConvertLeadAction } from '../actions/lead.actions';
 export const LeadDetailPage = definePage({
   name: 'lead_detail_page',
   label: 'Lead Detail',
-  type: 'record_detail',
-  objectName: 'lead',
+  type: 'record',
+  object: 'lead',
   template: 'three-column',
   regions: [
     {
@@ -876,7 +906,7 @@ export const LeadDetailPage = definePage({
 > the page root for any non-record value. For relative-date placeholders
 > (`{today}`, `{30_days_ago}`, `{N_<unit>_(ago|from_now)}` …) see the
 > [Date Macros](#date-macros--filter-placeholders) reference below — the
-> full token list is published as `DATE_MACRO_TOKENS` in `@objectstack/spec`.
+> full token list is published as `DATE_MACRO_TOKENS` in `@objectstack/spec/data`.
 
 > **Actions in header** — pass full `Action` objects into
 > `page:header.properties.actions`; do **not** create a sibling action node.
@@ -901,7 +931,7 @@ value `kind:'jsx'` is a deprecated alias for `kind:'html'`.
 #### `kind:'html'` — constrained JSX, parsed (safe by construction)
 
 Tags are the **registered components** (bare names: `<flex>`, `<grid>`, `<card>`,
-`<object-table>`, `<object-form>`, `<object-metric>`, …) **plus the safe native HTML
+`<object-grid>`, `<object-form>`, `<object-metric>`, …) **plus the safe native HTML
 set** (`<h1>`–`<h6>`, `<p>`, `<a>`, `<ul>/<ol>/<li>`, `<img>`, `<blockquote>`, `<strong>`,
 …). Props come from each component's registry `inputs` (e.g. `<text content=…>`,
 `<badge label=…>`). **No JavaScript** — `onClick`, `{expr}` logic and `.map()` are NOT
@@ -911,7 +941,7 @@ on unknown tags / missing required props / forbidden constructs (event handlers,
 
 ```typescript
 export const ReleaseNotesPage = definePage({
-  name: 'release_notes', type: 'home', kind: 'html',
+  name: 'release_notes', label: 'Release Notes', type: 'home', kind: 'html',
   source: `
 <flex direction="col" gap={6} style={{"maxWidth":"768px","margin":"0 auto","padding":"40px"}}>
   <h1 style={{"fontSize":"32px","fontWeight":700,"color":"hsl(var(--foreground))"}}>Release Notes</h1>
@@ -928,8 +958,11 @@ The source is real React executed at render by the runtime. The injected scope a
 - `React` — hooks (`React.useState`, `React.useEffect`, …)
 - `useAdapter()` — live data: `adapter.find('obj', {…})` / `.findOne` / `.create` / `.update`
 - the public **data blocks as PascalCase components** — `<ObjectForm>`, `<ListView>`,
-  `<ObjectMetric>`, `<ObjectChart>`, `<ObjectKanban>`, … each rendering the real registered
-  component; `<Block type="…" …/>` is the escape hatch for any other type
+  `<ObjectMetric>`, `<ObjectChart>`, `<ObjectKanban>`, … The scope is built at
+  runtime from the public block registry (every non-container public block gets a
+  PascalCase wrapper), so blocks like `<ObjectMetric>` / `<ObjectKanban>` exist
+  even though the written contract below documents only the curated core set;
+  `<Block type="…" …/>` is the escape hatch for any other registered type
 - `data` / `variables` / `page`
 
 Compose **layout with inline `style={{…}}`** (real CSS — see *Styling*, below); use the
@@ -946,14 +979,16 @@ props/callbacks flow through — e.g. `<ObjectForm>` honors `objectName` / `mode
 > It is the authoritative answer to "what props does `<ObjectForm>`/`<ListView>`/…
 > take?" — author against it, not from memory. The `data` props are sourced from the platform's spec schemas (FormView,
 > ListView, RecordDetails, Chart, …) — the same protocol the server validates;
-> `binding`/`controlled`/`callback` are the React overlay. Regenerate with
-> `pnpm --filter @objectstack/spec gen:react-blocks`.
+> `binding`/`controlled`/`callback` are the React overlay. The contract covers
+> the **curated core set**; runtime-injected blocks outside it (`<ObjectMetric>`,
+> `<ObjectKanban>`, …) read their props from the block registry at render time.
+> (Maintainers: regenerate with `pnpm --filter @objectstack/spec gen:react-blocks`.)
 
 Master/detail (click a row → edit it → save refreshes the list):
 
 ```tsx
 export const CrmWorkbenchPage = definePage({
-  name: 'crm_workbench', type: 'home', kind: 'react',
+  name: 'crm_workbench', label: 'CRM Workbench', type: 'home', kind: 'react',
   source: `
 function Page() {
   const [sel, setSel] = React.useState(null);
@@ -1036,10 +1071,9 @@ Rules:
 Why this model: it's **build-independent** (no Tailwind compile dependency),
 **collision-free** (per-node scoped, beats base utilities without `@layer`
 games), and **responsive-correct** (breakpoint maps → generated `@media`). The
-spec field is `PageComponentSchema.responsiveStyles` (`@objectstack/spec`,
-`ResponsiveStylesSchema`). Full worked example:
-`examples/app-showcase/src/pages/styling-gallery.page.ts` (the "Styling
-(ADR-0065)" nav entry). See [ADR-0065](../../docs/adr/0065-sdui-styling-model.md).
+spec field is `PageComponentSchema.responsiveStyles` (`ResponsiveStylesSchema` —
+see `node_modules/@objectstack/spec/src/ui/responsive.zod.ts`). See ADR-0065
+(SDUI styling model).
 
 **In the source tiers (`kind:'html'` / `kind:'react'`) the same rule holds — no
 Tailwind `className` — but the primitive differs:**
@@ -1057,9 +1091,10 @@ Tailwind `className` — but the primitive differs:**
   are HSL **triplets**, so always wrap them: `hsl(var(--card))`, never bare
   `var(--card)`; a translucent scrim is `hsl(0 0% 0% / 0.5)`. For a **drawer/modal**,
   render `<ObjectForm formType="drawer"|"modal" open onOpenChange={…}>` — it ships a
-  pre-styled Sheet/Dialog with backdrop + animation; never hand-roll a
-  `fixed inset-0` overlay (its utility classes won't compile, so it renders as
-  unstyled boxes with no backdrop).
+  pre-styled Sheet/Dialog with backdrop + animation (`open`/`onOpenChange` are
+  read by the component at runtime; they sit outside the contract's `data` prop
+  tables); never hand-roll a `fixed inset-0` overlay (its utility classes won't
+  compile, so it renders as unstyled boxes with no backdrop).
 
 ---
 
@@ -1192,8 +1227,6 @@ Manages accounts, contacts, and opportunities.
 | `crm_contact` | People at an account |
 ```
 
-In-repo reference: `examples/app-showcase/src/docs/showcase_docs_guide.md`.
-
 ---
 
 ## CRM UI Blueprint (Metadata-First)
@@ -1203,7 +1236,7 @@ Use this CRM-style structure as the canonical UI assembly reference:
 | UI Surface | Typical Location | Pattern to Follow |
 |:--|:--|:--|
 | Multi-view object UI | `src/views/*.view.ts` | Define default `list` + `form`, then named `listViews` / `formViews` for scenarios |
-| **Public / anonymous form** | `src/views/*.view.ts` (formView with `sharing.allowAnonymous: true`) | Web-to-Lead / Web-to-Case. Auto-exposed at `GET/POST /api/v1/forms/:slug`. See `guides/public-forms.mdx` |
+| **Public / anonymous form** | `src/views/*.view.ts` (formView with `sharing.allowAnonymous: true`) | Web-to-Lead / Web-to-Case. Auto-exposed at `GET/POST /api/v1/forms/:slug` |
 | App navigation | `src/apps/*.app.ts` | Use grouped nav trees, `viewName` shortcuts, and `requiresObject` for capability-aware visibility |
 | Dashboards | `src/dashboards/*.dashboard.ts` | Combine KPI + chart + table widgets with shared `dateRange` and `globalFilters` |
 | Reports | `src/reports/*.report.ts` | Bind a `dataset` + `rows` (dimensions) + `values` (measures) for tabular/summary/matrix/joined analytics |
@@ -1211,31 +1244,6 @@ Use this CRM-style structure as the canonical UI assembly reference:
 | User actions | `src/actions/*.actions.ts` | Use `flow` for orchestration and `modal` for parameterized bulk mutations |
 
 This blueprint is the default for “build a complete metadata app UI” tasks.
-
----
-
-## ObjectUI Runtime Coverage (2026-05-08 → 2026-06-08 scan)
-
-Recent `../objectui` work moved many UI metadata surfaces from "spec only" to
-partial or full frontend implementation. When authoring metadata, assume these
-ObjectUI capabilities exist and prefer the protocol-native shape:
-
-| Area | Current ObjectUI capability | Authoring guidance |
-|:--|:--|:--|
-| Metadata admin / Studio | Generic metadata list/detail/edit, live preview, diagnostics, draft/publish/rollback, package scoping, skew-safe curated inspectors | Prefer spec-driven inspectors and canonical metadata shapes; do not invent designer-only shadow fields |
-| Object designer | Field groups, drag/drop fields, object create canvas, field-level conditional rules, bulk field selection, live validation | Put durable behavior on object/field metadata; use CEL via `P\`...\`` |
-| Form views | Modal/drawer/full-page subforms, inline master-detail, atomic batch create/edit, submit feedback | Model parent-child entry with `master_detail.inlineEdit` or form `subforms` |
-| Line-item grids | Spreadsheet editing, computed cells, ghost row, lookup auto-fill, duplicate, drag reorder, subtotal/tax/total | Keep line fields on the child object; use `position`/`sort_order` and summary fields |
-| Record detail | Derived related lists, action slots, system/audit sections, record-page assignment, optional reference rail | Let relationships derive related lists unless a record page needs bespoke placement |
-| Pages | Page create flows, block canvas, slotted record pages, block property inspectors, nested container blocks | Use Page metadata for layout; use full Action objects in `page:header.properties.actions` |
-| Dashboards | Metric/chart/list/pivot/funnel/table widgets, drill-downs, type-aware cells, date bucketing, dataset-bound widgets | Bind every widget to a `dataset` + `values` (+ `dimensions`); the inline object/valueField/aggregate form was removed (ADR-0021) |
-| Reports | Spec-native tabular/summary/matrix/joined reports, chart/KPI blocks, drill-downs, dataset-bound reports | Bind a `dataset` + `rows` + `values`; joined reports carry dataset-bound `blocks` |
-| Actions | Row/global/header actions, modal parameter collection, visible CEL, popup-safe opens, nested action runner sharing | Define actions as metadata; use row context/defaultFromRow instead of custom code |
-| Flow designer | Typed node config panels, trigger/decision forms, reference pickers, simulator/debug runner | Author flows with typed config, not advanced JSON fallbacks |
-| Console utilities | Integrations & APIs, public forms, flow runs, approvals inbox, settings, marketplace/package management, AI draft review/publish | Link app navigation to these surfaces with capability gates where appropriate |
-
-Still treat broad "universal renderer parity" as in progress: verify uncommon
-component/widget combinations in ObjectUI before documenting them as shipped.
 
 ---
 
@@ -1366,7 +1374,7 @@ category, collapsing a 12-row seed into a 12-point flat line. (The old widget-le
 ```typescript
 // In the dataset (Guides → Analytics Datasets):
 defineDataset({
-  name: 'contract_metrics', object: 'contract',
+  name: 'contract_metrics', label: 'Contract Metrics', object: 'contract',
   dimensions: [{ name: 'signed_date', field: 'signed_date', type: 'date', dateGranularity: 'month' }],
   measures: [{ name: 'signed_count', aggregate: 'count' }],
 });
@@ -1449,9 +1457,9 @@ Dashboard and report drill are unified.
 Dashboards, reports, list-view filters, and other UI metadata can embed
 relative-date placeholders that are resolved on the client just before
 the request leaves the browser. The canonical contract is published as
-[`DATE_MACRO_TOKENS`](../../packages/spec/src/data/date-macros.zod.ts) in
-`@objectstack/spec`; the resolver lives in `@object-ui/core`
-(`resolveDateMacros`). Keep the two in lockstep.
+`DATE_MACRO_TOKENS` in `@objectstack/spec/data` (source:
+`node_modules/@objectstack/spec/src/data/date-macros.zod.ts`); the resolver
+lives in `@object-ui/core` (`resolveDateMacros`). Keep the two in lockstep.
 
 Both `{token}` and `${token}` forms are accepted.
 
@@ -1481,7 +1489,7 @@ Both `{token}` and `${token}` forms are accepted.
 ### DO / DON'T
 
 * **DO** type-check tokens against the spec — `isDateMacroToken(tok)` from
-  `@objectstack/spec` returns `false` for anything unsupported.
+  `@objectstack/spec/data` returns `false` for anything unsupported.
 * **DO** prefer `Field.datetime()` for "near-now" filters (minute/hour
   precision); driver-sql automatically coerces ISO macros to the stored
   ms-epoch representation.
@@ -1547,11 +1555,12 @@ Register them under `defineStack({ actions: [...] })`.
 
 | `type`   | Purpose                                                            | Required field |
 |:---------|:-------------------------------------------------------------------|:---------------|
-| `script` | Run an inline L2 hook body (sandboxed JS) on the server            | `body`         |
+| `script` | Run an inline L2 hook body (sandboxed JS) on the server            | `body` (or `target` = registered function name) |
 | `url`    | Navigate to an internal route or external URL                      | `target`       |
-| `modal`  | Open a dialog, collect `params`, then execute `body`               | `target`, `params`, `body` |
+| `modal`  | Open a dialog (typically collecting `params`, then executing `body`) | `target`     |
 | `flow`   | Launch a screen/auto-launched flow by name                         | `target`       |
 | `api`    | Call a registered API endpoint                                     | `target`       |
+| `form`   | Open a FormView by name (routed to `/console/forms/:name`)         | `target`       |
 
 ### Where Actions Appear (`locations`)
 
@@ -1560,10 +1569,12 @@ Register them under `defineStack({ actions: [...] })`.
 | Value            | Surface |
 |:-----------------|:--------|
 | `record_header`  | Detail page header (single record) |
-| `record_more`    | Detail page overflow menu |
+| `record_more`    | Detail page overflow menu (the "More" / ⋯ button) |
+| `record_related` | Related-list section inside a record |
+| `record_section` | Body section/tab of a record (e.g. a Security tab) |
 | `list_item`      | Per-row action in list views |
 | `list_toolbar`   | Bulk action on selected rows (`input.selectedIds`) |
-| `global`         | Global action launcher (utility bar) |
+| `global_nav`     | Global navigation / command-palette level |
 
 ### Visibility, Disable & Feedback
 
@@ -1778,9 +1789,12 @@ the selected row in `list_item` contexts.
    Quick filters dramatically improve usability. Always add at least a
    "My Records" filter using `$currentUser`.
 
-5. **Dashboard widgets without position.**
-   Every widget needs `position: { x, y, w, h }` on the grid. Plan the
-   layout on paper first.
+5. **Putting widget grid placement in `position`.**
+   The grid-placement field is `layout: { x, y, w, h }` — there is no
+   `position` key on a widget, so a `position` object is silently dropped.
+   `layout` is optional: omit it and the widget auto-flows (the Studio
+   designer relies on this); set it only when you want an explicit grid
+   position.
 
 ---
 
