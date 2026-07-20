@@ -11,10 +11,10 @@ description: >
   syntax (see objectstack-query). CEL expressions in route guards or auth
   predicates: load objectstack-formula alongside.
 license: Apache-2.0
-compatibility: Requires @objectstack/spec Zod schemas (v4+)
+compatibility: Requires @objectstack/spec 16.x (Zod v4 schemas)
 metadata:
   author: objectstack-ai
-  version: "1.1"
+  version: "1.2"
   domain: api
   tags: rest, graphql, endpoint, auth, realtime, server
 ---
@@ -47,14 +47,20 @@ Every ObjectStack object with `apiEnabled: true` (the default) automatically
 gets a full REST API:
 
 ```
-GET    /api/v1/{object}          # List records (with filter, sort, pagination)
-GET    /api/v1/{object}/:id      # Get single record
-POST   /api/v1/{object}          # Create record
-PATCH  /api/v1/{object}/:id      # Update record
-DELETE /api/v1/{object}/:id      # Delete record (soft-delete if trash enabled)
-POST   /api/v1/{object}/bulk     # Bulk operations
-GET    /api/v1/{object}/aggregate # Aggregation queries
+GET    /api/v1/data/{object}          # List records (with filter, sort, pagination)
+GET    /api/v1/data/{object}/:id      # Get single record
+POST   /api/v1/data/{object}          # Create record
+PATCH  /api/v1/data/{object}/:id      # Update record
+DELETE /api/v1/data/{object}/:id      # Delete record (soft-delete if trash enabled)
+POST   /api/v1/data/{object}/query    # Complex queries + aggregation (QueryAST in body)
+POST   /api/v1/data/{object}/batch    # Per-object batch operations
+POST   /api/v1/batch                  # Cross-object atomic batch
 ```
+
+Data CRUD lives under the `/data` prefix. There is no `/bulk` route and no
+`GET .../aggregate` route — batch writes go through the `batch` endpoints, and
+aggregation goes through `POST /api/v1/data/{object}/query` with
+`groupBy`/`aggregations` in the body.
 
 > **Key rule:** If your object defines `apiMethods`, only those operations are
 > exposed. For example, `apiMethods: ['get', 'list']` creates a read-only API.
@@ -69,16 +75,16 @@ GET /api/v1/meta/:type            # List metadata items of a type (object, view,
 GET /api/v1/meta/:type/:name      # Read a single metadata item
 ```
 
-Three query-param contracts gained in 9.x:
+Three query-param contracts:
 
-- **`?preview=draft`** (#1763) — overlay pending **draft** metadata instead of the
+- **`?preview=draft`** — overlay pending **draft** metadata instead of the
   published copy, on both list and get. The draft path is **cache-bypassed**, so
-  it always reflects the latest unpublished edit (ADR-0033/0037 authoring loop).
-- **`?package=<packageId>`** (ADR-0048, #1816/#1819) — **package-scope** a read so
+  it always reflects the latest unpublished edit (the authoring loop).
+- **`?package=<packageId>`** — **package-scope** a read so
   two installed packages that share a bare metadata name disambiguate by owning
   package; prefer-local resolution. A package-scoped read **bypasses the meta
   cache**. The layered / Studio-editor read is package-scoped the same way.
-- **`/meta/doc`** (ADR-0046, #1790) — docs-as-metadata. The **list** response omits
+- **`/meta/doc`** — docs-as-metadata. The **list** response omits
   each doc's `content` by default (use `?include=content` to include it); the
   **single-item** `GET /meta/doc/:name` always returns the full body.
 
@@ -98,36 +104,40 @@ are intended for Web-to-Lead / Web-to-Case style flows. The framework
 strips fields outside the form's `sections[].fields[]` list; a
 `beforeInsert` hook on the target object should stamp safe defaults
 (`status='new'`, `lead_source='web'`, …) and `delete` privileged keys
-(`owner`, `internal_notes`, …). See `content/docs/ui/forms.mdx`
-for the full contract.
+(`owner`, `internal_notes`, …). For the full contract, read
+`node_modules/@objectstack/spec/src/ui/view.zod.ts` (`FormViewSchema`) and
+`node_modules/@objectstack/spec/src/ui/sharing.zod.ts` (`SharingConfigSchema`
+with `allowAnonymous` / `publicLink`).
 
 ### Custom Endpoints
 
 For business logic beyond CRUD, define custom endpoints via the REST API
-plugin:
+plugin (`RestApiEndpointSchema`):
 
+<!-- os:check -->
 ```typescript
-{
-  name: 'close_case',
-  path: '/api/v1/cases/:id/close',
+import { RestApiEndpointSchema, type RestApiEndpoint } from '@objectstack/spec/api';
+
+export const closeCase: RestApiEndpoint = RestApiEndpointSchema.parse({
   method: 'POST',
+  path: '/api/v1/cases/:id/close',
+  handler: 'closeCase',              // protocol method / handler identifier
+  category: 'data',
   description: 'Close a support case with resolution notes.',
+  public: false,                     // auth required (the default)
+  permissions: ['support_agent'],
+  requestSchema: 'CloseCaseRequest', // schema *name* reference, not an inline shape
+  responseSchema: 'SupportCase',
   handlerStatus: 'implemented',
-  request: {
-    params: { id: { type: 'string', required: true } },
-    body: {
-      resolution: { type: 'string', required: true },
-      satisfaction: { type: 'number', min: 1, max: 5 },
-    },
-  },
-  response: {
-    200: { description: 'Case closed successfully', schema: 'SupportCase' },
-    404: { description: 'Case not found' },
-    409: { description: 'Case already closed' },
-  },
-  auth: { required: true, permissions: ['support_agent'] },
-}
+});
 ```
+
+There is no `name`, `request`, `response`, or `auth` field on this schema —
+request/response schemas are referenced **by name** (`requestSchema` /
+`responseSchema`), and auth is the flat `public` + `permissions` pair. The
+alternative declarative surface is `ApiEndpointSchema` (`endpoint.zod.ts`):
+`type: 'flow' | 'script' | 'object_operation' | 'proxy'` plus a `target`
+(Flow ID, script name, or proxy URL) and `authRequired: boolean`.
 
 ---
 
@@ -135,8 +145,8 @@ plugin:
 
 | Pattern | Use Case | Example |
 |:--------|:---------|:--------|
-| `/api/v1/{object}` | Auto-generated collection | `/api/v1/accounts` |
-| `/api/v1/{object}/:id` | Auto-generated record | `/api/v1/accounts/abc123` |
+| `/api/v1/data/{object}` | Auto-generated collection | `/api/v1/data/accounts` |
+| `/api/v1/data/{object}/:id` | Auto-generated record | `/api/v1/data/accounts/abc123` |
 | `/api/v1/{object}/:id/{action}` | Custom action on record | `/api/v1/cases/:id/close` |
 | `/api/v1/{domain}/{action}` | Domain-level action | `/api/v1/ai/chat` |
 
@@ -147,28 +157,36 @@ plugin:
 - Use **verbs** only for actions, not for CRUD (`/close`, `/approve`).
 - Always prefix with `/api/v1/` for versioning.
 
+Depending on deployment configuration, routes may also be mounted
+**environment-scoped** under `/api/v1/environments/:environmentId/...`
+(project scoping in the REST server). With `projectResolution: 'required'`
+only the scoped routes are registered; with `optional`/`auto` the bare
+`/api/v1/...` routes remain available alongside them.
+
 ---
 
 ## API Methods (Operations)
 
-The full set of operations an object can expose:
+The full set of operations an object can expose (the `ApiMethod` enum, 14
+values). Not every enum value has its own generated route — some only gate
+access:
 
-| Method | HTTP | Purpose |
-|:-------|:-----|:--------|
-| `get` | `GET /:id` | Retrieve a single record |
-| `list` | `GET /` | List records with filter/sort/pagination |
-| `create` | `POST /` | Create a new record |
-| `update` | `PATCH /:id` | Update an existing record |
-| `delete` | `DELETE /:id` | Delete a record |
-| `upsert` | `PUT /` | Create or update by external ID |
-| `bulk` | `POST /bulk` | Batch create/update/delete |
-| `aggregate` | `GET /aggregate` | Count, sum, avg, min, max |
-| `history` | `GET /:id/history` | Audit trail access |
-| `search` | `GET /search` | Full-text search |
-| `restore` | `POST /:id/restore` | Restore from trash |
-| `purge` | `DELETE /:id/purge` | Permanent deletion |
-| `import` | `POST /import` | Bulk data import |
-| `export` | `GET /export` | Data export |
+| Method | HTTP surface today | Purpose |
+|:-------|:-------------------|:--------|
+| `get` | `GET /data/{object}/:id` | Retrieve a single record |
+| `list` | `GET /data/{object}` | List records with filter/sort/pagination |
+| `create` | `POST /data/{object}` | Create a new record |
+| `update` | `PATCH /data/{object}/:id` | Update an existing record |
+| `delete` | `DELETE /data/{object}/:id` | Delete a record |
+| `upsert` | Enum value gating access — no dedicated generated route in `@objectstack/rest` today | Create or update by external ID |
+| `bulk` | `POST /data/{object}/batch` | Batch create/update/delete |
+| `aggregate` | No dedicated route — use `POST /data/{object}/query` with `groupBy`/`aggregations` | Count, sum, avg, min, max |
+| `history` | Enum value gating access — no dedicated generated route today | Audit trail access |
+| `search` | Global `GET /api/v1/search` (cross-object), not per-object | Full-text search |
+| `restore` | Enum value gating access — no dedicated generated route today | Restore from trash |
+| `purge` | Enum value gating access — no dedicated generated route today | Permanent deletion |
+| `import` | `POST /data/{object}/import` | Bulk data import |
+| `export` | `GET /data/{object}/export` | Data export |
 
 ---
 
@@ -179,34 +197,50 @@ metadata.
 
 ### Service Info Schema
 
+The discovery response (`GET /api/v1/discovery`) reports each registered
+service in a `services` **record** — the record key is the service name, and
+there is no `endpoints` array on a service entry:
+
+<!-- os:check -->
 ```typescript
-{
-  name: 'service-rest-api',
+import type { ServiceInfo } from '@objectstack/spec/api';
+
+// In the discovery response: services: { data: { ... }, ... }
+const dataService: ServiceInfo = {
+  enabled: true,          // required
+  status: 'available',    // 'available' | 'registered' | 'unavailable' | 'degraded' | 'stub'
+  handlerReady: true,     // HTTP handler verified mounted (omitted = unknown)
+  route: '/api/v1/data',
+  provider: 'objectql',
   version: '1.0.0',
-  status: 'healthy',       // 'healthy' | 'degraded' | 'unhealthy' | 'registered'
-  handlerReady: true,       // HTTP handler verified and operational
-  endpoints: [
-    { path: '/api/v1/accounts', methods: ['GET', 'POST'] },
-    { path: '/api/v1/accounts/:id', methods: ['GET', 'PATCH', 'DELETE'] },
-  ],
-}
+};
 ```
+
+Optional fields also include `message` (human-readable reason if unavailable)
+and `rateLimit` (per-service quota info). There is no `healthy`/`unhealthy`
+status — `available` is the fully-operational state.
 
 ### Health Endpoint
 
-Every ObjectStack deployment exposes `/health`:
+Every ObjectStack deployment exposes `GET /api/v1/health`, which returns the
+standard success envelope (no per-service map):
 
 ```json
 {
-  "status": "healthy",
-  "version": "4.0.1",
-  "services": {
-    "objectql": { "status": "healthy" },
-    "rest-api": { "status": "healthy" },
-    "auth": { "status": "healthy" }
+  "success": true,
+  "data": {
+    "status": "ok",
+    "timestamp": "2026-07-20T12:00:00.000Z",
+    "version": "1.0.0",
+    "uptime": 42.7
   }
 }
 ```
+
+A readiness probe also exists at `GET /ready` on the same base path — it
+returns 200 only when the kernel is fully running, and 503 while booting or
+shutting down. For per-service status, use `GET /api/v1/discovery` (the
+`services` record above).
 
 ---
 
@@ -239,22 +273,61 @@ Every endpoint has a handler status:
 
 ---
 
+## Realtime Subscriptions
+
+Realtime contracts are pointer-style — read the spec source for exact shapes:
+
+- `node_modules/@objectstack/spec/src/api/realtime.zod.ts` — `TransportProtocol`
+  (`websocket` | `sse` | `polling`), `SubscriptionSchema` (`id`, `events[]`,
+  `transport`, optional `channel`), `RealtimeEventSchema`, and
+  `RealtimeConfigSchema`. Note: the `RealtimeEventType` enum is declared but
+  not yet enforced — the runtime emits `data.record.*` event names instead.
+- `node_modules/@objectstack/spec/src/api/websocket.zod.ts` — the WebSocket
+  message protocol: subscribe/unsubscribe messages, event delivery with
+  filters, presence, cursor and collaborative-edit messages, and
+  ack/error/ping/pong frames.
+
+---
+
 ## Authentication & Authorization
 
 ### Auth Configuration
 
+There is no nested `auth` block on endpoints. Auth is declared with flat
+fields on the endpoint itself:
+
 ```typescript
+// RestApiEndpointSchema (plugin-rest-api) endpoints:
 {
-  auth: {
-    required: true,            // Require authentication
-    permissions: ['admin'],    // Required permission profiles
-    rateLimit: {
-      requests: 100,
-      window: '1m',           // per minute
-    },
-  },
+  public: false,                  // false (the default) = auth required
+  permissions: ['admin'],         // required permissions
+  rateLimit: 'default',           // named rate-limit policy (a string reference)
 }
 ```
+
+Declarative `ApiEndpointSchema` endpoints (and the dispatcher) instead use
+`authRequired: boolean` (default `true`). Rate-limit policies themselves are
+shaped by `RateLimitConfigSchema`:
+
+<!-- os:check -->
+```typescript
+import { RateLimitConfigSchema, type RateLimitConfig } from '@objectstack/spec/shared';
+
+const limit: RateLimitConfig = RateLimitConfigSchema.parse({
+  enabled: true,
+  windowMs: 60_000,     // time window in milliseconds
+  maxRequests: 100,     // max requests per window
+});
+```
+
+### Auth Providers
+
+Provider and login contracts live in
+`node_modules/@objectstack/spec/src/api/auth.zod.ts`: `AuthProvider` is
+`'local' | 'google' | 'github' | 'microsoft' | 'ldap' | 'saml'`, and
+`LoginRequestSchema` carries `type` (login method), plus optional `email`,
+`username`, `password`, `provider`, and `redirectTo`. Read that file for the
+session and token response shapes before wiring an auth flow.
 
 ### Security Layers
 
@@ -273,32 +346,43 @@ Every endpoint has a handler status:
 
 ## Datasource Configuration
 
-Connect to external data sources for virtualised data access:
+Connect to external data sources for virtualised data access.
+`DatasourceSchema` has no `type`, `connection`, or `readOnly` fields — the
+connection settings live in the driver-specific `config` record, and
+read-only safety comes from `schemaMode` plus the `external` write gate:
 
+<!-- os:check -->
 ```typescript
-{
+import { defineDatasource } from '@objectstack/spec';
+
+export const legacyErp = defineDatasource({
   name: 'legacy_erp',
-  type: 'sql',
-  driver: 'postgresql',
-  connection: {
+  driver: 'postgres',
+  config: {
     host: 'erp.internal.example.com',
     port: 5432,
     database: 'erp_production',
-    ssl: true,
   },
-  readOnly: true,      // Safety for legacy systems
-}
+  ssl: { enabled: true },
+  schemaMode: 'external',              // DDL forbidden; schema mismatch fails boot
+  external: { allowWrites: false },    // required when schemaMode != 'managed'
+});
 ```
 
 ### Supported Drivers
 
+Registered driver ids in the datasource driver catalog:
+
 | Driver | Use Case |
 |:-------|:---------|
-| `postgresql` | Primary production database |
+| `postgres` | Primary production database |
 | `mysql` | Legacy systems, WordPress integration |
+| `mongo` | Document store (MongoDB) |
 | `sqlite` | Local development, embedded apps |
-| `turso` | Edge SQLite (Turso/libSQL) — serverless |
 | `memory` | Unit tests, development |
+
+Edge SQLite (Turso/libSQL) is available via the separate
+`@objectstack/driver-turso` package (driver name `turso`).
 
 ---
 
@@ -306,27 +390,27 @@ Connect to external data sources for virtualised data access:
 
 ### Service Contracts
 
-ObjectStack uses typed service contracts defined in `@objectstack/spec/contracts`:
-
-```typescript
-// Service contract interface
-interface DataService {
-  find(object: string, query: QueryOptions): Promise<Record[]>;
-  findOne(object: string, id: string): Promise<Record>;
-  create(object: string, data: object): Promise<Record>;
-  update(object: string, id: string, data: object): Promise<Record>;
-  delete(object: string, id: string): Promise<void>;
-}
-```
+ObjectStack uses typed service contracts defined in `@objectstack/spec/contracts`.
+The data contract is `IDataEngine` (`find(objectName, query?: EngineQueryOptions)`,
+`findOne`, `insert`, `update`, `delete`, `count`, `aggregate`, plus optional
+`vectorFind`/`batch`/`execute`) — there is no `DataService` contract.
 
 ### Kernel Service Resolution
 
-Services are resolved through the microkernel:
+Services are resolved through the microkernel with `kernel.getService<T>(name)`
+(there is no `kernel.resolve()`); an async variant `kernel.getServiceAsync`
+supports factory-created services:
 
+<!-- os:check -->
 ```typescript
-const dataService = kernel.resolve<DataService>('data');
-const authService = kernel.resolve<AuthService>('auth');
-const aiService = kernel.resolve<AIService>('ai');
+import type { IDataEngine } from '@objectstack/spec/contracts';
+
+declare const kernel: { getService<T>(name: string): T };
+
+async function firstTenAccounts() {
+  const data = kernel.getService<IDataEngine>('data');
+  return data.find('account', { limit: 10 });
+}
 ```
 
 ---
@@ -337,14 +421,23 @@ const aiService = kernel.resolve<AIService>('ai');
    a new version (`v2`).
 2. **Use auto-generated APIs** whenever possible. Only create custom endpoints
    for business logic that cannot be expressed through CRUD + triggers.
-3. **Return consistent error shapes.** Use the `DispatcherErrorResponseSchema`
-   format with `type`, `message`, and `hint`.
+3. **Return consistent error shapes.** The dispatcher envelope is
+   `DispatcherErrorResponseSchema`: `{ success: false, error: { code, message,
+   type?, route?, service?, hint? } }`, where `code` is the **numeric** HTTP
+   status and `code`/`message` are required. General API errors use
+   `ErrorResponseSchema` (`errors.zod.ts`). Be aware the shipped data routes
+   return flat `{ error, code }` bodies instead (e.g. `CONCURRENT_UPDATE` →
+   409, `VALIDATION_FAILED` → 400) — do not assume every error arrives in the
+   `success: false` envelope.
 4. **Document every endpoint** with `description` and response schemas.
 5. **Set `handlerStatus`** to communicate implementation progress to consumers.
 6. **Apply least-privilege auth.** Every endpoint should declare its required
    permissions explicitly.
-7. **Use `upsert` for idempotent writes.** External integrations should prefer
-   `upsert` over `create` to avoid duplicates.
+7. **Design idempotent writes deliberately.** `upsert` exists as an
+   `apiMethods` enum value, but `@objectstack/rest` generates no upsert route
+   today. External integrations should query by a unique external ID and then
+   branch to create or update (the per-object
+   `POST /api/v1/data/{object}/batch` endpoint can group those writes).
 
 ---
 

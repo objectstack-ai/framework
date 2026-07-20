@@ -12,16 +12,16 @@ When implemented, evals will follow this structure:
 
 ```
 evals/
-├── naming/
-│   ├── test-object-names.md
-│   ├── test-field-keys.md
-│   └── test-option-values.md
-├── relationships/
-│   ├── test-lookup-vs-master-detail.md
-│   └── test-junction-patterns.md
-├── validation/
-│   ├── test-script-inversion.md
-│   └── test-state-machine.md
+├── routes/
+│   ├── test-data-prefix.md          # CRUD routes live under /api/v1/data/{object}
+│   ├── test-query-vs-aggregate.md   # aggregation via POST /data/{object}/query, no GET /aggregate
+│   └── test-batch-routes.md         # per-object /data/{object}/batch vs cross-object /batch
+├── errors/
+│   ├── test-dispatcher-envelope.md  # { success: false, error: { code, message, ... } }
+│   └── test-data-route-errors.md    # flat { error, code } bodies (CONCURRENT_UPDATE 409, VALIDATION_FAILED 400)
+├── endpoints/
+│   ├── test-rest-endpoint-shape.md  # RestApiEndpointSchema fields (public/permissions, schema name refs)
+│   └── test-api-endpoint-types.md   # ApiEndpointSchema type/target/authRequired
 └── ...
 ```
 
@@ -42,5 +42,5 @@ Each eval file will contain:
 When adding evals:
 1. Each eval should test a single, specific rule or pattern
 2. Include both positive (correct) and negative (incorrect) examples
-3. Reference the corresponding rule file in `rules/`
+3. Validate expected outputs against the Zod schemas in `node_modules/@objectstack/spec/src/api/`
 4. Use realistic scenarios from actual ObjectStack projects
