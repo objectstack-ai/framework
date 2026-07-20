@@ -465,9 +465,17 @@ describe('celEngine', () => {
       expect(r).toEqual({ ok: true, value: true });
     });
 
-    it('abs / round / min / max', () => {
+    it('abs / round / floor / ceil / min / max', () => {
       expect(celEngine.evaluate(cel('abs(record.x)'), { record: { x: -3.5 } })).toEqual({ ok: true, value: 3.5 });
       expect(celEngine.evaluate(cel('round(2.6)'), {})).toEqual({ ok: true, value: 3 });
+      expect(celEngine.evaluate(cel('floor(6.7)'), {})).toEqual({ ok: true, value: 6 });
+      expect(celEngine.evaluate(cel('ceil(6.1)'), {})).toEqual({ ok: true, value: 7 });
+      // floor/ceil round toward −∞/+∞, NOT toward zero — the whole reason they are
+      // not interchangeable with integer division (#3306).
+      expect(celEngine.evaluate(cel('floor(-1.2)'), {})).toEqual({ ok: true, value: -2 });
+      expect(celEngine.evaluate(cel('ceil(-1.2)'), {})).toEqual({ ok: true, value: -1 });
+      // A record number field arrives as a cel-js `double`; `floor` must accept it.
+      expect(celEngine.evaluate(cel('floor(record.x / 365.0)'), { record: { x: 2318 } })).toEqual({ ok: true, value: 6 });
       expect(celEngine.evaluate(cel('min(record.a, record.b)'), { record: { a: 3, b: 7 } })).toEqual({ ok: true, value: 3 });
       expect(celEngine.evaluate(cel('max(record.a, record.b)'), { record: { a: 3, b: 7 } })).toEqual({ ok: true, value: 7 });
     });
@@ -495,6 +503,7 @@ describe('celEngine', () => {
         daysBetween: 'daysBetween(today(), daysFromNow(7))', date: 'date("2026-03-15")',
         addDays: 'addDays(today(), 7)', addMonths: 'addMonths(today(), 3)',
         datetime: 'datetime("2026-03-15T08:00:00Z")', abs: 'abs(-3.5)', round: 'round(2.6)',
+        floor: 'floor(6.7)', ceil: 'ceil(6.1)',
         min: 'min(1, 2)', max: 'max(1, 2)', upper: 'upper("hi")', lower: 'lower("HI")',
         trim: 'trim(" x ")', contains: 'contains("hello", "ell")', startsWith: 'startsWith("hi", "h")',
         endsWith: 'endsWith("hi", "i")', matches: 'matches("a1", "a.")', joinNonEmpty: 'joinNonEmpty(["a", "b"], "-")',
@@ -586,6 +595,48 @@ describe('celEngine', () => {
         .toEqual({ ok: true, value: false });
       expect(celEngine.evaluate(cel('record.due == today()'), rec(null)))
         .toEqual({ ok: true, value: false });
+    });
+  });
+
+  // #3306 — the blessed null-guard idiom `cond ? <value> : null`. cel-js's ternary
+  // unifier rejects a concrete branch against `null`; the engine's AST rewrite
+  // wraps the non-null branch in `dyn(...)` so it compiles AND evaluates, and the
+  // null branch still yields null.
+  describe('null-guarded formula idiom (#3306)', () => {
+    const now = new Date('2026-07-20T00:00:00Z');
+
+    it('`cond ? <number> : null` evaluates instead of silently nulling', () => {
+      expect(celEngine.evaluate(cel('true ? 5 : null'), {})).toEqual({ ok: true, value: 5 });
+      expect(celEngine.evaluate(cel('false ? 5 : null'), {})).toEqual({ ok: true, value: null });
+      // null-first order (either branch may be the null literal).
+      expect(celEngine.evaluate(cel('true ? null : 5'), {})).toEqual({ ok: true, value: null });
+    });
+
+    it('compiles the idiom that used to fault type-checking', () => {
+      // Was: ERR[type] "Ternary branches must have the same type, got 'int' and 'null'".
+      expect(celEngine.compile('true ? 5 : null').ok).toBe(true);
+      expect(celEngine.compile('cond ? daysBetween(a, b) + 1 : null').ok).toBe(true);
+    });
+
+    it('the shipped hr templates now compute (tenure_years, time_off.days)', () => {
+      // tenure_years — daysBetween/365 integer division, null when hire_date unset.
+      const tenure = cel('record.hire_date != null ? daysBetween(record.hire_date, today()) / 365 : null');
+      expect(celEngine.evaluate(tenure, { now, record: { hire_date: '2020-03-15' } }))
+        .toEqual({ ok: true, value: 6 });
+      expect(celEngine.evaluate(tenure, { now, record: { hire_date: null } }))
+        .toEqual({ ok: true, value: null });
+      // time_off.days — inclusive calendar-day span.
+      const days = cel('record.start_date != null && record.end_date != null ? daysBetween(record.start_date, record.end_date) + 1 : null');
+      expect(celEngine.evaluate(days, { now, record: { start_date: '2026-06-20', end_date: '2026-06-24' } }))
+        .toEqual({ ok: true, value: 5 });
+    });
+
+    it('leaves a genuine type mismatch and same-typed / non-null ternaries alone', () => {
+      // Not a null-guard → still an honest type error (we only relax `… : null`).
+      expect(celEngine.compile('true ? "a" : 5').ok).toBe(false);
+      // Same-typed branches never needed the rewrite and are unchanged.
+      expect(celEngine.evaluate(cel('true ? "a" : "b"'), {})).toEqual({ ok: true, value: 'a' });
+      expect(celEngine.evaluate(cel('false ? 1 : 2'), {})).toEqual({ ok: true, value: 2 });
     });
   });
 });

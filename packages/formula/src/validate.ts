@@ -92,13 +92,12 @@ export interface ExprValidationResult {
 }
 
 /**
- * #1928 tier 4 — spec field type → the CEL type it is declared as for the
- * type-soundness check. ONLY genuinely-scalar, non-numeric-intent types are
- * pinned to a concrete type (`string` / `bool`); every other type — numbers,
- * dates, selects (option values may be numeric codes), lookups, media, JSON —
- * maps to `dyn` so it can never fault (the runtime rescues all of those). Any
- * field type absent from this map is treated as `dyn`. Keeping the map narrow
- * is the source of the check's near-zero false-positive rate.
+ * #1928 / #3306 — spec field type → the CEL type it is declared as for the
+ * type-soundness check. Pinned to a concrete type ONLY where a specific misuse
+ * always faults the runtime; numbers/currency/percent, selects (option values
+ * may be numeric codes), lookups, media, JSON stay `dyn` because the runtime
+ * rescues them. Any field type absent from this map is treated as `dyn`. Keeping
+ * the map narrow is the source of the check's near-zero false-positive rate.
  */
 const SPEC_TYPE_TO_CEL: Readonly<Record<string, FieldCelType>> = {
   // Free text — arithmetic / ordering against a number is (almost) always a bug.
@@ -106,6 +105,10 @@ const SPEC_TYPE_TO_CEL: Readonly<Record<string, FieldCelType>> = {
   phone: 'string', markdown: 'string', html: 'string', richtext: 'string',
   // Booleans — arithmetic / ordering against a number ALWAYS faults at runtime.
   boolean: 'bool', toggle: 'bool',
+  // Dates — ARITHMETIC against a number always nulls (`date − date + 1`, `date + n`,
+  // #3306). Only arithmetic is flagged; ordering / equality / concatenation of a
+  // date field are runtime-tolerated (see `firstTypeMismatch`).
+  date: 'timestamp', datetime: 'timestamp',
 };
 
 /** Map an object's field-type hints onto the CEL types the soundness check uses. */
@@ -118,29 +121,51 @@ function toCelFieldTypes(fieldTypes: Readonly<Record<string, string>>): Record<s
 }
 
 /**
- * #1928 tier 4 — a NON-blocking warning for a text/boolean field used with an
- * arithmetic/ordering operator against a number (a silent-null bug), or `null`
- * when the expression is type-sound. `scope` selects `record.<field>` vs bare
- * field binding, and shapes the referenced form in the message.
+ * #1928 / #3306 — a type-soundness verdict for an expression, or `null` when
+ * sound. Two categories, with different severities:
+ *  - `date-arith` (**error**): arithmetic on a date field against a number
+ *    (`date − date + 1`, `today() + 30`) — always nulls at runtime and never
+ *    recovers, so it blocks the build.
+ *  - `type-mismatch` (**warning**): a text/boolean field used with an
+ *    arithmetic/ordering operator against a number — nulls unless the text value
+ *    happens to be numeric, so it stays advisory.
+ * `scope` selects `record.<field>` vs bare field binding, shaping the message.
  */
-function typeSoundnessWarning(
+function typeSoundnessIssue(
   source: string,
   fieldTypes: Readonly<Record<string, string>>,
   scope: 'record' | 'flattened',
-): ExprValidationError | null {
+): { issue: ExprValidationError; severity: 'error' | 'warning' } | null {
   const mismatch = firstTypeMismatch(source, toCelFieldTypes(fieldTypes), scope);
   if (!mismatch) return null;
-  const held = mismatch.celType === 'bool' ? 'a boolean' : 'text';
   const ref = mismatch.field
     ? (scope === 'record' ? `\`record.${mismatch.field}\`` : `\`${mismatch.field}\``)
     : null;
+  if (mismatch.category === 'date-arith') {
+    const subject = ref ? `${ref} is a date` : 'a date field';
+    return {
+      severity: 'error',
+      issue: {
+        source,
+        message:
+          `date arithmetic \`${mismatch.operands}\` — ${subject}, and CEL can't do arithmetic on ` +
+          `dates: this faults at runtime, so the field silently evaluates to null. Use ` +
+          `\`daysBetween(a, b)\` for the span in whole days, and \`daysFromNow(n)\` / ` +
+          `\`addDays(d, n)\` / \`addMonths(d, n)\` to shift a date.`,
+      },
+    };
+  }
+  const held = mismatch.celType === 'bool' ? 'a boolean' : 'text';
   const subject = ref ? `${ref} holds ${held}` : `${held === 'a boolean' ? 'a boolean' : 'a text'} field`;
   return {
-    source,
-    message:
-      `type mismatch \`${mismatch.operands}\` — ${subject} but is used with \`${mismatch.operator}\` ` +
-      `against a number. This faults at runtime, so the expression silently evaluates to null ` +
-      `(unless the value happens to be numeric). Use a number field, or drop the arithmetic/comparison.`,
+    severity: 'warning',
+    issue: {
+      source,
+      message:
+        `type mismatch \`${mismatch.operands}\` — ${subject} but is used with \`${mismatch.operator}\` ` +
+        `against a number. This faults at runtime, so the expression silently evaluates to null ` +
+        `(unless the value happens to be numeric). Use a number field, or drop the arithmetic/comparison.`,
+    },
   };
 }
 
@@ -323,15 +348,14 @@ export function validateExpression(
             `expression silently evaluates to null. Write \`record.${bare}\`.`,
         });
       } else if (schema.fieldTypes) {
-        // #1928 tier 4 — with per-field types in hand, flag a text/boolean field
-        // used with an arithmetic/ordering operator against a number: it faults
-        // the runtime overload and the expression silently evaluates to null.
-        // Advisory (never blocks the build): the runtime CAN succeed if a text
-        // value happens to be numeric, so this is a warning, not an error. Only
-        // runs when there is no bare-ref error (the typed check needs the
-        // canonical `record.<field>` form).
-        const w = typeSoundnessWarning(source, schema.fieldTypes, 'record');
-        if (w) warnings.push(w);
+        // #1928 / #3306 — with per-field types in hand, flag a type-unsound
+        // operator use that faults at runtime and silently nulls: a text/boolean
+        // field arithmetic'd/ordered against a number (advisory warning — a
+        // numeric text value can succeed), or date-field arithmetic (hard error —
+        // always nulls). Only runs when there is no bare-ref error (the typed
+        // check needs the canonical `record.<field>` form).
+        const r = typeSoundnessIssue(source, schema.fieldTypes, 'record');
+        if (r) (r.severity === 'error' ? errors : warnings).push(r.issue);
       }
     } else if (schema?.fields && schema.fields.length > 0) {
       // Flattened flow/automation condition: the record's fields ARE bound at
@@ -352,13 +376,13 @@ export function validateExpression(
           });
         }
       }
-      // #1928 tier 4 — the same type-soundness check, for bare-field conditions:
-      // a text/boolean field compared/arithmetic'd against a number faults at
-      // runtime. Flow variables stay `dyn` (never flagged); equality is
-      // runtime-safe (never flagged). Advisory only.
+      // #1928 / #3306 — the same type-soundness check, for bare-field conditions:
+      // a text/boolean field compared/arithmetic'd against a number (advisory), or
+      // date-field arithmetic (error). Flow variables stay `dyn` (never flagged);
+      // equality/ordering of a date is runtime-safe (never flagged).
       if (schema.fieldTypes) {
-        const w = typeSoundnessWarning(source, schema.fieldTypes, 'flattened');
-        if (w) warnings.push(w);
+        const r = typeSoundnessIssue(source, schema.fieldTypes, 'flattened');
+        if (r) (r.severity === 'error' ? errors : warnings).push(r.issue);
       }
     }
   }
@@ -445,7 +469,7 @@ export const CEL_STDLIB_FUNCTIONS: string[] = [
   // Dates (registered stdlib)
   'now', 'today', 'daysFromNow', 'daysAgo', 'daysBetween', 'addDays', 'addMonths', 'date', 'datetime',
   // Numbers (registered stdlib)
-  'abs', 'round', 'min', 'max',
+  'abs', 'round', 'floor', 'ceil', 'min', 'max',
   // Strings (registered stdlib)
   'upper', 'lower', 'trim', 'contains', 'startsWith', 'endsWith', 'matches', 'joinNonEmpty',
   // Collections / null-ish (registered stdlib)

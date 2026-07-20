@@ -143,12 +143,15 @@ test asserts every entry resolves at runtime, so this table stays in sync with i
 | `addMonths(d, n)` | timestamp | Shift **any** date by `n` months; clamps to month-end (`addMonths(date('2026-01-31'), 1)` → Feb 28) |
 | `date(s)` / `datetime(s)` | timestamp | Parse an ISO date / date-time string to a timestamp |
 
+> **No date arithmetic.** Do NOT write `end - start`, `date + n`, or `today() + 30` — CEL has no numeric arithmetic on dates, so these fault and the field silently nulls (the build now rejects them). Use `daysBetween(start, end)` for a span in days, and `daysFromNow(n)` / `addDays(d, n)` / `addMonths(d, n)` to shift a date. Inclusive day span: `daysBetween(record.start_date, record.end_date) + 1`. Tenure in years: `daysBetween(record.hire_date, today()) / 365`.
+
 **Numbers**
 
 | Function | Returns | Notes |
 |:---|:---|:---|
 | `abs(x)` | double | Absolute value |
 | `round(x)` | int | Round to the nearest integer |
+| `floor(x)` / `ceil(x)` | int | Round toward −∞ / +∞ (`floor(-1.2)` = −2, not −1) |
 | `min(a, b)` / `max(a, b)` | dyn | Smaller / larger operand (numeric comparison) |
 
 **Strings**

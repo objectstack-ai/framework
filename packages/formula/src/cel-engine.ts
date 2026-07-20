@@ -170,11 +170,50 @@ export function detectBareReference(source: string): string | null {
 
 /**
  * The CEL type a field is declared as for the Tier-4 type-soundness check
- * (#1928). Deliberately coarse: only genuinely-scalar, non-numeric-intent
- * fields are pinned to a concrete type; everything the runtime rescues stays
- * `dyn` and can therefore never fault. See {@link firstTypeMismatch}.
+ * (#1928). Deliberately coarse: only genuinely-scalar fields whose *misuse
+ * always faults the runtime* are pinned to a concrete type; everything the
+ * runtime rescues stays `dyn` and can therefore never fault.
+ *  - `string`/`bool` — text/boolean fields; arithmetic/ordering against a number
+ *    faults (unless a text value happens to be numeric) → advisory warning.
+ *  - `timestamp` — `date`/`datetime` fields; ARITHMETIC against a number always
+ *    nulls at runtime (`date − date + 1`, `today() + 30`, #3306) → hard error.
+ *    Ordering/equality/concatenation of a date field is runtime-tolerated and
+ *    is never flagged (see {@link firstTypeMismatch}).
+ * See {@link firstTypeMismatch}.
  */
-export type FieldCelType = 'string' | 'bool' | 'dyn';
+export type FieldCelType = 'string' | 'bool' | 'timestamp' | 'dyn';
+
+/** The cel-js type name a {@link FieldCelType} declares in a typed env. */
+function celTypeName(t: FieldCelType): string {
+  return t === 'timestamp' ? 'google.protobuf.Timestamp' : t;
+}
+
+/** CEL types produced by date subtraction / temporal fns — arith on these nulls. */
+const DATE_CEL_TYPES = new Set(['google.protobuf.Timestamp', 'google.protobuf.Duration']);
+/** Numeric CEL types — the RHS that turns date arithmetic into a runtime fault. */
+const NUMERIC_CEL_TYPES = new Set(['int', 'uint', 'double']);
+/** Arithmetic operators (excludes ordering `< > <= >=`, which dates tolerate). */
+const ARITH_OPS = new Set(['+', '-', '*', '/', '%']);
+
+/** Concrete types the soundness env pins — each needs a `== null` overload below. */
+const NULL_GUARD_TYPES = ['string', 'bool', 'google.protobuf.Timestamp', 'google.protobuf.Duration'];
+
+/**
+ * cel-js has no `<scalar/message> == null` overload, so a `record.<field> != null`
+ * guard faults the typed check for any pinned field — and because `check()` reports
+ * only its FIRST error, that fault MASKS a real arithmetic fault later in the same
+ * expression (the ubiquitous `guard ? <date arith> : null` shape, #3306). Register
+ * no-op `== null` overloads (this env is check-only, never evaluated; `!=` desugars
+ * to `==`) so the guard type-checks and the real fault surfaces. `==`/`!=` are never
+ * flagged themselves ({@link UNSOUND_OVERLOAD_RE} excludes them), so this only
+ * unmasks — it can never introduce a false positive.
+ */
+function registerNullComparisons(env: Environment): void {
+  for (const t of NULL_GUARD_TYPES) {
+    try { env.registerOperator(`${t} == null`, () => false); } catch { /* already/invalid — ignore */ }
+    try { env.registerOperator(`null == ${t}`, () => false); } catch { /* already/invalid — ignore */ }
+  }
+}
 
 /**
  * A `no such overload` fault for an ARITHMETIC (`+ - * / %`) or ORDERING
@@ -213,13 +252,14 @@ function buildTypedEnv(
       limits: DEFAULT_LIMITS,
     });
     registerStdLib(env, () => new Date(0));
+    registerNullComparisons(env);
     for (const root of SCOPE_ROOTS) {
       try { env.registerVariable(root, 'map'); } catch { /* duplicate — ignore */ }
     }
     // Fields are bound bare at top level; a name that collides with a root
     // (unlikely) is skipped by the duplicate guard.
     for (const [name, t] of Object.entries(fieldCelTypes)) {
-      try { env.registerVariable(name, t); } catch { /* duplicate / reserved — ignore */ }
+      try { env.registerVariable(name, celTypeName(t)); } catch { /* duplicate / reserved — ignore */ }
     }
     return env;
   }
@@ -229,8 +269,9 @@ function buildTypedEnv(
     limits: DEFAULT_LIMITS,
   });
   registerStdLib(env, () => new Date(0));
+  registerNullComparisons(env);
   const fields: Record<string, string> = {};
-  for (const [name, t] of Object.entries(fieldCelTypes)) fields[name] = t;
+  for (const [name, t] of Object.entries(fieldCelTypes)) fields[name] = celTypeName(t);
   try { env.registerType('OsRecordScope', { fields }); } catch { /* invalid field name — ignore */ }
   // The record namespaces carry the typed struct; every other root stays a
   // `map` (dyn members) so a reference through it never faults.
@@ -277,15 +318,26 @@ function offendingField(
  * as a NON-blocking warning.
  *
  * Soundness (the ADR-0032 design law — never flag what the runtime tolerates):
- *  - Number / currency / percent / date / datetime fields are declared `dyn`,
- *    because the runtime rescues every mixed case for them — `registerOperator`
- *    for `double`×`int` arithmetic and the string-hydration retry for
- *    numeric-string / ISO-date values — so they can never fault here.
+ *  - Number / currency / percent fields are declared `dyn`, because the runtime
+ *    rescues every mixed case for them — `registerOperator` for `double`×`int`
+ *    arithmetic and the string-hydration retry for numeric strings — so they can
+ *    never fault here.
+ *  - `date`/`datetime` fields are `timestamp`, but ONLY ARITHMETIC (`+ − * / %`)
+ *    against a NUMBER is flagged (#3306): `date − date + 1`, `date + n`, `today()
+ *    + 30` all null at runtime and never recover (a date string is not numeric,
+ *    so hydration can't rescue it). Ordering (`date < today()` → Timestamp<Timestamp
+ *    overload; `date < "2026-01-01"` → runtime string-lex), equality (excluded by
+ *    {@link UNSOUND_OVERLOAD_RE}), and concatenation (`"Due: " + date` → runtime
+ *    string+string) are all runtime-tolerated, so they are never flagged. Two
+ *    date fields (`date − date` → Duration, `date + date` → runtime string concat)
+ *    also aren't flagged — only date/duration paired with a NUMBER.
  *  - Equality (`==` / `!=`) is excluded ({@link UNSOUND_OVERLOAD_RE}): a
  *    heterogeneous equality is runtime-safe.
  *
  * Returns the operand types, the faulting operator, the concrete operand CEL
- * type, and (best-effort) the offending field — or `null` when type-sound.
+ * type, the (best-effort) offending field, and a `category` — `'date-arith'`
+ * (a hard error: always nulls) vs `'type-mismatch'` (an advisory string/bool
+ * warning) — or `null` when type-sound.
  *
  * `scope` selects how fields are bound: `'record'` (default) for
  * `record.<field>` sites; `'flattened'` for bare-field flow/automation
@@ -295,28 +347,40 @@ export function firstTypeMismatch(
   source: string,
   fieldCelTypes: Readonly<Record<string, FieldCelType>>,
   scope: 'record' | 'flattened' = 'record',
-): { operator: string; operands: string; celType: FieldCelType; field: string | null } | null {
+): { operator: string; operands: string; celType: FieldCelType; field: string | null; category: 'date-arith' | 'type-mismatch' } | null {
   if (typeof source !== 'string' || !source.trim()) return null;
   // An all-`dyn` record can never fault an overload — skip the parse entirely.
-  if (!Object.values(fieldCelTypes).some((t) => t === 'string' || t === 'bool')) return null;
+  if (!Object.values(fieldCelTypes).some((t) => t === 'string' || t === 'bool' || t === 'timestamp')) return null;
   try {
+    // A null-guarded numeric branch (`cond ? n : null`) faults cel-js's ternary
+    // unifier *before* the check reaches an inner date-arith overload; rewrite it
+    // first (same pass the runtime uses) so the real fault surfaces (#3306).
     const env = buildTypedEnv(fieldCelTypes, scope);
-    const result = env.parse(source).check?.() as
+    const result = env.parse(rewriteNullableTernary(source)).check?.() as
       | { valid?: boolean; error?: { message?: string } }
       | undefined;
     if (!result || result.valid !== false) return null;
     const m = UNSOUND_OVERLOAD_RE.exec(result.error?.message ?? '');
     if (!m) return null;
     const operator = m[2];
+    const operands = `${m[1]} ${operator} ${m[3]}`;
+    // #3306 — date/duration ARITHMETIC against a number: always nulls, hard error.
+    if (ARITH_OPS.has(operator)
+      && ((DATE_CEL_TYPES.has(m[1]) && NUMERIC_CEL_TYPES.has(m[3]))
+        || (NUMERIC_CEL_TYPES.has(m[1]) && DATE_CEL_TYPES.has(m[3])))) {
+      return {
+        operator, operands, celType: 'timestamp', category: 'date-arith',
+        field: offendingField(source, fieldCelTypes, 'timestamp', scope),
+      };
+    }
+    // #1928 — text/boolean field in arithmetic/ordering against a number: warning.
     const celType: FieldCelType | null =
       m[1] === 'string' || m[1] === 'bool' ? (m[1] as FieldCelType)
       : m[3] === 'string' || m[3] === 'bool' ? (m[3] as FieldCelType)
       : null;
     if (!celType) return null;
     return {
-      operator,
-      operands: `${m[1]} ${operator} ${m[3]}`,
-      celType,
+      operator, operands, celType, category: 'type-mismatch',
       field: offendingField(source, fieldCelTypes, celType, scope),
     };
   } catch {
@@ -437,6 +501,95 @@ function rememberRewrite(source: string, rewritten: string): void {
   temporalRewriteCache.set(source, rewritten);
 }
 
+/** True when `node` is the CEL `null` literal (`{ op: 'value', args: null }`). */
+function isNullLiteral(node: unknown): boolean {
+  return isCelNode(node) && node.op === 'value' && node.args === null;
+}
+
+/** True when `node` is already a `dyn(...)` call — so the wrap is idempotent. */
+function isDynCall(node: unknown): boolean {
+  return isCelNode(node) && node.op === 'call'
+    && Array.isArray(node.args) && node.args[0] === 'dyn';
+}
+
+/** Wrap a branch in `dyn(...)` so a concrete-typed branch unifies with `null`. */
+function wrapInDyn(node: CelNode): CelNode {
+  return { op: 'call', args: ['dyn', [node]] };
+}
+
+/**
+ * #3306 — make the blessed null-guard idiom `cond ? <value> : null` compile and
+ * evaluate. cel-js's ternary type-unifier requires both branches to share a type,
+ * and a concrete `int`/`double`/`string` branch does NOT unify with `null` — so
+ * even `true ? 5 : null` faults *"Ternary branches must have the same type"* and
+ * the whole formula silently evaluates to null. But a `Field.formula` is inherently
+ * nullable — `guard ? value : null` is the canonical "compute value, else blank"
+ * shape (and the catalog blesses both ternary and `== null`). We restore it by
+ * wrapping the non-null branch in `dyn(...)`: `dyn(x)` returns `x` unchanged at
+ * runtime and only relaxes its STATIC type to `dyn`, which unifies with `null`.
+ *
+ * The rewrite is:
+ *   - **null-only** — fires ONLY when exactly one ternary branch is a `null`
+ *     literal, so a genuine mismatch (`cond ? "a" : 5`) is left to error as before;
+ *   - **value-preserving** — `dyn(x)` never changes the runtime value, and the
+ *     wrapped branch's own sub-expression is still type-checked (an inner
+ *     date-arith fault still surfaces — the soundness gate relies on this);
+ *   - **idempotent** — a branch already `dyn(...)` (or itself `null`) is not
+ *     re-wrapped, and nested ternaries are handled by the recursive walk.
+ *
+ * Returns the (possibly rewritten) source; only reserializes when a rewrite
+ * actually happened. Memoized; a parse fault returns the source unchanged.
+ */
+export function rewriteNullableTernary(source: string): string {
+  if (typeof source !== 'string' || !source.trim()) return source;
+  const cached = nullableTernaryCache.get(source);
+  if (cached !== undefined) return cached;
+  // Cheap gate: a rewrite needs a ternary AND a `null` literal branch.
+  if (!source.includes('?') || !source.includes('null')) {
+    rememberNullableRewrite(source, source);
+    return source;
+  }
+  let ast: unknown;
+  try {
+    ast = (recordScopeEnv ??= buildScopedEnv([])).parse(source).ast;
+  } catch {
+    rememberNullableRewrite(source, source);
+    return source;
+  }
+  let changed = false;
+  const visit = (node: unknown): void => {
+    if (!isCelNode(node)) return;
+    if (node.op === '?:' && Array.isArray(node.args) && node.args.length === 3) {
+      const args = node.args as unknown[];
+      const left = args[1];
+      const right = args[2];
+      // Exactly one branch is `null` → wrap the other so the pair unifies to `dyn`.
+      // Skip when the non-null branch is already `dyn(...)` or itself a null literal.
+      if (isNullLiteral(right) && !isNullLiteral(left) && isCelNode(left) && !isDynCall(left)) {
+        args[1] = wrapInDyn(left); changed = true;
+      } else if (isNullLiteral(left) && !isNullLiteral(right) && isCelNode(right) && !isDynCall(right)) {
+        args[2] = wrapInDyn(right); changed = true;
+      }
+    }
+    if (Array.isArray(node.args)) for (const child of node.args) visit(child);
+  };
+  visit(ast);
+  const out = changed ? serialize(ast as Parameters<typeof serialize>[0]) : source;
+  rememberNullableRewrite(source, out);
+  return out;
+}
+
+/** Bounded memo of source → null-guard-rewritten source (#3306). */
+const nullableTernaryCache = new Map<string, string>();
+const NULLABLE_TERNARY_CACHE_MAX = 500;
+function rememberNullableRewrite(source: string, rewritten: string): void {
+  if (nullableTernaryCache.size >= NULLABLE_TERNARY_CACHE_MAX) {
+    const first = nullableTernaryCache.keys().next().value;
+    if (first !== undefined) nullableTernaryCache.delete(first);
+  }
+  nullableTernaryCache.set(source, rewritten);
+}
+
 /** Coerce cel-js's BigInt-flavored return into spec-friendly JS values. */
 function coerce(value: unknown): unknown {
   if (typeof value === 'bigint') {
@@ -541,7 +694,10 @@ export const celEngine: DialectEngine = {
       // We use a wall-clock now() here purely for parse-time stdlib
       // type-checking; the function is never actually called.
       const env = buildEnv(() => new Date(0));
-      const compiled = env.parse(source);
+      // #3306 — accept the null-guard idiom `cond ? <value> : null`, which cel-js's
+      // ternary unifier otherwise rejects (`int`/`double`/`string` ≠ `null`). Same
+      // rewrite the runtime uses, so build and eval agree on what is valid.
+      const compiled = env.parse(rewriteNullableTernary(source));
       // Surface check errors eagerly. cel-js's `check()` returns a
       // `TypeCheckResult` object (`{ valid, type?, error? }`) — NOT an array —
       // so the type fault (including `found no matching overload for 'PRIOR(dyn)'`
@@ -590,7 +746,10 @@ export const celEngine: DialectEngine = {
       // temporal function (`date(record.d) == today()`), so a `Field.date` string
       // matches the Timestamp instead of silently never equalling it. No-op (and
       // no reserialize) for any source without such a comparison.
-      const evalSource = rewriteTemporalEquality(source);
+      // #3306 — then relax the null-guard idiom `cond ? <value> : null` so a
+      // nullable numeric/string formula evaluates instead of faulting cel-js's
+      // ternary unifier. Both rewrites are no-ops for sources that don't need them.
+      const evalSource = rewriteNullableTernary(rewriteTemporalEquality(source));
       try {
         const raw = env.evaluate(evalSource, scope);
         return { ok: true, value: coerce(raw) as T };

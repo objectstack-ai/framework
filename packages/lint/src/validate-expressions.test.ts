@@ -178,6 +178,47 @@ describe('validateStackExpressions (ADR-0032 build-time)', () => {
       expect(issues).toHaveLength(0);
     });
 
+    // #3306 — a formula field doing date arithmetic type-checks clean (dyn operands)
+    // but nulls at runtime. The stack gate must turn it RED with a corrective
+    // message — this is the exact shape that shipped in the `hr` template.
+    it('flags a formula field that does date arithmetic (the shipped time_off.days bug)', () => {
+      const issues = validateStackExpressions({
+        objects: [{
+          name: 'hr_time_off_request',
+          fields: {
+            start_date: { type: 'date' },
+            end_date: { type: 'date' },
+            days: {
+              type: 'formula', name: 'days',
+              formula: 'record.start_date != null && record.end_date != null ? (record.end_date - record.start_date) + 1 : null',
+            },
+          },
+        }],
+      });
+      expect(issues).toHaveLength(1);
+      expect(issues[0].severity).toBe('error');
+      expect(issues[0].where).toContain("field 'days' formula");
+      expect(issues[0].message).toMatch(/date arithmetic/i);
+      expect(issues[0].message).toMatch(/daysBetween/);
+    });
+
+    it('accepts the daysBetween rewrite of that formula', () => {
+      const issues = validateStackExpressions({
+        objects: [{
+          name: 'hr_time_off_request',
+          fields: {
+            start_date: { type: 'date' },
+            end_date: { type: 'date' },
+            days: {
+              type: 'formula', name: 'days',
+              formula: 'record.start_date != null && record.end_date != null ? daysBetween(record.start_date, record.end_date) + 1 : null',
+            },
+          },
+        }],
+      });
+      expect(issues).toHaveLength(0);
+    });
+
     it('does NOT flag bare references in a flow condition (flattened scope)', () => {
       const issues = validateStackExpressions({
         objects: [{ name: 'crm_opportunity', fields: { stage: { type: 'select' }, amount: { type: 'currency' } } }],

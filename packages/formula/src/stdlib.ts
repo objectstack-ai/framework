@@ -202,6 +202,14 @@ export function registerStdLib(
     // ── Numbers ──────────────────────────────────────────────────────────
     .registerFunction('abs(dyn): double', (x: unknown) => Math.abs(Number(x)))
     .registerFunction('round(dyn): int', (x: unknown) => BigInt(Math.round(Number(x))))
+    // `floor`/`ceil` round toward −∞ / +∞ (NOT toward zero like integer division),
+    // so `floor(-1.2) == -2`, `ceil(-1.2) == -1`. Registered because they are
+    // universally-expected math primitives that authors (and LLMs) reach for by
+    // reflex — omitting them makes `floor(...)` fault and the formula silently
+    // null (#3306). Return `int` to match `round`, coercing the arg with
+    // `Number(...)` (a record number arrives as cel-js `double`).
+    .registerFunction('floor(dyn): int', (x: unknown) => BigInt(Math.floor(Number(x))))
+    .registerFunction('ceil(dyn): int', (x: unknown) => BigInt(Math.ceil(Number(x))))
     // min/max return the smaller/larger operand verbatim (type preserved) rather
     // than a coerced copy, so `min(record.a, record.b)` keeps int-ness when both
     // are ints. Comparison is numeric.

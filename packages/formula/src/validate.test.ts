@@ -269,6 +269,70 @@ describe('validateExpression (ADR-0032)', () => {
     });
   });
 
+  // #3306 — date arithmetic (`date − date + 1`, `date + n`) type-checks clean (the
+  // operands are `dyn` at compile) but ALWAYS nulls at runtime and never recovers,
+  // so — unlike the advisory text/bool warning — it is a HARD ERROR that blocks the
+  // build. Only arithmetic is flagged; ordering / equality / concatenation of a
+  // date field are runtime-tolerated and stay clean (the design law).
+  describe('date-arithmetic errors (#3306)', () => {
+    const schema = {
+      objectName: 'hr_time_off_request',
+      fields: ['start_date', 'end_date', 'hire_date', 'note'] as const,
+      fieldTypes: { start_date: 'date', end_date: 'date', hire_date: 'datetime', note: 'text' },
+      scope: 'record',
+    } as const;
+
+    it('errors on `date − date + n` — the shipped `time_off.days` bug', () => {
+      const r = validateExpression('value', '(record.end_date - record.start_date) + 1', schema);
+      expect(r.ok).toBe(false);
+      expect(r.errors).toHaveLength(1);
+      expect(r.errors[0].message).toMatch(/date arithmetic/i);
+      expect(r.errors[0].message).toMatch(/daysBetween/);
+    });
+
+    it('errors even when the arithmetic is behind a `!= null` guard (the real template shape)', () => {
+      // The `!= null` guard on a date field must not mask the inner arithmetic fault.
+      const r = validateExpression(
+        'value',
+        'record.start_date != null && record.end_date != null ? (record.end_date - record.start_date) + 1 : null',
+        schema,
+      );
+      expect(r.ok).toBe(false);
+      expect(r.errors[0].message).toMatch(/date arithmetic/i);
+    });
+
+    it('errors on `date + n` (author meant `addDays`)', () => {
+      expect(validateExpression('value', 'record.hire_date + 30', schema).ok).toBe(false);
+    });
+
+    it('does NOT flag runtime-tolerated date uses (ordering, string-literal, equality, concat)', () => {
+      // Ordering vs a temporal fn → Timestamp<Timestamp overload; vs a string literal
+      // → runtime string-lex (correct for ISO dates); equality → #3183; concat →
+      // runtime string+string. None of these null at runtime, so none is flagged.
+      for (const src of [
+        'record.end_date < today()',
+        'record.end_date <= daysFromNow(60)',
+        'record.end_date < "2026-01-01"',
+        'record.end_date == today()',
+        '"Due: " + record.end_date',
+        'record.end_date - record.start_date',          // → Duration, no further arith
+      ]) {
+        const r = validateExpression('value', src, schema);
+        expect(r.errors, `should be clean: ${src}`).toHaveLength(0);
+      }
+    });
+
+    it('accepts the catalog-correct rewrite that replaces the broken form', () => {
+      const r = validateExpression(
+        'value',
+        'record.start_date != null && record.end_date != null ? daysBetween(record.start_date, record.end_date) + 1 : null',
+        schema,
+      );
+      expect(r.ok).toBe(true);
+      expect(r.errors).toHaveLength(0);
+    });
+  });
+
   describe('introspection', () => {
     it('reports the dialect + scope for a field role', () => {
       expect(expectedDialect('predicate')).toBe('cel');
