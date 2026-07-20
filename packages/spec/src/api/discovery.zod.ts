@@ -289,6 +289,24 @@ export const WellKnownCapabilitiesSchema = lazySchema(() => z.object({
   export: z.boolean().describe('Whether the backend supports async export'),
   /** Whether the backend supports chunked (multipart) uploads */
   chunkedUpload: z.boolean().describe('Whether the backend supports chunked (multipart) uploads'),
+  /**
+   * Whether the backend exposes the atomic cross-object batch endpoint
+   * (`POST {basePath}/batch`, issue #1604 / ADR-0034 item 4): heterogeneous
+   * create/update/delete across objects that all commit or all roll back in a
+   * single transaction, with intra-batch `{ $ref: <opIndex> }` parent references.
+   *
+   * This lets a client decide **at connection time** whether to send an atomic
+   * batch or fall back to non-atomic client-side simulation — replacing the
+   * runtime probe (fire a `/batch` and read 404/405/501). `true` means the route
+   * is mounted AND the runtime engine can honour a transaction; a backend that
+   * would 404 (no route) or 501 (no `transaction()`) MUST report `false`
+   * (declared === enforced).
+   */
+  transactionalBatch: z.boolean().describe(
+    'Whether the backend exposes the atomic cross-object batch endpoint (POST {basePath}/batch, #1604/ADR-0034): '
+    + 'all ops commit or roll back together in one transaction. Lets clients skip non-atomic client-side simulation '
+    + 'instead of runtime-probing 404/405/501. True ⟺ the /batch route is mounted AND the runtime can honour a transaction.'
+  ),
 }).describe('Well-known capability flags for frontend intelligent adaptation'));
 
 export type WellKnownCapabilities = z.infer<typeof WellKnownCapabilitiesSchema>;

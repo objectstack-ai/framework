@@ -2382,6 +2382,75 @@ describe('discovery — routes.mcp (ADR-0036, #152)', () => {
 });
 
 // ──────────────────────────────────────────────────────────────────────────
+// discovery — capabilities.transactionalBatch (#3298 / #1604 / ADR-0034)
+//
+// The atomic cross-object batch bit must be broadcast so clients negotiate
+// declaratively instead of runtime-probing POST /batch for 404/405/501. The
+// rest-server producer ANDs the runtime-engine signal (from the protocol,
+// derived from `engine.transaction`) with whether IT mounts the route
+// (`api.enableBatch`) — declared === enforced.
+// ──────────────────────────────────────────────────────────────────────────
+describe('discovery — capabilities.transactionalBatch (#3298)', () => {
+  /**
+   * Build the /discovery handler for a server whose protocol advertises the
+   * given runtime batch support, under the given api config.
+   */
+  function discoveryHandler(opts: { runtimeTx?: boolean; api?: any } = {}) {
+    const server = createMockServer();
+    const protocol = createMockProtocol();
+    const capabilities =
+      opts.runtimeTx === undefined
+        ? undefined
+        : { transactionalBatch: { enabled: opts.runtimeTx } };
+    (protocol.getDiscovery as any) = vi.fn().mockResolvedValue({
+      routes: { data: '', metadata: '' },
+      ...(capabilities ? { capabilities } : {}),
+    });
+    const rest = new RestServer(
+      server as any,
+      protocol as any,
+      { api: opts.api ?? { requireAuth: false } } as any,
+    );
+    rest.registerRoutes();
+    const entry = rest.getRouteManager().get('GET', '/api/v1/discovery');
+    if (!entry) throw new Error('discovery route not registered');
+    return entry.handler as (req: any, res: any) => Promise<void>;
+  }
+
+  async function invoke(handler: (req: any, res: any) => Promise<void>) {
+    let body: any;
+    const res: any = { json: (b: any) => { body = b; }, status: () => res };
+    await handler({ params: {} }, res);
+    return body;
+  }
+
+  it('advertises transactionalBatch=true when the runtime supports it and /batch is mounted (default)', async () => {
+    const body = await invoke(discoveryHandler({ runtimeTx: true }));
+    expect(body.capabilities.transactionalBatch.enabled).toBe(true);
+    // The description is carried so the capability is self-documenting.
+    expect(body.capabilities.transactionalBatch.description).toContain('POST {basePath}/batch');
+  });
+
+  it('reports transactionalBatch=false when api.enableBatch is off — the /batch route is not mounted', async () => {
+    const body = await invoke(
+      discoveryHandler({ runtimeTx: true, api: { requireAuth: false, enableBatch: false } }),
+    );
+    expect(body.capabilities.transactionalBatch.enabled).toBe(false);
+  });
+
+  it('reports transactionalBatch=false when the runtime engine cannot honour a transaction', async () => {
+    const body = await invoke(discoveryHandler({ runtimeTx: false }));
+    expect(body.capabilities.transactionalBatch.enabled).toBe(false);
+  });
+
+  it('always populates the bit even if the protocol omitted capabilities (no declared-but-unpopulated gap)', async () => {
+    const body = await invoke(discoveryHandler({ /* protocol returns no capabilities */ }));
+    expect(body.capabilities).toBeDefined();
+    expect(body.capabilities.transactionalBatch.enabled).toBe(false);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────
 // Metadata translation — envelope unwrapping
 //
 // Regression guard for the Setup-app i18n gap: `getMetaItem` returns an

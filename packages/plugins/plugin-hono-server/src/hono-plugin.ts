@@ -690,6 +690,16 @@ export class HonoServerPlugin implements Plugin {
                 storage:       `${prefix}/storage`,
                 ui:            `${prefix}/ui`,
             },
+            capabilities: {
+                // This standalone Hono surface registers CRUD + auth only (see
+                // below) — it does NOT mount the cross-object `/batch` route,
+                // which ships with `@objectstack/rest`. `declared === enforced`
+                // (#3298): report `transactionalBatch: false` so a client never
+                // drops its non-atomic fallback against a backend that lacks the
+                // endpoint. When `@objectstack/rest` is mounted it serves its own
+                // discovery, which reports the real value from the runtime engine.
+                transactionalBatch: { enabled: false },
+            },
         };
 
         // Discovery endpoints

@@ -1422,6 +1422,15 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             search: registeredServices.has('search'),
             export: registeredServices.has('automation') || registeredServices.has('queue'),
             chunkedUpload: registeredServices.has('file-storage'),
+            // Atomic cross-object batch (#3298 / #1604 / ADR-0034 item 4): the
+            // REST /batch endpoint runs its ops inside `engine.transaction()`,
+            // which only opens a real (all-or-nothing) transaction when the
+            // engine exposes one — otherwise it degrades to a non-atomic
+            // passthrough. Advertise the capability iff the runtime engine can
+            // honour a transaction, so `declared === enforced` (Prime Directive
+            // #10). The rest-server producer ANDs this with `api.enableBatch` so
+            // a server that doesn't mount the route reports `false` at its layer.
+            transactionalBatch: typeof (this.engine as { transaction?: unknown })?.transaction === 'function',
         };
 
         // Convert flat booleans → hierarchical capability objects

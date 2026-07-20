@@ -709,6 +709,7 @@ describe('WellKnownCapabilitiesSchema', () => {
       search: true,
       export: true,
       chunkedUpload: true,
+      transactionalBatch: true,
     };
     expect(() => WellKnownCapabilitiesSchema.parse(caps)).not.toThrow();
   });
@@ -721,14 +722,26 @@ describe('WellKnownCapabilitiesSchema', () => {
       search: false,
       export: false,
       chunkedUpload: false,
+      transactionalBatch: false,
     });
     expect(caps.comments).toBe(false);
     expect(caps.chunkedUpload).toBe(false);
+    expect(caps.transactionalBatch).toBe(false);
   });
 
   it('should reject missing required fields', () => {
     expect(() => WellKnownCapabilitiesSchema.parse({ comments: true })).toThrow();
     expect(() => WellKnownCapabilitiesSchema.parse({})).toThrow();
+    // transactionalBatch is required — a payload missing only it must fail so a
+    // producer can never silently omit the batch capability bit (#3298).
+    expect(() => WellKnownCapabilitiesSchema.parse({
+      comments: true,
+      automation: true,
+      cron: true,
+      search: true,
+      export: true,
+      chunkedUpload: true,
+    })).toThrow();
   });
 
   it('should reject non-boolean values', () => {
@@ -739,6 +752,7 @@ describe('WellKnownCapabilitiesSchema', () => {
       search: true,
       export: true,
       chunkedUpload: true,
+      transactionalBatch: true,
     })).toThrow();
   });
 
@@ -750,6 +764,7 @@ describe('WellKnownCapabilitiesSchema', () => {
     expect(shape.search.description).toBeDefined();
     expect(shape.export.description).toBeDefined();
     expect(shape.chunkedUpload.description).toBeDefined();
+    expect(shape.transactionalBatch.description).toBeDefined();
   });
 });
 
