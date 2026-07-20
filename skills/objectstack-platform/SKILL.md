@@ -3,8 +3,8 @@ name: objectstack-platform
 description: >
   Bootstrap, configure, extend, and operate ObjectStack runtimes. Covers
   project setup (`defineStack`, drivers, adapters, scaffolding), plugin and
-  service development (PluginContext, DI, kernel hooks like `kernel:ready`
-  and `data:*`), and operations (CLI commands, migrations, deployment, test
+  service development (PluginContext, DI, kernel hooks like `kernel:ready`),
+  and operations (CLI commands, migrations, deployment, test
   harnesses via LiteKernel). Use when the user is writing
   `objectstack.config.ts`, building a plugin or driver, wiring a framework
   adapter, running `os` CLI commands, or planning deployment. Do not use for
@@ -12,10 +12,10 @@ description: >
   objectstack-query); data lifecycle hooks (beforeInsert / afterUpdate)
   belong in objectstack-data — only kernel / service-level events live here.
 license: Apache-2.0
-compatibility: Requires @objectstack/spec v4+, @objectstack/core v4+, Node 18+, pnpm 8+
+compatibility: Requires @objectstack/spec 16.x and @objectstack/core 16.x (Zod v4 schemas), Node 18+
 metadata:
   author: objectstack-ai
-  version: "1.1"
+  version: "1.2"
   domain: platform
   tags: project, defineStack, driver, adapter, plugin, kernel, service, DI, lifecycle, cli, deploy, ops
 ---
@@ -39,10 +39,10 @@ they live in one skill.
 ## When to Use This Skill
 
 - Creating a **new ObjectStack project** from scratch.
-- Choosing the right **project template** (minimal-api, full-stack, plugin).
+- Choosing the right **project template** (blank, todo, compliance, content, contracts, procurement).
 - Writing or modifying **`objectstack.config.ts`** (`defineStack()` config).
-- Selecting a **database driver** (Memory, SQL, Turso).
-- Integrating with a **web framework** (Hono, Express, Fastify, Next.js, etc.).
+- Selecting a **database driver** (Memory, SQL, MongoDB).
+- Integrating with a **web framework** (Hono via `@objectstack/hono` / `@objectstack/plugin-hono-server`).
 - Understanding the **runtime boot sequence** and plugin loading order.
 - Setting up **multi-app composition** with `composeStacks()`.
 - Answering **"how do I get started?"** questions.
@@ -54,35 +54,32 @@ they live in one skill.
 ```
 What are you building?
 │
-├── A simple REST API or backend service?
-│   └── ✅ minimal-api
-│       • 1 object, REST endpoints, in-memory driver
-│       • Fastest path to a running API
+├── Starting from scratch / learning the platform?
+│   └── ✅ blank (default)
+│       • Bundled with create-objectstack — works offline
+│       • One example object, in-memory driver, Hono server
 │
-├── A full business application with UI?
-│   └── ✅ full-stack
-│       • Multiple objects, views, apps, auth
-│       • Studio UI included
-│       • CRM-like starter with relationships
+├── A small task app to study end-to-end patterns?
+│   └── ✅ todo
 │
-└── A reusable extension for other projects?
-    └── ✅ plugin
-        • Plugin scaffold with onInstall/onEnable/onDisable
-        • Exports objects that other apps can import
-        • Designed for the marketplace
+└── A domain starter with richer metadata?
+    └── ✅ compliance | content | contracts | procurement
+        • Fetched remotely from the objectstack-ai/templates repo
 ```
 
 ### Scaffolding Command
 
 ```bash
-# Interactive — prompts for name, template, package manager
+# Interactive — prompts for name and template
 npx create-objectstack
 
-# Direct — skip prompts
-npx create-objectstack my-app --template full-stack
+# Direct — skip prompts (blank is the default template)
+npx create-objectstack my-app --template todo
 ```
 
-Templates: `minimal-api` | `full-stack` | `plugin`
+Templates: `blank` (default, bundled) | `todo` | `compliance` | `content` |
+`contracts` | `procurement` (all except `blank` are fetched remotely from
+`objectstack-ai/templates`)
 
 ---
 
@@ -139,11 +136,11 @@ CRM-style layout:
 | By-type directories | `src/{objects,views,pages,actions,flows,...}` | Domain-per-folder layout with barrel exports |
 | Typed aggregates | `src/*/index.ts` | Export `allFlows` / `allAgents` / `allSkills` typed arrays |
 | Runtime capabilities | `requires: ['ai','automation','analytics','auth','ui','approvals','sharing']` | Declare opt-in capabilities explicitly |
-| Security assembly | `src/profiles/*` + `src/sharing/*` | Compose `permissions`, `sharingRules`, and `roles` in stack root |
+| Security assembly | `src/profiles/*` + `src/sharing/*` | Compose `permissions` and `sharingRules` in stack root |
 | Localization assembly | `src/translations/*` + `i18n` | Keep per-locale files and central bundle registration |
 
 Use this as the default template for “metadata application” requests before
-simplifying to minimal-api.
+simplifying to a blank-style minimal stack.
 
 ---
 
@@ -186,18 +183,26 @@ export default defineStack({
 ### Full Configuration Reference
 
 `defineStack()` accepts an `ObjectStackDefinitionInput`. Each top-level key
-holds a collection of one metadata kind — `objects`, `views`, `apps`,
-`pages`, `dashboards`, `reports`, `actions`, `flows`, `workflows`,
-`approvals`, `agents`, `ragPipelines`, `hooks`, `apis`, `webhooks`,
-`roles`, `permissions`, `sharingRules`, `policies`, `themes`,
-`translations`, `i18n`, `datasources`, `data` (seed), `plugins`,
-`devPlugins`, `manifest`, `objectExtensions`, `mappings`,
-`analyticsCubes`, `connectors`.
+holds a collection of one metadata kind — `manifest`, `objects`,
+`objectExtensions`, `views`, `apps`, `portals`, `pages`, `dashboards`,
+`reports`, `datasets`, `actions`, `themes`, `flows`, `jobs`,
+`emailTemplates`, `docs`, `books`, `positions`, `permissions`,
+`capabilities`, `sharingRules`, `apis`, `webhooks`, `api`, `agents`,
+`tools`, `skills`, `hooks`, `functions`, `mappings`, `analyticsCubes`,
+`connectors`, `data` (seed), `datasources`, `datasourceMapping`,
+`translations`, `i18n`, `plugins`, `devPlugins`, `requires`, `tiers`.
+
+There is deliberately **no** top-level `workflows` or `approvals` collection:
+an approval is authored as a flow with Approval nodes (ADR-0019), and record
+state machines are a `state_machine` validation rule on each object
+(ADR-0020). Unknown keys are **silently stripped** by strict parsing — a
+phantom key like `roles:` or `policies:` is a no-op, not an error.
 
 For the exact Zod shape — including which keys are optional and what types
 the collection items take — read
 `node_modules/@objectstack/spec/src/stack.zod.ts`
-(`ObjectStackDefinitionInputSchema`). Each collection's item shape lives in
+(`ObjectStackDefinitionSchema`; the input type is
+`ObjectStackDefinitionInput`). Each collection's item shape lives in
 its own domain folder (`data/object.zod.ts`, `ui/view.zod.ts`, …).
 
 ### Map Format (Key → Name)
@@ -248,7 +253,7 @@ export default defineStack({
 `defineStack()` validates by default (`strict: true`):
 
 1. **Zod schemas** — field names, types, enums
-2. **Cross-references** — views/actions/workflows reference defined objects
+2. **Cross-references** — views/actions/flows reference defined objects
 3. **Seed data** — dataset objects exist in the definition
 
 To disable (advanced — e.g., objects provided by another plugin):
@@ -310,9 +315,11 @@ Drivers are the storage layer. Pick based on your environment:
 
 | Driver | Package | Best For | Notes |
 |:-------|:--------|:---------|:------|
-| **Memory** | `@objectstack/driver-memory` | Dev, testing, prototyping | Data lost on restart (unless persistence adapter used) |
-| **SQL** | `@objectstack/driver-sql` | Production (PostgreSQL, MySQL, SQLite) | Uses Knex.js under the hood |
-| **Turso** | `@objectstack/driver-turso` | Edge, serverless, multi-tenant | LibSQL/Turso cloud, per-tenant databases |
+| **Memory** | `@objectstack/driver-memory` | Dev, testing, prototyping | `InMemoryDriver` — data lost on restart |
+| **SQL** | `@objectstack/driver-sql` | Production (PostgreSQL, MySQL, SQLite) | `SqlDriver` — Knex.js under the hood (`pg` / `mysql` / `better-sqlite3` clients) |
+| **MongoDB** | `@objectstack/driver-mongodb` | Production (document store) | `MongoDBDriver` |
+| **SQLite WASM** | `@objectstack/driver-sqlite-wasm` | Browser / WebContainer | `SqliteWasmDriver` — in-process, no server |
+| **Turso** | `@objectstack/driver-turso` | Edge, serverless, multi-tenant | **Cloud / EE only** — ships with the ObjectStack cloud / enterprise distribution, not the open framework. The open-core CLI recognizes `libsql://` URLs but **fails loudly** (`UnsupportedDriverError`) |
 
 ### Usage Pattern
 
@@ -336,35 +343,28 @@ new DriverPlugin(new SqlDriver({
   client: 'pg',
   connection: process.env.DATABASE_URL,
 }))
-
-// Edge / Serverless (Turso)
-import { TursoDriver } from '@objectstack/driver-turso';
-new DriverPlugin(new TursoDriver({
-  url: process.env.TURSO_DATABASE_URL,
-  authToken: process.env.TURSO_AUTH_TOKEN,
-}))
 ```
 
 ---
 
 ## Adapter Selection Guide
 
-Adapters bridge ObjectStack to web frameworks. All expose the same REST API.
+The HTTP layer is Hono-based. Two packages exist:
 
-| Adapter | Package | Use When |
-|:--------|:--------|:---------|
-| **Hono** | `@objectstack/adapter-hono` | Default choice. Lightweight, edge-ready, web-standard. |
-| **Express** | `@objectstack/adapter-express` | Existing Express codebase. |
-| **Fastify** | `@objectstack/adapter-fastify` | Need Fastify's schema validation / plugin ecosystem. |
-| **Next.js** | `@objectstack/adapter-nextjs` | Full-stack React with App Router. |
-| **Nuxt** | `@objectstack/adapter-nuxt` | Vue.js / Nuxt projects. |
-| **NestJS** | `@objectstack/adapter-nestjs` | Enterprise Angular-style architecture. |
-| **SvelteKit** | `@objectstack/adapter-sveltekit` | Svelte projects. |
+| Package | Export | Use When |
+|:--------|:-------|:---------|
+| `@objectstack/hono` | `createHonoApp({ kernel, prefix })` | You own the server: embed ObjectStack routes in your own Hono app / deploy target. |
+| `@objectstack/plugin-hono-server` | `HonoServerPlugin` | ObjectStack owns the server: a kernel plugin that hosts the Hono app and opens the listening socket (this is what `os dev` / `os serve` register). |
+
+There are **no** `@objectstack/adapter-*` packages (no adapter-express /
+-fastify / -nextjs / -nuxt / -nestjs / -sveltekit). To integrate another
+framework, mount the Hono app (a web-standard `fetch` handler) or call the
+dispatcher yourself.
 
 ### Usage Pattern (Hono)
 
 ```typescript
-import { createHonoApp } from '@objectstack/adapter-hono';
+import { createHonoApp } from '@objectstack/hono';
 
 const app = createHonoApp({
   kernel,                    // ObjectKernel instance
@@ -374,32 +374,17 @@ const app = createHonoApp({
 export default app;          // Deploy to Cloudflare Workers, Deno, Bun, Node
 ```
 
-### Usage Pattern (Next.js App Router)
+### Architecture
 
-```typescript
-// app/api/[...objectstack]/route.ts
-import { createRouteHandler } from '@objectstack/adapter-nextjs';
-import { kernel } from '@/lib/objectstack';
-
-const handler = createRouteHandler({ kernel });
-
-export const GET = handler;
-export const POST = handler;
-export const PUT = handler;
-export const DELETE = handler;
-```
-
-### Pattern Across All Adapters
-
-Every adapter follows the same architecture:
+`createHonoApp` follows this architecture:
 
 1. Accept a `kernel` (ObjectKernel) instance
 2. Create an `HttpDispatcher` internally
 3. Mount explicit routes for auth, GraphQL, storage, discovery
-4. Delegate everything else to `dispatcher.dispatch()`
+4. Delegate everything else to the dispatcher
 
-This means **new routes added to HttpDispatcher work automatically in all
-adapters** without code changes.
+This means **new routes added to HttpDispatcher work automatically**
+without adapter code changes.
 
 ---
 
@@ -416,17 +401,20 @@ CLI: `os serve` / `os dev`
   1. Load .env files (NODE_ENV-based)
   2. Dynamic import of config file
   3. Create Runtime + ObjectKernel
-  4. Auto-detect and register plugins:
+  4. Auto-detect and register plugins (in this order):
      ├── ObjectQLPlugin (if objects defined)
      ├── DriverPlugin (memory in dev, SQL in prod)
      ├── AppPlugin (loads the defineStack bundle)
      ├── I18nServicePlugin (if translations/i18n defined)
+     ├── HonoServerPlugin (registered BEFORE AuthPlugin — the server must
+     │     exist for plugins that mount routes during init/start)
      ├── AuthPlugin
      ├── Split platform-app plugins (ADR-0048, optional/best-effort, after AuthPlugin):
      │     @objectstack/setup → createSetupAppPlugin   (first-run wizard)
-     │     @objectstack/studio → createStudioAppPlugin
      │     @objectstack/account → createAccountAppPlugin
-     ├── HonoServerPlugin
+     │     (@objectstack/studio is intentionally NOT default-loaded — the
+     │      Console, mounted at /_console/ by `--ui`, ships its own Studio
+     │      surface at /_console/studio/…)
      ├── RESTPlugin (auto-generated API)
      ├── DispatcherPlugin
      └── AIServicePlugin (cloud / EE only — reverse-mounted by a cloud host; absent in the open framework per cloud ADR-0025)
@@ -532,7 +520,7 @@ export default defineStack({
   data: [
     {
       object: 'task',
-      mode: 'upsert',              // 'upsert' | 'insert' | 'ignore' | 'replace'
+      mode: 'upsert',              // 'upsert' | 'insert' | 'update' | 'ignore' | 'replace'
       externalId: 'subject',       // Idempotency key for upsert matching
       records: [
         { subject: 'Learn ObjectStack', status: 'open', priority: 'high' },
@@ -547,6 +535,7 @@ export default defineStack({
 |:-----|:---------|
 | `upsert` (default) | Insert or update based on `externalId` match |
 | `insert` | Always insert (fails on duplicate) |
+| `update` | Only update found records; ignore new ones |
 | `ignore` | Insert if not exists, skip otherwise |
 | `replace` | Drop and re-insert all records |
 
@@ -559,9 +548,9 @@ Daily commands are covered in **Part 3 — Operations** below
 sheet for the bootstrap loop:
 
 ```bash
-npx create-objectstack my-app --template full-stack
-cd my-app && pnpm install
-os dev --ui          # dev server + Studio (auto-hops port if taken)
+npx create-objectstack my-app
+cd my-app && npm install
+os dev --ui          # dev server + Console at /_console/ (auto-hops port if taken)
 os validate          # metadata cross-reference checks
 os compile           # produce dist/ artifact
 os migrate plan      # preview metadata↔DB schema drift (additive sync never alters existing columns)
@@ -575,18 +564,26 @@ PORT=8080 os start   # production — pin the port explicitly (see Ports & netwo
 
 A minimal but complete project from scratch:
 
-**`package.json`**:
+**`package.json`** (mirrors the `blank` template):
 ```json
 {
   "name": "my-todo-app",
   "type": "module",
+  "scripts": {
+    "dev": "objectstack dev",
+    "start": "objectstack start",
+    "build": "objectstack build",
+    "validate": "objectstack validate"
+  },
   "dependencies": {
-    "@objectstack/spec": "^4.0.0",
-    "@objectstack/runtime": "^4.0.0",
-    "@objectstack/objectql": "^4.0.0",
-    "@objectstack/driver-memory": "^4.0.0",
-    "@objectstack/adapter-hono": "^4.0.0",
-    "@objectstack/cli": "^4.0.0"
+    "@objectstack/spec": "^16.0.0-rc.1",
+    "@objectstack/runtime": "^16.0.0-rc.1",
+    "@objectstack/driver-memory": "^16.0.0-rc.1",
+    "@objectstack/plugin-hono-server": "^16.0.0-rc.1"
+  },
+  "devDependencies": {
+    "@objectstack/cli": "^16.0.0-rc.1",
+    "typescript": "^6.0.0"
   }
 }
 ```
@@ -653,9 +650,9 @@ export default defineStack({
 ```bash
 # Run it
 os dev --ui
-# → Server at http://localhost:5174
-# → REST API at http://localhost:5174/api
-# → Studio UI at http://localhost:5174/studio
+# → Server at http://localhost:3000 (default port; dev auto-hops if taken)
+# → REST API at http://localhost:3000/api
+# → Console at http://localhost:3000/_console/
 ```
 
 ---
@@ -682,7 +679,7 @@ For comprehensive documentation with incorrect/correct examples:
 
 - **[Plugin Lifecycle](./rules/plugin-lifecycle.md)** — 3-phase lifecycle (init/start/destroy), execution order, complete examples
 - **[Service Registry](./rules/service-registry.md)** — DI container, factories, lifecycles (singleton/transient/scoped), core fallbacks
-- **[Hooks & Events](./rules/plugin-hooks-events.md)** — Plugin hooks reference (→ [objectstack-data](../objectstack-data/SKILL.md))
+- **[Hooks & Events](./rules/plugin-hooks-events.md)** — Kernel hooks & events reference (record-level lifecycle hooks → [objectstack-data](../objectstack-data/SKILL.md))
 
 ---
 
@@ -696,7 +693,7 @@ For comprehensive documentation with incorrect/correct examples:
 | **Service factories** | Singleton / Transient / Scoped | Direct instances only |
 | **Health monitoring** | Built-in per-plugin health checks | Not available |
 | **Graceful shutdown** | Timeout + rollback on failure | Basic destroy phase |
-| **Dependency resolution** | Topological sort + circular detection | Topological sort |
+| **Dependency resolution** | Topological sort + circular detection (throws) | Topological sort (throws on cycles) |
 | **Core fallbacks** | Auto-injects in-memory fallbacks | Not available |
 | **Config validation** | Zod schema validation per plugin | Not available |
 
@@ -804,23 +801,33 @@ See [rules/service-registry.md](./rules/service-registry.md) for factories and l
 ### Hook / Event System
 
 ```typescript
-// Register a hook handler
+// Register a kernel hook handler
 ctx.hook('kernel:ready', async () => {
   ctx.logger.info('System is ready!');
 });
 
-// Register data lifecycle hooks
-ctx.hook('data:beforeInsert', async (objectName, record) => {
-  if (objectName === 'task') {
-    record.created_at = new Date().toISOString();
-  }
+// React to a metadata hot-reload / publish
+ctx.hook('metadata:reloaded', async (payload?: { changed?: string[] }) => {
+  ctx.logger.info('Metadata reloaded', { changed: payload?.changed });
 });
 
 // Trigger a custom hook
 await ctx.trigger('my-plugin:initialized', { version: '1.0.0' });
 ```
 
-See [rules/hooks-events.md](./rules/plugin-hooks-events.md) for all 14 built-in hooks and patterns.
+Built-in kernel events: `kernel:ready`, `kernel:bootstrapped`,
+`kernel:listening`, `kernel:shutdown`, `app:seeded`, `metadata:reloaded`,
+`external.schema.drift`.
+
+> **⚠️ There are no `data:*` kernel hooks.** Record-level lifecycle logic
+> (beforeInsert / afterUpdate / …) runs on the **ObjectQL engine**, not the
+> kernel event bus — author it via the `hooks:` collection or
+> `ql.on('beforeInsert', 'task', async (ctx) => { … })` (see
+> **objectstack-data**). Because `ctx.hook()` accepts any string, a handler
+> registered for `'data:beforeInsert'` will register successfully and then
+> **silently never fire**. Kernel hooks are for platform lifecycle only.
+
+See [rules/plugin-hooks-events.md](./rules/plugin-hooks-events.md) for the kernel event list, payloads, and patterns.
 
 ### Logger
 
@@ -844,21 +851,20 @@ const state = kernel.getState(); // 'idle' | 'initializing' | 'running' | 'stopp
 ## Complete Plugin Example
 
 ```typescript
-// packages/plugins/plugin-audit/src/plugin.ts
+// src/plugins/audit.ts
 import type { Plugin, PluginContext } from '@objectstack/core';
 
 interface AuditEntry {
   timestamp: string;
-  operation: string;
-  object: string;
-  recordId?: string;
+  event: string;
+  detail?: Record<string, unknown>;
 }
 
 class AuditService {
   private log: AuditEntry[] = [];
 
-  record(entry: AuditEntry) {
-    this.log.push(entry);
+  record(event: string, detail?: Record<string, unknown>) {
+    this.log.push({ timestamp: new Date().toISOString(), event, detail });
   }
 
   getLog(): AuditEntry[] {
@@ -870,20 +876,18 @@ const AuditPlugin: Plugin = {
   name: 'com.example.audit',
   version: '1.0.0',
   type: 'plugin',
-  dependencies: ['com.objectstack.engine.objectql'],
 
   async init(ctx: PluginContext) {
-    // Phase 1: Register service and hooks
+    // Phase 1: Register service and kernel hooks
     const auditService = new AuditService();
     ctx.registerService('audit', auditService);
 
-    ctx.hook('data:afterInsert', async (objectName, _record, result) => {
-      auditService.record({
-        timestamp: new Date().toISOString(),
-        operation: 'insert',
-        object: objectName,
-        recordId: result?.id,
-      });
+    ctx.hook('kernel:ready', async () => {
+      auditService.record('kernel:ready');
+    });
+
+    ctx.hook('metadata:reloaded', async (payload?: { changed?: string[] }) => {
+      auditService.record('metadata:reloaded', { changed: payload?.changed });
     });
 
     ctx.logger.info('Audit plugin initialized');
@@ -902,6 +906,12 @@ const AuditPlugin: Plugin = {
 export default AuditPlugin;
 ```
 
+> To audit **record writes** (who inserted/updated which record), register
+> engine lifecycle hooks instead — e.g.
+> `ctx.getService('objectql').on('afterInsert', 'task', async (hookCtx) => …)`
+> in `start()`, or the declarative `hooks:` collection. See
+> **objectstack-data** for the engine hook contract.
+
 ---
 
 ## Using Plugins
@@ -911,7 +921,7 @@ import { ObjectKernel } from '@objectstack/core';
 import { ObjectQLPlugin } from '@objectstack/objectql';
 import { DriverPlugin } from '@objectstack/runtime';
 import { InMemoryDriver } from '@objectstack/driver-memory';
-import AuditPlugin from './plugin';
+import AuditPlugin from './plugins/audit';
 
 const kernel = new ObjectKernel();
 await kernel.use(new ObjectQLPlugin());
@@ -930,22 +940,28 @@ const audit = kernel.getService<AuditService>('audit');
 ```typescript
 import { describe, it, expect } from 'vitest';
 import { LiteKernel } from '@objectstack/core';
-import AuditPlugin from './plugin';
+import type { PluginContext } from '@objectstack/core';
+import AuditPlugin from './audit';
 
 describe('AuditPlugin', () => {
-  it('records insert events', async () => {
+  it('records kernel lifecycle events', async () => {
     const kernel = new LiteKernel({ logger: { level: 'silent' } });
     kernel.use(AuditPlugin);
-    await kernel.bootstrap();
 
-    // Simulate a data event
-    await kernel.context.trigger('data:afterInsert', 'task', {}, { id: '123' });
+    // `kernel.context` is protected — to fire events in a test, capture a
+    // PluginContext from a probe plugin instead.
+    let probe!: PluginContext;
+    kernel.use({ name: 'test.probe', init(ctx) { probe = ctx; } });
 
-    const audit = kernel.getService('audit');
-    const log = audit.getLog();
-    expect(log).toHaveLength(1);
-    expect(log[0].operation).toBe('insert');
-    expect(log[0].object).toBe('task');
+    await kernel.bootstrap();   // fires kernel:ready → recorded
+
+    // Simulate a metadata hot-reload announcement
+    await probe.trigger('metadata:reloaded', { changed: ['object/task'] });
+
+    const audit = kernel.getService<{ getLog(): { event: string }[] }>('audit');
+    const events = audit.getLog().map((e) => e.event);
+    expect(events).toContain('kernel:ready');
+    expect(events).toContain('metadata:reloaded');
 
     await kernel.shutdown();
   });
@@ -958,17 +974,18 @@ describe('AuditPlugin', () => {
 
 | Plugin Name | Service Key | Package |
 |:------------|:------------|:--------|
-| `com.objectstack.engine.objectql` | `objectql` | `@objectstack/objectql` |
+| `com.objectstack.engine.objectql` | `objectql` (also `data`) | `@objectstack/objectql` |
 | `com.objectstack.driver.*` | `driver.{name}` | `@objectstack/driver-*` |
 | `com.objectstack.auth` | `auth` | `@objectstack/plugin-auth` |
-| `com.objectstack.rest` | `rest` | `@objectstack/rest` |
+| `com.objectstack.rest.api` | — (registers no service) | `@objectstack/rest` |
 | `com.objectstack.metadata` | `metadata` | `@objectstack/metadata` |
-| `com.objectstack.realtime` | `realtime` | `@objectstack/service-realtime` |
-| `com.objectstack.cache` | `cache` | `@objectstack/service-cache` |
+| `com.objectstack.service.realtime` | `realtime` | `@objectstack/service-realtime` |
+| `com.objectstack.service.cache` | `cache` | `@objectstack/service-cache` |
+| `com.objectstack.server.hono` | — | `@objectstack/plugin-hono-server` → `HonoServerPlugin` |
 | `com.objectstack.setup` | — | `@objectstack/setup` → `createSetupAppPlugin` (ADR-0048 one-app pkg) |
 | `com.objectstack.studio` | — | `@objectstack/studio` → `createStudioAppPlugin` |
 | `com.objectstack.account` | — | `@objectstack/account` → `createAccountAppPlugin` |
-| `com.objectstack.cloud-connection` | — | `@objectstack/cloud-connection` → `createCloudConnectionPlugin` |
+| `com.objectstack.cloud.connection` | — | `@objectstack/cloud-connection` → `createCloudConnectionPlugin` |
 
 ---
 
@@ -1083,7 +1100,7 @@ capability gates (`requiresFeature` → `PUBLIC_AUTH_FEATURES`).
 # Part 3 — Operations: CLI, Testing, Deployment
 
 The `@objectstack/cli` package ships an `os` binary (alias: `objectstack`).
-Every project gets the same command surface — `pnpm install` does not need to
+Every project gets the same command surface — `npm install` does not need to
 be re-run when commands are added.
 
 ## Daily-loop commands
@@ -1091,11 +1108,11 @@ be re-run when commands are added.
 | Command | What it does |
 |:--------|:-------------|
 | `os init` | Scaffold a new project (alternative to `npx create-objectstack`) |
-| `os dev` | Start the dev server with hot metadata reload. `--fresh` = ephemeral clean DB + auto `--seed-admin`, which POSTs a sign-up after boot (default `admin@objectos.ai` / `admin123`; override with `--admin-email` / `--admin-password`). The seeded human is auto-promoted to **platform admin**, so Setup/Studio work on first login. |
-| `os studio` | Launch Studio UI against the local stack |
+| `os dev` | Start the dev server with hot metadata reload. `--seed-admin` (default **on** for plain `os dev`) seeds a loginable dev admin **in-process via the runtime** (env vars `OS_SEED_ADMIN*`) on an **empty** DB only — idempotent, never overwrites an existing account (default `admin@objectos.ai` / `admin123`; override with `--admin-email` / `--admin-password`; disable with `--no-seed-admin`). `--fresh` = ephemeral clean OS_HOME/DB, implies `--seed-admin`. The seeded admin is promoted to **platform admin**, so Setup/Studio work on first login. |
+| `os dev --ui` | Also mount the bundled Console portal at `/_console/` (there is no separate `os studio` command) |
 | `os validate` | Validate `objectstack.config.ts` — Zod protocol schema, CEL/predicate validation (`record.<field>` existence), and widget-binding integrity. Same gates as `os build`, no artifact emitted. See [Verify your work](#verify-your-work). |
 | `os lint` | Style/convention lint on metadata files |
-| `os info` | Print resolved stack info (env, drivers, adapter, plugin list) |
+| `os info` | Print a metadata summary of the config (objects, apps, and other collections; `--json`) |
 | `os doctor` | Diagnose common setup issues |
 
 ## Build & runtime
@@ -1105,7 +1122,7 @@ be re-run when commands are added.
 | `os build` | Compile TS metadata, bundle, and produce `dist/` |
 | `os compile` | Compile to portable JSON artifact (for runtime hydration) |
 | `os serve` | Serve a compiled stack in production mode |
-| `os start` | Production-grade boot (validates env, applies migrations, starts adapter) |
+| `os start` | Quick-start a server: auto-compiles `objectstack.config.ts` when no artifact is present, and falls back to an empty kernel with the Console + marketplace when there is no config at all. It does **not** validate env or apply migrations — run `os validate` / `os migrate apply` yourself |
 | `os generate <kind>` | Scaffold an object / view / flow / agent from a template |
 
 ## Verify your work
@@ -1173,10 +1190,9 @@ Port resolution is the same for `os dev` and `os start` (both spawn `os serve`):
 
 | Command | What it does |
 |:--------|:-------------|
-| `os data seed` | Run all `defineSeed()` entries scoped to current env |
-| `os data export` / `import` | Bulk import / export records as JSONL |
-| `os diff` | Show schema diff between local and target environment |
-| `os meta apply` | Apply metadata + data migrations to the target |
+| `os data create` / `get` / `query` / `update` / `delete` | Record-level CRUD against a running server (there is no `os data seed` / `export` / `import` — seed data in the `data:` collection loads automatically at boot) |
+| `os diff` | Compare two ObjectStack config files and detect breaking changes |
+| `os meta register` / `os meta resync` | Register (create/update) metadata on a target server / re-sync it (there is no `os meta apply`) |
 | `os migrate plan` / `os migrate apply` | Dry-run / apply physical-DB drift reconciliation from metadata (forward-only — no batch rollback; `os rollback` was removed) |
 
 ## Environments & deploy
@@ -1186,7 +1202,7 @@ Port resolution is the same for `os dev` and `os start` (both spawn `os serve`):
 | `os login` / `logout` / `whoami` | Auth against the ObjectStack cloud control plane |
 | `os environments list` / `create` / `switch` | Manage cloud environments (prod/staging/dev) |
 | `os register` | Register the local stack as a deployable target |
-| `os cloud …` | Cloud-specific subcommands (logs, metrics, status) |
+| `os cloud login` / `logout` / `whoami` | Cloud auth subcommands (these three only — there are no `os cloud logs/metrics/status`) |
 | `os package publish [dist/objectstack.json] [--env … --install --visibility org]` | Upload the compiled artifact as a versioned package to the cloud catalog (ADR-0008 P3) |
 | `os package install <manifest-id │ ./dist/objectstack.json> [--version │ --runtime http://localhost:3000]` | Install a package into a **running** runtime via its install-local endpoint. Catalog mode (by manifest id) or air-gapped local-artifact mode. Auths with the **target runtime's** session (`--email/--password` or `OS_RUNTIME_EMAIL`/`OS_RUNTIME_PASSWORD`), not the cloud login |
 
@@ -1202,49 +1218,64 @@ Port resolution is the same for `os dev` and `os start` (both spawn `os serve`):
 ## Testing pattern
 
 Use `LiteKernel` for unit / integration tests — it skips the cloud bits and
-plugin discovery, so tests run in milliseconds:
+plugin discovery, so tests run in milliseconds. Assemble the same plugins the
+CLI would auto-register (`use()` is synchronous and chainable):
 
 ```typescript
 import { describe, it, expect } from 'vitest';
 import { LiteKernel } from '@objectstack/core';
+import { ObjectQLPlugin } from '@objectstack/objectql';
+import { DriverPlugin, AppPlugin } from '@objectstack/runtime';
+import { InMemoryDriver } from '@objectstack/driver-memory';
 import stack from '../objectstack.config';
 
-describe('account hooks', () => {
-  it('defaults industry to "Other"', async () => {
-    const kernel = await LiteKernel.create({ stack });
-    const created = await kernel.api('account').create({ name: 'Acme' });
-    expect(created.industry).toBe('Other');
+describe('stack boot', () => {
+  it('registers the task object', async () => {
+    const kernel = new LiteKernel({ logger: { level: 'silent' } });
+    kernel
+      .use(new ObjectQLPlugin())
+      .use(new DriverPlugin(new InMemoryDriver()))
+      .use(new AppPlugin(stack));
+    await kernel.bootstrap();
+
+    const ql = kernel.getService<any>('objectql');
+    // query / mutate through the engine — see objectstack-query for the API
+    expect(ql).toBeDefined();
+
     await kernel.shutdown();
   });
 });
 ```
 
-- **Seed in tests:** call `kernel.seed(SeedData)` after create. See
-  **objectstack-data** for env-scoped fixtures (`env: ['test']`).
-- **Reset between tests:** prefer `await kernel.reset()` over recreating —
-  it's an order of magnitude faster.
-- **HTTP-level tests:** mount the adapter (Hono / Express) on a random
-  port and use `fetch`. The adapter is just middleware.
+- **Seed in tests:** declare fixtures in the stack's `data:` collection —
+  they load at boot. See **objectstack-data** for env-scoped fixtures
+  (`env: ['test']`).
+- **Reset between tests:** create a fresh `LiteKernel` per test — with the
+  in-memory driver a full bootstrap is cheap, and there is no `reset()`.
+- **HTTP-level tests:** mount `createHonoApp({ kernel })` from
+  `@objectstack/hono` and drive it with `app.request(...)` / `fetch`.
 
 ## Deployment targets
 
-| Target | Driver | Adapter | Notes |
-|:-------|:-------|:--------|:------|
-| Node.js server | `driver-postgres` / `driver-sqlite` | `adapter-hono` / `adapter-express` | Default — works anywhere Node runs |
-| Edge (Cloudflare Workers, Vercel Edge) | `driver-turso` / `driver-d1` | `adapter-hono` | Cold-start friendly; LiteKernel only |
-| Serverless (Lambda, Vercel functions) | `driver-postgres` (with pooler) | `adapter-nextjs` / `adapter-express` | Mind cold-start: prefer LiteKernel |
-| Browser / WebContainer | `driver-sqlite-wasm` | none (in-process) | Studio playground, demos |
+| Target | Driver | HTTP layer | Notes |
+|:-------|:-------|:-----------|:------|
+| Node.js server | `driver-sql` (`pg` / `mysql` / `better-sqlite3`) | `plugin-hono-server` / `@objectstack/hono` | Default — works anywhere Node runs |
+| Edge (Cloudflare Workers, Vercel Edge) | `driver-turso` (**cloud / EE only**) | `@objectstack/hono` | Cold-start friendly; LiteKernel only |
+| Serverless (Lambda, Vercel functions) | `driver-sql` (`pg` with pooler) / `driver-mongodb` | `@objectstack/hono` | Mind cold-start: prefer LiteKernel |
+| Browser / WebContainer | `driver-sqlite-wasm` | none (in-process) | Playground, demos |
 | Docker / Kubernetes | any | any | Use `os start` as the entrypoint; pin `PORT` and `EXPOSE` it (see [Ports & networking](#ports--networking)) |
 
 ## Health & observability
 
-- **Health endpoint:** the adapter auto-exposes `GET /healthz` and
-  `GET /readyz` when the kernel reports ready (see "Health Monitoring"
+- **Health endpoints:** the HTTP dispatcher exposes `GET /health` and
+  `GET /ready` under the API prefix (see "Health Monitoring"
   earlier in this skill).
-- **Logs:** plugins log via `ctx.logger`. Configure the sink in
-  `defineStack({ logging: { sink: 'pino' | 'console' | custom } })`.
-- **Metrics:** the kernel exposes a `metrics` service; install
-  `@objectstack/plugin-prometheus` for an OpenMetrics scrape endpoint.
+- **Logs:** plugins log via `ctx.logger`. Logger config is a **kernel
+  construction** option, not a `defineStack` key:
+  `new ObjectKernel({ logger: { level: 'info', format: 'json' } })`.
+- **Metrics:** use the kernel's built-ins — `kernel.getPluginMetrics()`
+  (per-plugin startup durations) and `await kernel.checkAllPluginsHealth()`.
+  There is no `metrics` service and no `@objectstack/plugin-prometheus`.
 
 ## Common ops pitfalls
 
@@ -1255,7 +1286,7 @@ describe('account hooks', () => {
 | better-auth `Invalid origin` 403 after a port/host change | Port or hostname out of sync with `OS_AUTH_URL` / `OS_TRUSTED_ORIGINS` — see [Ports & networking](#ports--networking) |
 | Migrations apply locally but not in cloud | `env` scoping on the dataset excludes the target environment |
 | Adapter 404s on auto-generated routes | `enable.apiEnabled: false` on the object, or missing `os build` |
-| LiteKernel test passes, ObjectKernel boot fails | Test missed a plugin dependency — list with `os info` |
+| LiteKernel test passes, ObjectKernel boot fails | Test missed a plugin the CLI auto-registers — compare your test's `use()` list against the `os dev` boot log |
 | Hot reload misses new objects | Barrel `src/objects/index.ts` not re-exporting — check the file |
 | Login works but **Setup / Studio missing** | The logged-in user isn't a platform admin. Setup/Studio are gated by `setup.access` / `studio.access` on `admin_full_access`, auto-granted only to the first registered **human** (`bootstrapPlatformAdmin`). The `usr_system` seed identity is skipped, so it can't steal the grant. Either sign up first (`--seed-admin`/`--fresh` does this) or check `sys_user_permission_set` for a cross-tenant (`organization_id = NULL`) `admin_full_access` link on your user. Don't edit nav code first. |
 

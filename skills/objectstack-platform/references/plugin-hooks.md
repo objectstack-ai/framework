@@ -1,6 +1,10 @@
 # Hook & Event System
 
-Complete guide for using hooks and events in ObjectStack plugins.
+Complete guide for using kernel hooks and events in ObjectStack plugins.
+
+> **Scope.** The kernel hook bus carries **platform lifecycle** events only.
+> Record-level data lifecycle (`beforeInsert` / `afterUpdate` / …) is a
+> different system — see [Data lifecycle hooks live elsewhere](#data-lifecycle-hooks-live-elsewhere).
 
 ## Hook Registration
 
@@ -8,16 +12,14 @@ Register hook handlers in `init()` or `start()`:
 
 ```typescript
 async init(ctx: PluginContext) {
-  // Register a hook handler
+  // Register a kernel hook handler
   ctx.hook('kernel:ready', async () => {
     ctx.logger.info('System is ready!');
   });
 
-  // Register data lifecycle hooks
-  ctx.hook('data:beforeInsert', async (objectName, record) => {
-    if (objectName === 'task') {
-      record.created_at = new Date().toISOString();
-    }
+  // React to a metadata hot-reload / publish
+  ctx.hook('metadata:reloaded', async (payload?: { changed?: string[] }) => {
+    ctx.logger.info('Metadata reloaded', { changed: payload?.changed });
   });
 }
 ```
@@ -33,33 +35,47 @@ async start(ctx: PluginContext) {
 }
 ```
 
-## Built-in Hooks
+## Built-in Kernel Events
 
-### Kernel Lifecycle Hooks
+These are the events the open framework actually fires (trigger sites:
+`@objectstack/core` kernels, `@objectstack/runtime` AppPlugin / dispatcher /
+external-validation plugin, `@objectstack/metadata` plugin; typed in
+`packages/spec/src/contracts/plugin-lifecycle-events.ts`):
 
-| Hook | Triggered When | Arguments |
-|:-----|:---------------|:----------|
-| `kernel:ready` | All plugins started, system validated | (none) |
-| `kernel:shutdown` | Shutdown begins | (none) |
+| Event | Triggered When | Handler Arguments |
+|:------|:---------------|:------------------|
+| `kernel:ready` | All plugins started; route/middleware registration phase | (none) |
+| `kernel:bootstrapped` | After **every** `kernel:ready` handler has settled — the "synchronous bootstrap has settled" anchor for reconcile/backfill work. Does NOT guarantee background app seed data has settled — subscribe `app:seeded` for that | (none) |
+| `kernel:listening` | After `kernel:ready` + `kernel:bootstrapped` handlers complete — the cue for HTTP server plugins to open the listening socket | (none) |
+| `kernel:shutdown` | Shutdown begins (before plugin `destroy()` calls) | (none) |
+| `app:seeded` | An app's inline seed attempt has settled (fires during plugin start when within the seed budget; after boot when it overran it) | `({ appId: string, overBudget: boolean })` |
+| `metadata:reloaded` | Metadata hot-reload or publish announcement (dev artifact reload, `POST /packages/:id/publish-drafts`) | `({ changed: string[], metadata? })` — `changed` entries are `'{type}/{name}'` strings, e.g. `'flow/ticket_closed'` |
+| `external.schema.drift` | Background drift checker found a federated object whose external schema drifted (one event per drifted object) | `({ datasource, object, diffs })` |
 
-### Data Lifecycle Hooks
+Service plugins additionally announce readiness with a `{service}:ready`
+convention — e.g. `analytics:ready`, `automation:ready`, `mcp:ready` — passing
+the service instance. `plugin-auth` fires `auth:configure` while assembling
+its config.
 
-| Hook | Triggered When | Arguments |
-|:-----|:---------------|:----------|
-| `data:beforeInsert` | Before a record is created | `(objectName, record)` |
-| `data:afterInsert` | After a record is created | `(objectName, record, result)` |
-| `data:beforeUpdate` | Before a record is updated | `(objectName, id, record)` |
-| `data:afterUpdate` | After a record is updated | `(objectName, id, record, result)` |
-| `data:beforeDelete` | Before a record is deleted | `(objectName, id)` |
-| `data:afterDelete` | After a record is deleted | `(objectName, id, result)` |
-| `data:beforeFind` | Before querying records | `(objectName, query)` |
-| `data:afterFind` | After querying records | `(objectName, query, result)` |
+> There is **no** `metadata:changed` event — the real name is
+> `metadata:reloaded`, and its payload is an object, not `(type, name, metadata)`.
 
-### Metadata Hooks
+## Data Lifecycle Hooks Live Elsewhere
 
-| Hook | Triggered When | Arguments |
-|:-----|:---------------|:----------|
-| `metadata:changed` | Metadata is registered or updated | `(type, name, metadata)` |
+**There are no `data:*` kernel events.** Record lifecycle logic runs on the
+**ObjectQL engine** with a single `HookContext` argument and *unprefixed*
+event names (`beforeFind`, `afterFind`, `beforeInsert`, `afterInsert`,
+`beforeUpdate`, `afterUpdate`, `beforeDelete`, `afterDelete`). Author it via:
+
+- the declarative `hooks:` collection in `defineStack()`, or
+- the engine API: `ql.on('beforeInsert', 'task', async (hookCtx) => { … })`
+  where `ql = ctx.getService('objectql')`.
+
+Because `ctx.hook()` accepts any string, a handler registered for
+`'data:beforeInsert'` on the kernel bus registers "successfully" and then
+**silently never fires**. If you need per-record validation, defaults, or
+audit trails, go to the **objectstack-data** skill (`rules/hooks.md`,
+`references/data-hooks.md`).
 
 ## Custom Hooks
 
@@ -92,165 +108,119 @@ ctx.hook('kernel:ready', async () => {
 });
 ```
 
-### Handler with Data
+### Handler with Payload
 
 ```typescript
-ctx.hook('data:afterInsert', async (objectName, record, result) => {
-  console.log(`Created ${objectName} record:`, result.id);
+ctx.hook('app:seeded', async (payload: { appId: string; overBudget: boolean }) => {
+  console.log(`Seed settled for ${payload.appId} (overBudget: ${payload.overBudget})`);
 });
 ```
 
-### Handler with Context
+### Deferred Setup on kernel:ready
+
+Plugins that need a service which may be registered by a *later* plugin
+(e.g. i18n) defer that wiring to `kernel:ready`:
 
 ```typescript
-ctx.hook('data:beforeInsert', async (objectName, record) => {
-  // Access kernel context
-  const user = ctx.getService('auth').getCurrentUser();
-  record.created_by = user.id;
+async init(ctx: PluginContext) {
+  ctx.hook('kernel:ready', async () => {
+    try {
+      const i18n = ctx.getService<any>('i18n');
+      await i18n.loadTranslations(myBundle);
+    } catch {
+      ctx.logger.debug('i18n service not available — skipping translations');
+    }
+  });
+}
+```
+
+### Rebinding on metadata:reloaded
+
+Anything cached from boot-time metadata must re-sync when metadata reloads:
+
+```typescript
+ctx.hook('metadata:reloaded', async (payload?: { changed?: string[] }) => {
+  await this.rebuildDerivedState(payload?.changed ?? []);
 });
 ```
 
-### Async Error Handling
+### Error Handling
+
+Handlers run **sequentially** and errors propagate to the `trigger()` call
+site — a throwing `kernel:ready` handler fails the whole bootstrap. Catch
+and log unless you *want* to abort:
 
 ```typescript
-ctx.hook('data:afterInsert', async (objectName, record, result) => {
+ctx.hook('kernel:ready', async () => {
   try {
-    await sendNotification(record);
+    await warmCache();
   } catch (error) {
-    ctx.logger.error('Failed to send notification', error);
-    // Don't throw — let other hooks continue
+    ctx.logger.error('Cache warm-up failed', error);
+    // Don't rethrow — let boot continue
   }
 });
 ```
 
 ## Incorrect vs Correct
 
-### ❌ Incorrect — Blocking Hook with Slow Operation
+### ❌ Incorrect — Subscribing to Phantom `data:*` Kernel Events
 
 ```typescript
 ctx.hook('data:beforeInsert', async (objectName, record) => {
-  // ❌ Blocks transaction
-  await sendEmail(record.email);
-  await callExternalAPI(record);
+  record.created_at = new Date().toISOString();  // ❌ NEVER fires
 });
 ```
 
-### ✅ Correct — Use after* Hook for Side Effects
+### ✅ Correct — Engine Hook for Record Lifecycle
 
 ```typescript
-ctx.hook('data:afterInsert', async (objectName, record, result) {
-  // ✅ Non-blocking, outside transaction
-  try {
-    await sendEmail(record.email);
-    await callExternalAPI(record);
-  } catch (error) {
-    ctx.logger.error('Side effect failed', error);
-  }
-});
-```
-
-### ❌ Incorrect — Throwing in after* Hook
-
-```typescript
-ctx.hook('data:afterInsert', async (objectName, record, result) {
-  throw new Error('Notification failed');  // ❌ Too late to abort
-});
-```
-
-### ✅ Correct — Logging Errors in after* Hook
-
-```typescript
-ctx.hook('data:afterInsert', async (objectName, record, result) {
-  try {
-    await sendNotification(result);
-  } catch (error) {
-    ctx.logger.error('Notification failed', error);  // ✅ Log, don't throw
-  }
-});
-```
-
-### ❌ Incorrect — Modifying result in before* Hook
-
-```typescript
-ctx.hook('data:beforeInsert', async (objectName, record) => {
-  record.result = { id: '123' };  // ❌ result doesn't exist yet
-});
-```
-
-### ✅ Correct — Modifying input in before* Hook
-
-```typescript
-ctx.hook('data:beforeInsert', async (objectName, record) {
-  record.created_at = new Date().toISOString();  // ✅ Modify input
-});
-```
-
-## Common Patterns
-
-### Setting Defaults
-
-```typescript
-ctx.hook('data:beforeInsert', async (objectName, record) => {
-  if (objectName === 'task') {
-    record.status = record.status || 'pending';
-    record.priority = record.priority || 'medium';
-  }
-});
-```
-
-### Audit Logging
-
-```typescript
-ctx.hook('data:afterInsert', async (objectName, record, result) => {
-  const audit = ctx.getService('audit');
-  await audit.log({
-    action: 'create',
-    object: objectName,
-    recordId: result.id,
-    timestamp: new Date().toISOString(),
+async start(ctx: PluginContext) {
+  const ql = ctx.getService<any>('objectql');
+  ql.on('beforeInsert', 'task', async (hookCtx: any) => {
+    // ✅ Real engine hook — single HookContext argument
+    // (see objectstack-data for the HookContext contract)
   });
+}
+```
+
+### ❌ Incorrect — Reconcile Work in kernel:ready That Reads Other Plugins' Boot Data
+
+```typescript
+ctx.hook('kernel:ready', async () => {
+  await backfillFromSeededRows();  // ❌ Races the producer's own kernel:ready handler
 });
 ```
 
-### Triggering Workflows
+### ✅ Correct — Use kernel:bootstrapped (or app:seeded for seed rows)
 
 ```typescript
-ctx.hook('data:afterUpdate', async (objectName, id, record, result) => {
-  if (objectName === 'opportunity' && record.stage === 'won') {
-    await ctx.trigger('sales:opportunity-won', { id, record: result });
-  }
+ctx.hook('kernel:bootstrapped', async () => {
+  await backfillFromSeededRows();  // ✅ Every kernel:ready handler has settled
+});
+// For rows written by an over-budget background seed, subscribe app:seeded.
+```
+
+### ❌ Incorrect — Server listen() in kernel:ready
+
+```typescript
+ctx.hook('kernel:ready', async () => {
+  await server.listen(port);  // ❌ Sibling plugins may still be adding routes
 });
 ```
 
-### Cross-Object Updates
+### ✅ Correct — listen() in kernel:listening
 
 ```typescript
-ctx.hook('data:afterInsert', async (objectName, record, result) => {
-  if (objectName === 'invoice_line_item') {
-    // Update invoice total
-    const engine = ctx.getService('objectql');
-    await engine.object('invoice').update(record.invoice_id, {
-      updated_at: new Date().toISOString(),
-    });
-  }
-});
-```
-
-### Validation
-
-```typescript
-ctx.hook('data:beforeInsert', async (objectName, record) => {
-  if (objectName === 'account') {
-    if (!record.email || !record.email.includes('@')) {
-      throw new Error('Valid email is required');
-    }
-  }
+ctx.hook('kernel:listening', async () => {
+  await server.listen(port);  // ✅ All route registration has completed
 });
 ```
 
 ## Hook Execution Order
 
-Hooks are executed in **registration order** within each plugin, then by **plugin initialization order**.
+Hooks are executed in **registration order** within each event — and since
+plugins register during `init()` in dependency order, that means plugin
+initialization order overall.
 
 ```typescript
 // Plugin A (depends on nothing)
@@ -262,19 +232,8 @@ ctx.hook('kernel:ready', () => console.log('B'));
 // Output: A, B
 ```
 
-## Performance Considerations
-
-### before* Hooks
-- ⚠️ Block the operation — keep fast
-- ⚠️ Run inside transaction — don't call slow APIs
-- ✅ Use for validation and data enrichment
-- ✅ Throw errors to abort operation
-
-### after* Hooks
-- ⚠️ Still block by default — use sparingly
-- ✅ Use for notifications and logging
-- ✅ Use try/catch to prevent cascading failures
-- ✅ Consider async execution (if supported)
+Handlers for one event run **sequentially and are awaited**; the next
+lifecycle phase does not begin until every handler settles.
 
 ## Hook Naming Conventions
 
@@ -288,24 +247,29 @@ Follow the pattern: `{namespace}:{event-name}`
 
 **Bad names:**
 - `userLogin` (no namespace)
-- `auth.user.login` (use colons, not dots)
 - `auth:USER_LOGIN` (use lowercase)
 
 ## Testing Hooks
 
+`kernel.context` is **protected** — tests cannot call
+`kernel.context.trigger(...)`. Capture a `PluginContext` from a probe plugin
+and trigger through it:
+
 ```typescript
 import { describe, it, expect } from 'vitest';
 import { LiteKernel } from '@objectstack/core';
-import MyPlugin from './plugin';
+import type { PluginContext } from '@objectstack/core';
 
 describe('Hook System', () => {
   it('executes hook handler', async () => {
-    const kernel = new LiteKernel();
+    const kernel = new LiteKernel({ logger: { level: 'silent' } });
     let hookCalled = false;
+    let probe!: PluginContext;
 
     kernel.use({
       name: 'test-plugin',
       async init(ctx) {
+        probe = ctx;
         ctx.hook('test:event', async () => {
           hookCalled = true;
         });
@@ -313,7 +277,7 @@ describe('Hook System', () => {
     });
 
     await kernel.bootstrap();
-    await kernel.context.trigger('test:event');
+    await probe.trigger('test:event');
 
     expect(hookCalled).toBe(true);
 
@@ -321,12 +285,14 @@ describe('Hook System', () => {
   });
 
   it('passes arguments to hook handler', async () => {
-    const kernel = new LiteKernel();
+    const kernel = new LiteKernel({ logger: { level: 'silent' } });
     let receivedData: any;
+    let probe!: PluginContext;
 
     kernel.use({
       name: 'test-plugin',
       async init(ctx) {
+        probe = ctx;
         ctx.hook('test:event', async (data) => {
           receivedData = data;
         });
@@ -334,7 +300,7 @@ describe('Hook System', () => {
     });
 
     await kernel.bootstrap();
-    await kernel.context.trigger('test:event', { foo: 'bar' });
+    await probe.trigger('test:event', { foo: 'bar' });
 
     expect(receivedData).toEqual({ foo: 'bar' });
 
@@ -345,13 +311,18 @@ describe('Hook System', () => {
 
 ## Best Practices
 
-1. **Use before* for validation** — Abort operations early
-2. **Use after* for side effects** — Notifications, logging, external API calls
-3. **Keep hooks fast** — Especially before* hooks
-4. **Use try/catch in after* hooks** — Don't let one failure cascade
-5. **Use descriptive hook names** — Follow `{namespace}:{event-name}` convention
-6. **Document custom hooks** — What they do, what arguments they pass
-7. **Don't mutate arguments** — Except for `record` in before* hooks
-8. **Test hook handlers** — Verify they execute and handle errors
-9. **Limit hook count** — Too many hooks slow down operations
-10. **Use specific object names** — Don't hook all objects unless necessary
+1. **Use kernel hooks for platform lifecycle only** — boot, shutdown,
+   metadata reload, seed settle. Record lifecycle → engine hooks
+   (objectstack-data).
+2. **Pick the right boot anchor** — route/service registration in
+   `kernel:ready`; reconcile/backfill in `kernel:bootstrapped`; socket
+   `listen()` in `kernel:listening`; seed-dependent reconcilers on
+   `app:seeded` (and make them idempotent).
+3. **Catch errors unless you want to abort** — handler errors propagate and
+   can fail bootstrap.
+4. **Rebind on `metadata:reloaded`** — anything derived from boot-time
+   metadata goes stale after a hot reload / publish.
+5. **Use descriptive custom hook names** — follow `{namespace}:{event-name}`.
+6. **Document custom hooks** — what they do, what arguments they pass.
+7. **Test hook handlers** — trigger through a probe plugin's `PluginContext`
+   (never `kernel.context`, which is protected).

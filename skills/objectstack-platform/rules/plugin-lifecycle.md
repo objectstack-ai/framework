@@ -20,8 +20,9 @@ kernel.bootstrap()
 │   └── PluginC.start(ctx)   → bind routes, listen on port
 │
 └── Phase 3: READY
-    └── ctx.trigger('kernel:ready')
-        └── All hook handlers execute
+    ├── trigger('kernel:ready')          → route/service registration handlers
+    ├── trigger('kernel:bootstrapped')   → after EVERY kernel:ready handler settles
+    └── trigger('kernel:listening')      → HTTP servers open their socket here
 
 kernel.shutdown()
 │
@@ -93,21 +94,23 @@ async init(ctx: PluginContext) {
   const pool = createPool({ /* config */ });
   ctx.registerService('db-pool', pool);
 
-  // Register hook handlers
+  // Register kernel hook handlers
   ctx.hook('kernel:ready', async () => {
     ctx.logger.info('System ready');
   });
 
-  // Register data hooks
-  ctx.hook('data:beforeInsert', async (objectName, record) => {
-    if (objectName === 'task') {
-      record.created_at = new Date().toISOString();
-    }
+  ctx.hook('metadata:reloaded', async (payload?: { changed?: string[] }) => {
+    ctx.logger.info('Metadata reloaded', { changed: payload?.changed });
   });
 
   ctx.logger.info('Plugin initialized');
 }
 ```
+
+> Kernel hooks cover **platform lifecycle only**. Record-level lifecycle
+> (`beforeInsert` / `afterUpdate` / …) runs on the ObjectQL engine — there
+> are no `data:*` kernel events (a handler for one would silently never
+> fire). See **objectstack-data**.
 
 ## Phase 2: start() — Active Behavior
 
@@ -195,28 +198,36 @@ async start(ctx: PluginContext) {
 }
 ```
 
-### ❌ Incorrect — Using getService() in init()
+### ❌ Incorrect — Using getService() in init() Without a Declared Dependency
 
 ```typescript
-async init(ctx: PluginContext) {
-  const db = ctx.getService('db-pool');  // ❌ May not exist yet
-  ctx.registerService('cache', new Cache(db));
-}
+const CachePlugin: Plugin = {
+  name: 'com.example.cache',
+
+  async init(ctx: PluginContext) {
+    const db = ctx.getService('db-pool');  // ❌ May not exist yet
+    ctx.registerService('cache', new Cache(db));
+  },
+};
 ```
 
-### ✅ Correct — Using getService() in start()
+### ✅ Correct — Declare the Dependency, Then getService() in init() Is Safe
 
 ```typescript
-async init(ctx: PluginContext) {
-  ctx.registerService('cache', null);  // ✅ Register placeholder
-}
+const CachePlugin: Plugin = {
+  name: 'com.example.cache',
+  dependencies: ['com.example.db'],  // ✅ db plugin inits first
 
-async start(ctx: PluginContext) {
-  const db = ctx.getService('db-pool');  // ✅ Safe — all services registered
-  const cache = new Cache(db);
-  ctx.replaceService('cache', cache);
-}
+  async init(ctx: PluginContext) {
+    const db = ctx.getService('db-pool');  // ✅ Guaranteed registered
+    ctx.registerService('cache', new Cache(db));
+  },
+};
 ```
+
+Never register `null` as a placeholder: `registerService` throws on a
+duplicate key, so you can't re-register later, and `getService()` treats a
+falsy value as missing and throws anyway.
 
 ### ❌ Incorrect — Missing destroy()
 
@@ -265,69 +276,19 @@ const MyPlugin: Plugin = {
 };
 ```
 
-The kernel performs **topological sort** on the dependency graph. If circular dependencies are detected, ObjectKernel logs a warning (LiteKernel throws).
+The kernel performs **topological sort** on the dependency graph. Circular
+**plugin** dependencies make **both** kernels throw
+(`Circular dependency detected`). The warning-only path exists solely for
+circular **service-factory** dependency graphs in ObjectKernel
+(`registerServiceFactory` dependency cycles).
 
 ## Complete Plugin Example
 
-```typescript
-// packages/plugins/plugin-audit/src/plugin.ts
-import type { Plugin, PluginContext } from '@objectstack/core';
-
-interface AuditEntry {
-  timestamp: string;
-  operation: string;
-  object: string;
-  recordId?: string;
-}
-
-class AuditService {
-  private log: AuditEntry[] = [];
-
-  record(entry: AuditEntry) {
-    this.log.push(entry);
-  }
-
-  getLog(): AuditEntry[] {
-    return [...this.log];
-  }
-}
-
-const AuditPlugin: Plugin = {
-  name: 'com.example.audit',
-  version: '1.0.0',
-  type: 'plugin',
-  dependencies: ['com.objectstack.engine.objectql'],
-
-  // Phase 1: Register service and hooks
-  async init(ctx: PluginContext) {
-    const auditService = new AuditService();
-    ctx.registerService('audit', auditService);
-
-    ctx.hook('data:afterInsert', async (objectName, _record, result) => {
-      auditService.record({
-        timestamp: new Date().toISOString(),
-        operation: 'insert',
-        object: objectName,
-        recordId: result?.id,
-      });
-    });
-
-    ctx.logger.info('Audit plugin initialized');
-  },
-
-  // Phase 2: Log that audit is active
-  async start(ctx: PluginContext) {
-    ctx.logger.info('Audit logging active');
-  },
-
-  // Phase 3: Flush remaining entries (if using external storage)
-  async destroy() {
-    // Cleanup if needed
-  },
-};
-
-export default AuditPlugin;
-```
+See the **Complete Plugin Example** (AuditPlugin) in
+[../SKILL.md](../SKILL.md#complete-plugin-example) — a full three-phase
+plugin that registers a service in `init()`, subscribes to the
+`kernel:ready` / `metadata:reloaded` kernel events, and cleans up in
+`destroy()`.
 
 ## Best Practices
 

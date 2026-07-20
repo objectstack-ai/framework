@@ -1,23 +1,8 @@
 # Plugin Hooks & Events (Reference)
 
-> **Note:** This document is a reference pointer. Complete documentation has been moved to the canonical hooks skill.
-
----
-
-## Complete Documentation
-
-For comprehensive plugin hooks and event system documentation, see:
-
-**→ [objectstack-platform/references/plugin-hooks.md](../../objectstack-platform/references/plugin-hooks.md)**
-
-The canonical reference includes:
-- Complete hook registration API (`ctx.hook`, `ctx.trigger`)
-- All built-in hooks (kernel lifecycle + data events)
-- Custom plugin event patterns
-- Hook handler patterns and error handling
-- Performance considerations
-- Testing strategies
-- Best practices
+> **Note:** This document is a compact pointer. Complete documentation lives in
+> the canonical reference:
+> **→ [references/plugin-hooks.md](../references/plugin-hooks.md)**
 
 ---
 
@@ -34,11 +19,9 @@ async init(ctx: PluginContext) {
     ctx.logger.info('System ready');
   });
 
-  // Data lifecycle hook
-  ctx.hook('data:beforeInsert', async (objectName, record) => {
-    if (objectName === 'task') {
-      record.created_at = new Date().toISOString();
-    }
+  // Metadata hot-reload / publish announcement
+  ctx.hook('metadata:reloaded', async (payload?: { changed?: string[] }) => {
+    ctx.logger.info('Metadata reloaded', { changed: payload?.changed });
   });
 }
 ```
@@ -51,24 +34,29 @@ async start(ctx: PluginContext) {
 }
 ```
 
-### Built-in Hooks
+### Built-in Kernel Events
 
-**Kernel Lifecycle:**
-- `kernel:ready` — All plugins started, system validated
-- `kernel:shutdown` — Shutdown begins
+| Event | Fires | Payload |
+|:------|:------|:--------|
+| `kernel:ready` | All plugins started (route/service registration phase) | (none) |
+| `kernel:bootstrapped` | After every `kernel:ready` handler settles (reconcile/backfill anchor) | (none) |
+| `kernel:listening` | After bootstrapped — HTTP servers open their socket here | (none) |
+| `kernel:shutdown` | Shutdown begins | (none) |
+| `app:seeded` | An app's inline seed attempt settled | `{ appId, overBudget }` |
+| `metadata:reloaded` | Metadata hot-reload or publish (dev reload, publish-drafts) | `{ changed: string[], metadata? }` |
+| `external.schema.drift` | Federated datasource schema drift detected | `{ datasource, object, diffs }` |
 
-**Data Lifecycle:**
-- `data:beforeInsert` — Before record created
-- `data:afterInsert` — After record created
-- `data:beforeUpdate` — Before record updated
-- `data:afterUpdate` — After record updated
-- `data:beforeDelete` — Before record deleted
-- `data:afterDelete` — After record deleted
-- `data:beforeFind` — Before querying records
-- `data:afterFind` — After querying records
+There is no `metadata:changed` event — the real name is `metadata:reloaded`.
 
-**Metadata:**
-- `metadata:changed` — Metadata registered or updated
+### ⚠️ No `data:*` Kernel Events
+
+**Record-level lifecycle logic does not live on the kernel bus.** The engine
+dispatches unprefixed events (`beforeInsert`, `afterUpdate`, …) with a single
+`HookContext` argument — author them via the `hooks:` collection or
+`ql.on('beforeInsert', 'task', async (ctx) => { … })` on the `objectql`
+service. A kernel handler registered for `'data:beforeInsert'` registers
+without error and **silently never fires**. Kernel hooks are for platform
+lifecycle only → see **[objectstack-data](../../objectstack-data/SKILL.md)**.
 
 ### Custom Hooks
 
@@ -86,78 +74,35 @@ ctx.hook('analytics:pageview', async (data) => {
 
 ---
 
-## Common Patterns
-
-### Setting Defaults
-
-```typescript
-ctx.hook('data:beforeInsert', async (objectName, record) => {
-  if (objectName === 'task') {
-    record.status = record.status || 'pending';
-  }
-});
-```
-
-### Audit Logging
-
-```typescript
-ctx.hook('data:afterInsert', async (objectName, record, result) => {
-  const audit = ctx.getService('audit');
-  await audit.log({
-    action: 'create',
-    object: objectName,
-    recordId: result.id,
-  });
-});
-```
-
-### Triggering Workflows
-
-```typescript
-ctx.hook('data:afterUpdate', async (objectName, id, record, result) => {
-  if (objectName === 'opportunity' && record.stage === 'won') {
-    await ctx.trigger('sales:opportunity-won', { id, record: result });
-  }
-});
-```
-
----
-
-## Best Practices
+## Rules of Thumb
 
 ✅ **DO:**
-1. Use `before*` for validation
-2. Use `after*` for side effects (notifications, logging, external API calls)
-3. Keep hooks fast — especially `before*` hooks
-4. Use try/catch in `after*` hooks — don't let one failure cascade
-5. Follow naming convention: `{namespace}:{event-name}`
-6. Test hook handlers thoroughly
+1. Use kernel hooks for **platform lifecycle only** (boot, shutdown, metadata
+   reload, seed settle)
+2. Do reconcile/backfill work in `kernel:bootstrapped`, not `kernel:ready`
+3. Open server sockets in `kernel:listening`
+4. Catch handler errors unless you want to abort boot — errors propagate
+5. Follow the naming convention: `{namespace}:{event-name}`
 
 ❌ **DON'T:**
-1. Don't block operations with slow external API calls in `before*` hooks
-2. Don't throw in `after*` hooks (use try/catch and log errors)
-3. Don't mutate arguments (except `record` in `before*` hooks)
-4. Don't create circular dependencies between plugins
-5. Don't hook all objects unless necessary
+1. Don't subscribe to `data:*` kernel events — they don't exist and never fire
+2. Don't call `kernel.context.trigger(...)` in tests — `context` is protected;
+   capture a `PluginContext` from a probe plugin
+3. Don't create circular dependencies between plugins (both kernels throw)
 
 ---
 
 ## Hook Execution Order
 
-Hooks execute in **registration order** within each plugin, then by **plugin initialization order** (based on dependencies).
+Hooks execute in **registration order** within each event (which follows
+plugin initialization order). Handlers run sequentially and are awaited.
 
 ---
 
 ## See Also
 
-- **[objectstack-data/SKILL.md#lifecycle-hooks](../../objectstack-data/SKILL.md#lifecycle-hooks)** — Complete hooks system overview
-- **[objectstack-platform/references/plugin-hooks.md](../../objectstack-platform/references/plugin-hooks.md)** — Full plugin hooks documentation
-- **[objectstack-data/references/data-hooks.md](../../objectstack-data/references/data-hooks.md)** — Data lifecycle hooks
+- **[references/plugin-hooks.md](../references/plugin-hooks.md)** — Full kernel hooks documentation (payloads, patterns, testing)
+- **[objectstack-data/SKILL.md](../../objectstack-data/SKILL.md)** — Data lifecycle hooks (engine-level)
+- **[objectstack-data/references/data-hooks.md](../../objectstack-data/references/data-hooks.md)** — The 8-event engine hook guide
 - **[Plugin Lifecycle](./plugin-lifecycle.md)** — 3-phase plugin lifecycle
 - **[Service Registry](./service-registry.md)** — DI container and service management
-
----
-
-**For complete documentation with detailed examples, hook context API, testing strategies, and performance optimization, see the canonical reference:**
-
-→ **[objectstack-platform/references/plugin-hooks.md](../../objectstack-platform/references/plugin-hooks.md)**

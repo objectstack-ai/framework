@@ -4,65 +4,109 @@ Guide for bootstrapping ObjectStack projects with defineStack().
 
 ## Basic Stack Configuration
 
+There is **no `driver:` key** on `defineStack()` — unknown keys are silently
+stripped by strict parsing, so a `driver:` entry is a no-op. Drivers are
+plugins: wrap them in `DriverPlugin` and put them in `plugins:`.
+
+The `manifest` requires `id`, `version`, `type`, and `name`
+(`ManifestSchema` is strict — a missing required field throws at
+`defineStack()` time).
+
 ```typescript
 import { defineStack } from '@objectstack/spec';
 import { DriverPlugin } from '@objectstack/runtime';
-import { TursoDriver } from '@objectstack/driver-turso';
+import { InMemoryDriver } from '@objectstack/driver-memory';
 
 export default defineStack({
   manifest: {
-    name: 'my-crm',
-    version: '1.0.0',
+    id: 'com.example.crm',        // required — reverse domain style
+    version: '1.0.0',             // required — semver
+    type: 'app',                  // required
+    name: 'My CRM',               // required — human-readable
     description: 'Customer relationship management system',
   },
-  driver: new DriverPlugin(
-    new TursoDriver({
-      url: process.env.DATABASE_URL!,
-      authToken: process.env.DATABASE_AUTH_TOKEN!,
-    })
-  ),
+  plugins: [
+    new DriverPlugin(new InMemoryDriver()),
+  ],
   objects: [
     /* ... */
   ],
 });
 ```
 
+For production, swap the driver:
+
+```typescript
+import { SqlDriver } from '@objectstack/driver-sql';
+
+new DriverPlugin(new SqlDriver({
+  client: 'pg',                      // 'pg' | 'mysql' | 'better-sqlite3'
+  connection: process.env.DATABASE_URL!,
+}))
+```
+
 ## Driver Selection
 
-| Driver | Use Case |
-|:-------|:---------|
-| `InMemoryDriver` | Development, testing |
-| `SQLiteDriver` | Local development, small deployments |
-| `TursoDriver` | Production (edge database) |
-| `PostgreSQLDriver` | Production (full-featured) |
+| Driver | Package | Use Case |
+|:-------|:--------|:---------|
+| `InMemoryDriver` | `@objectstack/driver-memory` | Development, testing |
+| `SqlDriver` | `@objectstack/driver-sql` | Production — PostgreSQL / MySQL / SQLite via Knex |
+| `MongoDBDriver` | `@objectstack/driver-mongodb` | Production — document store |
+| `SqliteWasmDriver` | `@objectstack/driver-sqlite-wasm` | Browser / WebContainer |
+| `TursoDriver` | `@objectstack/driver-turso` | **Cloud / EE only** — not in the open framework; the open-core CLI fails loudly on `libsql://` URLs |
 
-## Adapter Selection
+## HTTP Layer
 
-| Adapter | Framework |
-|:--------|:----------|
-| `@objectstack/adapter-express` | Express.js |
-| `@objectstack/adapter-fastify` | Fastify |
-| `@objectstack/adapter-hono` | Hono |
-| `@objectstack/adapter-nextjs` | Next.js |
+| Package | Export | Use Case |
+|:--------|:-------|:---------|
+| `@objectstack/plugin-hono-server` | `HonoServerPlugin` | ObjectStack hosts the server (what `os dev` / `os serve` register) |
+| `@objectstack/hono` | `createHonoApp({ kernel, prefix })` | Embed ObjectStack routes in your own Hono app / deploy target |
+
+There are no `@objectstack/adapter-*` packages.
 
 ## Incorrect vs Correct
 
-### ❌ Incorrect — Missing Driver
+### ❌ Incorrect — `driver:` Key (Silently Stripped)
 
 ```typescript
 export default defineStack({
-  manifest: { /* ... */ },
-  // ❌ No driver specified
+  manifest: { id: 'com.example.app', version: '1.0.0', type: 'app', name: 'App' },
+  driver: new DriverPlugin(new InMemoryDriver()),  // ❌ Not a defineStack key — no-op
   objects: [/* ... */],
 });
 ```
 
-### ✅ Correct — Driver Configured
+### ✅ Correct — Driver as a Plugin
 
 ```typescript
 export default defineStack({
-  manifest: { /* ... */ },
-  driver: new DriverPlugin(new InMemoryDriver()),  // ✅ Driver specified
+  manifest: { id: 'com.example.app', version: '1.0.0', type: 'app', name: 'App' },
+  plugins: [new DriverPlugin(new InMemoryDriver())],  // ✅ plugins: collection
+  objects: [/* ... */],
+});
+```
+
+### ❌ Incorrect — Incomplete Manifest
+
+```typescript
+export default defineStack({
+  manifest: {
+    name: 'my-crm',          // ❌ Missing id, version, type — defineStack throws
+  },
+  objects: [/* ... */],
+});
+```
+
+### ✅ Correct — Manifest with All Required Fields
+
+```typescript
+export default defineStack({
+  manifest: {
+    id: 'com.example.crm',
+    version: '1.0.0',
+    type: 'app',
+    name: 'My CRM',
+  },
   objects: [/* ... */],
 });
 ```
@@ -71,8 +115,8 @@ export default defineStack({
 
 1. **Choose appropriate driver** — Match to deployment environment
 2. **Use environment variables** — Don't hardcode credentials
-3. **Configure logging** — Set appropriate log level
-4. **Enable features** — trackHistory, feeds, activities as needed
+3. **Complete the manifest** — `id`, `version`, `type`, `name` are required
+4. **Put drivers in `plugins:`** — There is no `driver:` key
 5. **Organize objects** — Group by domain/module
 
 ---

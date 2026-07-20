@@ -12,17 +12,20 @@ When implemented, evals will follow this structure:
 
 ```
 evals/
-├── naming/
-│   ├── test-object-names.md
-│   ├── test-field-keys.md
-│   └── test-option-values.md
-├── relationships/
-│   ├── test-lookup-vs-master-detail.md
-│   └── test-junction-patterns.md
-├── validation/
-│   ├── test-script-inversion.md
-│   └── test-state-machine.md
-└── ...
+├── bootstrap/
+│   ├── test-definestack-keys.md        # no phantom keys (driver:, workflows:, roles:)
+│   ├── test-manifest-required-fields.md
+│   └── test-template-selection.md      # blank | todo | compliance | content | contracts | procurement
+├── drivers-adapters/
+│   ├── test-driver-selection.md        # memory / sql / mongodb / sqlite-wasm; turso = cloud/EE
+│   └── test-hono-integration.md        # @objectstack/hono vs plugin-hono-server; no adapter-*
+├── plugins/
+│   ├── test-lifecycle-phases.md        # init/start/destroy, dependency order
+│   ├── test-service-registry.md        # registerService throws on duplicate; no null placeholders
+│   └── test-kernel-events.md           # kernel:ready/bootstrapped/listening/shutdown; NO data:* events
+└── ops/
+    ├── test-cli-commands.md            # real command surface (no os studio / os data seed / os meta apply)
+    └── test-litekernel-testing.md      # new LiteKernel().use(...) pattern; kernel.context is protected
 ```
 
 ## Format

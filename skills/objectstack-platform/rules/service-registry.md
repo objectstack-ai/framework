@@ -146,13 +146,15 @@ async start(ctx: PluginContext) {
 
 | Service Key | Plugin Name | Package |
 |:------------|:------------|:--------|
-| `objectql` | `com.objectstack.engine.objectql` | `@objectstack/objectql` |
+| `objectql` (also `data`) | `com.objectstack.engine.objectql` | `@objectstack/objectql` |
 | `driver.*` | `com.objectstack.driver.*` | `@objectstack/driver-*` |
 | `auth` | `com.objectstack.auth` | `@objectstack/plugin-auth` |
-| `rest` | `com.objectstack.rest` | `@objectstack/rest` |
 | `metadata` | `com.objectstack.metadata` | `@objectstack/metadata` |
-| `realtime` | `com.objectstack.realtime` | `@objectstack/service-realtime` |
-| `cache` | `com.objectstack.cache` | `@objectstack/service-cache` |
+| `realtime` | `com.objectstack.service.realtime` | `@objectstack/service-realtime` |
+| `cache` | `com.objectstack.service.cache` | `@objectstack/service-cache` |
+
+The REST plugin (`com.objectstack.rest.api`, `@objectstack/rest`) registers
+**no** service — there is no `rest` service key.
 
 ## Core Fallback Injection
 
@@ -161,15 +163,22 @@ ObjectKernel auto-injects in-memory fallbacks for `core`-criticality services no
 ```
 Phase 1: init() completes for all plugins
     ↓
-Kernel checks ServiceRequirementDef:
-  'metadata'  → core    → auto-inject InMemoryMetadataService if missing
-  'cache'     → core    → auto-inject InMemoryCache if missing
-  'queue'     → core    → auto-inject InMemoryQueue if missing
-  'objectql'  → required → ERROR if missing (no fallback)
+Kernel checks ServiceRequirementDef (@objectstack/spec/system):
+  'data'      → required → ERROR if missing (no fallback; ObjectQLPlugin registers it)
+  'metadata'  → core    → auto-inject createMemoryMetadata() if missing
+  'cache'     → core    → auto-inject createMemoryCache() if missing
+  'queue'     → core    → auto-inject createMemoryQueue() if missing
+  'job'       → core    → auto-inject createMemoryJob() if missing
+  'i18n'      → core    → auto-inject createMemoryI18n() if missing
+  'auth'      → core    → no fallback factory — degraded-capability warning if missing
   'realtime'  → optional → skip, plugins should check availability
     ↓
 Phase 2: start() begins — all core services available
 ```
+
+The fallbacks are **factories** exported from `@objectstack/core`
+(`createMemoryCache`, `createMemoryMetadata`, `createMemoryQueue`,
+`createMemoryJob`, `createMemoryI18n`) — not classes.
 
 ### Service Criticality Levels
 
@@ -181,29 +190,37 @@ Phase 2: start() begins — all core services available
 
 ## Incorrect vs Correct
 
-### ❌ Incorrect — Getting Service in init()
+### ❌ Incorrect — Getting Service in init() Without a Declared Dependency
 
 ```typescript
-async init(ctx: PluginContext) {
-  const db = ctx.getService('objectql');  // ❌ May not exist yet
-  ctx.registerService('analytics', new Analytics(db));
-}
+const AnalyticsPlugin: Plugin = {
+  name: 'com.example.analytics',
+
+  async init(ctx: PluginContext) {
+    const db = ctx.getService('objectql');  // ❌ May not exist yet
+    ctx.registerService('analytics', new Analytics(db));
+  },
+};
 ```
 
-### ✅ Correct — Getting Service in start()
+### ✅ Correct — Declare the Dependency So init() Order Is Guaranteed
 
 ```typescript
-async init(ctx: PluginContext) {
-  // Just register placeholder or factory
-  ctx.registerService('analytics', null);
-}
+const AnalyticsPlugin: Plugin = {
+  name: 'com.example.analytics',
+  dependencies: ['com.objectstack.engine.objectql'],  // ✅ inits first
 
-async start(ctx: PluginContext) {
-  const db = ctx.getService('objectql');  // ✅ Safe — all services registered
-  const analytics = new Analytics(db);
-  ctx.replaceService('analytics', analytics);
-}
+  async init(ctx: PluginContext) {
+    const db = ctx.getService('objectql');  // ✅ Guaranteed registered
+    ctx.registerService('analytics', new Analytics(db));
+  },
+};
 ```
+
+Never register `null` as a placeholder: `registerService` **throws** on a
+duplicate key (so you cannot register the real instance later without
+`replaceService`), and `getService()` treats a falsy value as missing and
+throws — so consumers break either way.
 
 ### ❌ Incorrect — No Error Handling for Optional Service
 
@@ -232,7 +249,8 @@ async start(ctx: PluginContext) {
 ```typescript
 async init(ctx: PluginContext) {
   ctx.registerService('cache', new MemoryCache());
-  ctx.registerService('cache', new RedisCache());  // ❌ Overwrites silently
+  ctx.registerService('cache', new RedisCache());
+  // ❌ THROWS: "[Kernel] Service 'cache' already registered"
 }
 ```
 
