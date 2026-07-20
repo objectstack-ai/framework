@@ -27,6 +27,34 @@ export const FieldTranslationSchema = lazySchema(() => z.object({
 export type FieldTranslation = z.infer<typeof FieldTranslationSchema>;
 
 /**
+ * Action Result-Dialog Translation Schema
+ *
+ * Translations for an action's post-success `resultDialog` (the one-shot
+ * reveal of secrets like temporary passwords, client secrets, or backup
+ * codes). Shared by object `_actions`, `globalActions`, and the
+ * object-first `ObjectTranslationNode._actions`.
+ *
+ * Convention:
+ *   …_actions.<action_name>.resultDialog.title
+ *   …_actions.<action_name>.resultDialog.description
+ *   …_actions.<action_name>.resultDialog.acknowledge
+ *   …_actions.<action_name>.resultDialog.fields.<path>
+ *
+ * `fields` is keyed by the **literal** `resultDialog.fields[].path` from the
+ * action metadata (e.g. `"user.email"`, `"temporaryPassword"`). Keys may
+ * contain dots — resolvers must index the record directly, not split on `.`.
+ */
+export const ActionResultDialogTranslationSchema = lazySchema(() => z.object({
+  title: z.string().optional().describe('Translated result dialog title'),
+  description: z.string().optional().describe('Translated result dialog description'),
+  acknowledge: z.string().optional().describe('Translated acknowledge button label'),
+  fields: z.record(z.string(), z.string()).optional()
+    .describe('Result field labels keyed by the literal field path declared in the action metadata (keys may contain dots)'),
+}).describe('Translations for an action result dialog'));
+
+export type ActionResultDialogTranslation = z.infer<typeof ActionResultDialogTranslationSchema>;
+
+/**
  * Object Translation Data Schema
  *
  * Translation data for a **single object** in a **single locale**.
@@ -80,6 +108,7 @@ export const ObjectTranslationDataSchema = lazySchema(() => z.object({
    *   objects.<object>._actions.<action_name>.label
    *   objects.<object>._actions.<action_name>.confirmText
    *   objects.<object>._actions.<action_name>.successMessage
+   *   objects.<object>._actions.<action_name>.resultDialog.*
    */
   _actions: z.record(z.string(), z.object({
     label: z.string().optional().describe('Translated action label'),
@@ -91,6 +120,8 @@ export const ObjectTranslationDataSchema = lazySchema(() => z.object({
       placeholder: z.string().optional().describe('Translated action parameter placeholder'),
       options: z.record(z.string(), z.string()).optional().describe('Param select option value to translated label'),
     })).optional().describe('Action parameter translations keyed by parameter name'),
+    resultDialog: ActionResultDialogTranslationSchema.optional()
+      .describe('Translations for the action result dialog'),
   })).optional().describe('Action translations keyed by action name'),
 
   /**
@@ -152,6 +183,7 @@ export const TranslationDataSchema = lazySchema(() => z.object({
    *   globalActions.<action_name>.label
    *   globalActions.<action_name>.confirmText
    *   globalActions.<action_name>.successMessage
+   *   globalActions.<action_name>.resultDialog.*
    */
   globalActions: z.record(z.string(), z.object({
     label: z.string().optional().describe('Translated action label'),
@@ -163,6 +195,8 @@ export const TranslationDataSchema = lazySchema(() => z.object({
       placeholder: z.string().optional().describe('Translated action parameter placeholder'),
       options: z.record(z.string(), z.string()).optional().describe('Param select option value to translated label'),
     })).optional().describe('Action parameter translations keyed by parameter name'),
+    resultDialog: ActionResultDialogTranslationSchema.optional()
+      .describe('Translations for the action result dialog'),
   })).optional().describe('Global action translations keyed by action name'),
 
   /**
@@ -505,6 +539,8 @@ export const ObjectTranslationNodeSchema = lazySchema(() => z.object({
       placeholder: z.string().optional().describe('Translated action parameter placeholder'),
       options: z.record(z.string(), z.string()).optional().describe('Param select option value to translated label'),
     })).optional().describe('Action parameter translations keyed by parameter name'),
+    resultDialog: ActionResultDialogTranslationSchema.optional()
+      .describe('Translations for the action result dialog'),
   })).optional().describe('Action translations keyed by action name'),
 
   /** Notification message translations keyed by notification name */

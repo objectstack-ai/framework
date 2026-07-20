@@ -46,6 +46,17 @@ export interface ActionLike {
   successMessage?: string;
   /** When omitted, the action is treated as global. */
   objectName?: string;
+  /** Post-success reveal dialog (see `Action.resultDialog` in ui/action.zod). */
+  resultDialog?: ResultDialogLike;
+}
+
+/** Minimal result-dialog shape consumed by `resolveActionResultDialog`. */
+export interface ResultDialogLike {
+  title?: string;
+  description?: string;
+  acknowledge?: string;
+  fields?: Array<{ path: string; label?: string; [key: string]: unknown }>;
+  [key: string]: unknown;
 }
 
 /** Optional resolver settings. */
@@ -217,6 +228,77 @@ export function resolveActionConfirm(
 }
 
 /**
+ * Look up the translated `resultDialog` node for an action in a single
+ * locale's data (object-scoped first, then global). The node's `fields`
+ * record is keyed by the LITERAL result-field path (`"user.email"`), so it
+ * is indexed directly — never split on `.`.
+ */
+function lookupActionResultDialogNode(
+  data: TranslationData | undefined,
+  action: ActionLike,
+): { title?: string; description?: string; acknowledge?: string; fields?: Record<string, string> } | undefined {
+  if (!data) return undefined;
+  const fromObject = action.objectName
+    ? data.objects?.[action.objectName]?._actions?.[action.name]?.resultDialog
+    : undefined;
+  if (fromObject) return fromObject;
+  return data.globalActions?.[action.name]?.resultDialog;
+}
+
+function lookupActionResultDialogText(
+  bundle: TranslationBundle | undefined,
+  action: ActionLike,
+  pick: (node: NonNullable<ReturnType<typeof lookupActionResultDialogNode>>) => string | undefined,
+  opts?: ResolveOptions,
+): string | undefined {
+  if (!bundle) return undefined;
+  for (const code of localeChain(opts)) {
+    const node = lookupActionResultDialogNode(pickData(bundle, code), action);
+    if (!node) continue;
+    const value = pick(node);
+    if (typeof value === 'string' && value.length > 0) return value;
+  }
+  return undefined;
+}
+
+/**
+ * Resolve a translated copy of an action's `resultDialog`, overlaying
+ * `title` / `description` / `acknowledge` and per-field `label`s (keyed by
+ * the literal field path) when translations exist. Returns the original
+ * spec untouched (same reference) when the action has no `resultDialog`;
+ * otherwise a shallow copy with translated strings merged in.
+ */
+export function resolveActionResultDialog<T extends ResultDialogLike>(
+  bundle: TranslationBundle | undefined,
+  action: ActionLike & { resultDialog?: T },
+  opts?: ResolveOptions,
+): T | undefined {
+  const spec = action.resultDialog;
+  if (!spec) return spec;
+  const title = lookupActionResultDialogText(bundle, action, (n) => n.title, opts) ?? spec.title;
+  const description =
+    lookupActionResultDialogText(bundle, action, (n) => n.description, opts) ?? spec.description;
+  const acknowledge =
+    lookupActionResultDialogText(bundle, action, (n) => n.acknowledge, opts) ?? spec.acknowledge;
+  const fields = Array.isArray(spec.fields)
+    ? spec.fields.map((field) => {
+        if (!field || typeof field.path !== 'string') return field;
+        const label =
+          lookupActionResultDialogText(bundle, action, (n) => n.fields?.[field.path], opts) ??
+          field.label;
+        return label !== undefined ? { ...field, label } : field;
+      })
+    : spec.fields;
+  return {
+    ...spec,
+    ...(title !== undefined ? { title } : {}),
+    ...(description !== undefined ? { description } : {}),
+    ...(acknowledge !== undefined ? { acknowledge } : {}),
+    ...(fields !== undefined ? { fields } : {}),
+  };
+}
+
+/**
  * Resolve a translated success message for an action, returning `undefined`
  * if neither the bundle nor the action defines one.
  */
@@ -250,8 +332,9 @@ export function translateView<T extends ViewLike>(
 
 /**
  * Apply the active locale to an action metadata document by overwriting
- * `label`, `confirmText`, and `successMessage` with translated values when
- * available. The original document is not mutated; a shallow copy is returned.
+ * `label`, `confirmText`, `successMessage`, and the `resultDialog` copy with
+ * translated values when available. The original document is not mutated; a
+ * shallow copy is returned.
  */
 export function translateAction<T extends ActionLike>(
   action: T,
@@ -261,11 +344,13 @@ export function translateAction<T extends ActionLike>(
   const label = resolveActionLabel(bundle, action, opts);
   const confirmText = resolveActionConfirm(bundle, action, opts);
   const successMessage = resolveActionSuccess(bundle, action, opts);
+  const resultDialog = resolveActionResultDialog(bundle, action, opts);
   return {
     ...action,
     label,
     ...(confirmText !== undefined ? { confirmText } : {}),
     ...(successMessage !== undefined ? { successMessage } : {}),
+    ...(resultDialog !== undefined ? { resultDialog } : {}),
   };
 }
 

@@ -1267,6 +1267,7 @@
     "studio/StudioPluginManifest",
     "studio/ViewMode",
     "system/AccessControlConfig",
+    "system/ActionResultDialogTranslation",
     "system/AddFieldOperation",
     "system/AdvancedAuthConfig",
     "system/AnalyzerConfig",
