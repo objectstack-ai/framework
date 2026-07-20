@@ -14,7 +14,8 @@ import {
 } from './explain-engine.js';
 import type { ExplainDecision, ExplainOperation } from '@objectstack/spec/security';
 import { bootstrapDeclaredPositions } from './bootstrap-declared-positions.js';
-import { bootstrapDeclaredPermissions, upsertPackagePermissionSet } from './bootstrap-declared-permissions.js';
+import { bootstrapDeclaredPermissions, upsertPackagePermissionSet, readDeclared } from './bootstrap-declared-permissions.js';
+import { applyManagedWriteDenies } from './managed-object-write-denies.js';
 import {
   createPermissionSetWriteThrough,
   registerPermissionSetProjection,
@@ -1540,8 +1541,31 @@ export class SecurityPlugin implements Plugin {
     // onMetadataMutation fallback appends listeners, and re-wiring that would
     // project each save N times.
     let envProjectionWired = false;
+    // [#3325 / ADR-0092] Union the better-auth managed-object write denies into
+    // the default sets from the LIVE registry, replacing the hand-maintained
+    // baseline as the source of truth (a newly-declared identity table is then
+    // covered without editing a list). This mutates the shared
+    // `bootstrapPermissionSets` instances IN PLACE — the same objects the
+    // permission evaluator resolves and `bootstrapPlatformAdmin` serializes into
+    // the seed row — so it must run BEFORE the seeder below, and once (the
+    // transform is idempotent, but the once-flag avoids re-reading the registry /
+    // re-logging on every runBootstrap re-entry). See managed-object-write-denies.ts.
+    let managedDeniesApplied = false;
     const runBootstrap = async () => {
       try {
+        if (!managedDeniesApplied) {
+          const { applied, skippedExisting } = applyManagedWriteDenies(
+            this.bootstrapPermissionSets,
+            readDeclared(ql, 'object'),
+          );
+          managedDeniesApplied = true;
+          if (applied > 0) {
+            ctx.logger.info(
+              `[security] managed-object write denies unioned from registry (ADR-0092): ` +
+                `${applied} injected, ${skippedExisting} already present`,
+            );
+          }
+        }
         const report = await bootstrapPlatformAdmin(ql, this.bootstrapPermissionSets, {
           logger: ctx.logger,
         });
