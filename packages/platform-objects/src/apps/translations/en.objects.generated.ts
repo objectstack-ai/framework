@@ -168,6 +168,16 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
           mustChangePassword: {
             label: "Require Password Change On First Login"
           }
+        },
+        resultDialog: {
+          title: "User Created",
+          description: "Copy the temporary password now — it is shown only once and never stored.",
+          acknowledge: "I have saved this password",
+          fields: {
+            "user.email": "Email",
+            "user.phoneNumber": "Phone Number",
+            temporaryPassword: "Temporary Password"
+          }
         }
       },
       set_user_password: {
@@ -182,6 +192,14 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
           },
           mustChangePassword: {
             label: "Require Password Change On Next Login"
+          }
+        },
+        resultDialog: {
+          title: "Password Updated",
+          description: "If a temporary password was generated, copy it now — it is shown only once and never stored.",
+          acknowledge: "Done",
+          fields: {
+            temporaryPassword: "Temporary Password"
           }
         }
       },
@@ -988,6 +1006,15 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
           password: {
             label: "Current Password"
           }
+        },
+        resultDialog: {
+          title: "Two-factor authentication enabled",
+          description: "Scan the QR code with your authenticator app, then save the backup codes somewhere safe. The backup codes are shown only once.",
+          acknowledge: "I have saved my backup codes",
+          fields: {
+            totpURI: "Authenticator URI",
+            backupCodes: "Backup Codes"
+          }
         }
       },
       disable_two_factor: {
@@ -1006,6 +1033,14 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
         params: {
           password: {
             label: "Current Password"
+          }
+        },
+        resultDialog: {
+          title: "New backup codes generated",
+          description: "Previous backup codes are now invalid. Save these new codes somewhere safe — they are shown only once.",
+          acknowledge: "I have saved the new codes",
+          fields: {
+            backupCodes: "Backup Codes"
           }
         }
       }
@@ -1287,11 +1322,28 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
               public: "Public"
             }
           }
+        },
+        resultDialog: {
+          title: "OAuth application registered",
+          description: "Save the client_secret now — it is shown only once and cannot be recovered. You can rotate it later if it leaks.",
+          acknowledge: "I have saved the client secret",
+          fields: {
+            "client.client_id": "Client ID",
+            "client.client_secret": "Client Secret"
+          }
         }
       },
       rotate_client_secret: {
         label: "Rotate Client Secret",
-        confirmText: "Rotate this OAuth client's secret? The previous secret will stop working immediately and any integrations using it will break until they are updated with the new secret. The new secret is shown only once."
+        confirmText: "Rotate this OAuth client's secret? The previous secret will stop working immediately and any integrations using it will break until they are updated with the new secret. The new secret is shown only once.",
+        resultDialog: {
+          title: "Client secret rotated",
+          description: "Save the new secret now — it is shown only once. Update every integration before the previous secret's grace period ends.",
+          acknowledge: "I have updated my integrations",
+          fields: {
+            client_secret: "New Client Secret"
+          }
+        }
       },
       delete_oauth_application: {
         label: "Delete OAuth Application",

@@ -37,6 +37,16 @@ const config: any = {
         {
           name: 'set_password',
           label: 'Set Password',
+          resultDialog: {
+            title: 'Password Updated',
+            description: 'Copy the temporary password now — it is shown only once.',
+            acknowledge: 'Done',
+            fields: [
+              { path: 'user.email', label: 'Email', format: 'text' },
+              { path: 'temporaryPassword', label: 'Temporary Password', format: 'secret' },
+              { path: 'unlabeled' }, // no label → no entry
+            ],
+          },
           params: [
             { field: 'label' },
             { field: 'active', label: 'Enabled Override' },
@@ -142,6 +152,24 @@ describe('collectExpectedEntries', () => {
     expect(byPath[`${base}.mode.options.manual`]).toBe('Manual');
     // Top-level (global) actions get the same treatment.
     expect(byPath['globalActions.export_csv.params.delimiter.label']).toBe('Delimiter');
+  });
+
+  it('emits resultDialog entries keyed by the literal field path (dots preserved)', () => {
+    const entries = collectExpectedEntries(config);
+    const base = 'objects.sys_position._actions.set_password.resultDialog';
+    const byPath = Object.fromEntries(entries.map((e) => [e.path.join('.'), e.sourceValue]));
+
+    expect(byPath[`${base}.title`]).toBe('Password Updated');
+    expect(byPath[`${base}.description`]).toBe('Copy the temporary password now — it is shown only once.');
+    expect(byPath[`${base}.acknowledge`]).toBe('Done');
+    expect(byPath[`${base}.fields.temporaryPassword`]).toBe('Temporary Password');
+    // The dotted path stays ONE segment ('user.email'), never split.
+    const emailEntry = entries.find(
+      (e) => e.path.join('\u0000') === ['objects', 'sys_position', '_actions', 'set_password', 'resultDialog', 'fields', 'user.email'].join('\u0000'),
+    );
+    expect(emailEntry?.sourceValue).toBe('Email');
+    // Fields without a label emit nothing.
+    expect(byPath[`${base}.fields.unlabeled`]).toBeUndefined();
   });
 });
 

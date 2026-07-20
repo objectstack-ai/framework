@@ -168,6 +168,16 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
           mustChangePassword: {
             label: "首次登录时必须修改密码"
           }
+        },
+        resultDialog: {
+          title: "用户已创建",
+          description: "请立即复制临时密码——它只显示一次，不会被保存。",
+          acknowledge: "我已保存该密码",
+          fields: {
+            "user.email": "邮箱",
+            "user.phoneNumber": "手机号",
+            temporaryPassword: "临时密码"
+          }
         }
       },
       set_user_password: {
@@ -182,6 +192,14 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
           },
           mustChangePassword: {
             label: "下次登录时必须修改密码"
+          }
+        },
+        resultDialog: {
+          title: "密码已更新",
+          description: "如果生成了临时密码，请立即复制——它只显示一次，不会被保存。",
+          acknowledge: "完成",
+          fields: {
+            temporaryPassword: "临时密码"
           }
         }
       },
@@ -988,6 +1006,15 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
           password: {
             label: "当前密码"
           }
+        },
+        resultDialog: {
+          title: "双因素认证已启用",
+          description: "请用身份验证器应用扫描二维码，并将备用码妥善保存。备用码只显示一次。",
+          acknowledge: "我已保存备用码",
+          fields: {
+            totpURI: "身份验证器 URI",
+            backupCodes: "备用码"
+          }
         }
       },
       disable_two_factor: {
@@ -1006,6 +1033,14 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
         params: {
           password: {
             label: "当前密码"
+          }
+        },
+        resultDialog: {
+          title: "已生成新的备用码",
+          description: "之前的备用码已全部失效。请妥善保存这些新备用码——它们只显示一次。",
+          acknowledge: "我已保存新备用码",
+          fields: {
+            backupCodes: "备用码"
           }
         }
       }
@@ -1287,11 +1322,28 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
               public: "公共客户端"
             }
           }
+        },
+        resultDialog: {
+          title: "OAuth 应用已注册",
+          description: "请立即保存 client_secret——它只显示一次，无法找回。如发生泄露可稍后轮换。",
+          acknowledge: "我已保存 Client Secret",
+          fields: {
+            "client.client_id": "Client ID",
+            "client.client_secret": "Client Secret"
+          }
         }
       },
       rotate_client_secret: {
         label: "轮换 Client Secret",
-        confirmText: "确定要轮换此 OAuth 客户端的密钥吗？旧密钥将立即失效，任何使用它的集成都将中断，直到更新为新密钥为止。新密钥仅显示一次。"
+        confirmText: "确定要轮换此 OAuth 客户端的密钥吗？旧密钥将立即失效，任何使用它的集成都将中断，直到更新为新密钥为止。新密钥仅显示一次。",
+        resultDialog: {
+          title: "Client Secret 已轮换",
+          description: "请立即保存新密钥——它只显示一次。请在旧密钥宽限期结束前更新所有集成。",
+          acknowledge: "我已更新所有集成",
+          fields: {
+            client_secret: "新的 Client Secret"
+          }
+        }
       },
       delete_oauth_application: {
         label: "删除 OAuth 应用",

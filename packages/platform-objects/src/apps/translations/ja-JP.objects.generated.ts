@@ -168,6 +168,16 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
           mustChangePassword: {
             label: "初回サインイン時にパスワード変更を必須にする"
           }
+        },
+        resultDialog: {
+          title: "ユーザーを作成しました",
+          description: "一時パスワードを今すぐコピーしてください。表示は一度きりで、保存されません。",
+          acknowledge: "パスワードを保存しました",
+          fields: {
+            "user.email": "メールアドレス",
+            "user.phoneNumber": "電話番号",
+            temporaryPassword: "一時パスワード"
+          }
         }
       },
       set_user_password: {
@@ -182,6 +192,14 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
           },
           mustChangePassword: {
             label: "次回サインイン時にパスワード変更を必須にする"
+          }
+        },
+        resultDialog: {
+          title: "パスワードを更新しました",
+          description: "一時パスワードが生成された場合は今すぐコピーしてください。表示は一度きりで、保存されません。",
+          acknowledge: "完了",
+          fields: {
+            temporaryPassword: "一時パスワード"
           }
         }
       },
@@ -988,6 +1006,15 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
           password: {
             label: "現在のパスワード"
           }
+        },
+        resultDialog: {
+          title: "二要素認証を有効化しました",
+          description: "認証アプリで QR コードをスキャンし、バックアップコードを安全な場所に保存してください。バックアップコードの表示は一度きりです。",
+          acknowledge: "バックアップコードを保存しました",
+          fields: {
+            totpURI: "認証アプリ URI",
+            backupCodes: "バックアップコード"
+          }
         }
       },
       disable_two_factor: {
@@ -1006,6 +1033,14 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
         params: {
           password: {
             label: "現在のパスワード"
+          }
+        },
+        resultDialog: {
+          title: "新しいバックアップコードを生成しました",
+          description: "以前のバックアップコードは無効になりました。新しいコードを安全な場所に保存してください。表示は一度きりです。",
+          acknowledge: "新しいコードを保存しました",
+          fields: {
+            backupCodes: "バックアップコード"
           }
         }
       }
@@ -1287,11 +1322,28 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
               public: "パブリック"
             }
           }
+        },
+        resultDialog: {
+          title: "OAuthアプリケーションを登録しました",
+          description: "client_secret を今すぐ保存してください。表示は一度きりで、復元できません。漏えいした場合は後でローテーションできます。",
+          acknowledge: "クライアントシークレットを保存しました",
+          fields: {
+            "client.client_id": "クライアント ID",
+            "client.client_secret": "クライアントシークレット"
+          }
         }
       },
       rotate_client_secret: {
         label: "クライアントシークレット更新",
-        confirmText: "このOAuthクライアントのシークレットをローテーションしますか？以前のシークレットは直ちに使用できなくなり、それを使用している連携は新しいシークレットに更新されるまで動作しなくなります。新しいシークレットは一度しか表示されません。"
+        confirmText: "このOAuthクライアントのシークレットをローテーションしますか？以前のシークレットは直ちに使用できなくなり、それを使用している連携は新しいシークレットに更新されるまで動作しなくなります。新しいシークレットは一度しか表示されません。",
+        resultDialog: {
+          title: "クライアントシークレットをローテーションしました",
+          description: "新しいシークレットを今すぐ保存してください。表示は一度きりです。旧シークレットの猶予期間が終わる前にすべての連携を更新してください。",
+          acknowledge: "連携を更新しました",
+          fields: {
+            client_secret: "新しいクライアントシークレット"
+          }
+        }
       },
       delete_oauth_application: {
         label: "OAuthアプリケーションを削除",

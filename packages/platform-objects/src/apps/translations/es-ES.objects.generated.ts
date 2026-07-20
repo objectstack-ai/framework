@@ -168,6 +168,16 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
           mustChangePassword: {
             label: "Exigir cambio de contraseña en el primer inicio de sesión"
           }
+        },
+        resultDialog: {
+          title: "Usuario creado",
+          description: "Copie la contraseña temporal ahora: se muestra una sola vez y no se almacena.",
+          acknowledge: "He guardado esta contraseña",
+          fields: {
+            "user.email": "Correo electrónico",
+            "user.phoneNumber": "Número de teléfono",
+            temporaryPassword: "Contraseña temporal"
+          }
         }
       },
       set_user_password: {
@@ -182,6 +192,14 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
           },
           mustChangePassword: {
             label: "Exigir cambio de contraseña en el próximo inicio de sesión"
+          }
+        },
+        resultDialog: {
+          title: "Contraseña actualizada",
+          description: "Si se generó una contraseña temporal, cópiela ahora: se muestra una sola vez y no se almacena.",
+          acknowledge: "Hecho",
+          fields: {
+            temporaryPassword: "Contraseña temporal"
           }
         }
       },
@@ -988,6 +1006,15 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
           password: {
             label: "Contraseña actual"
           }
+        },
+        resultDialog: {
+          title: "Autenticación de doble factor habilitada",
+          description: "Escanee el código QR con su aplicación de autenticación y guarde los códigos de respaldo en un lugar seguro. Los códigos de respaldo se muestran una sola vez.",
+          acknowledge: "He guardado mis códigos de respaldo",
+          fields: {
+            totpURI: "URI del autenticador",
+            backupCodes: "Códigos de respaldo"
+          }
         }
       },
       disable_two_factor: {
@@ -1006,6 +1033,14 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
         params: {
           password: {
             label: "Contraseña actual"
+          }
+        },
+        resultDialog: {
+          title: "Nuevos códigos de respaldo generados",
+          description: "Los códigos de respaldo anteriores ya no son válidos. Guarde estos nuevos códigos en un lugar seguro: se muestran una sola vez.",
+          acknowledge: "He guardado los nuevos códigos",
+          fields: {
+            backupCodes: "Códigos de respaldo"
           }
         }
       }
@@ -1287,11 +1322,28 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
               public: "Pública"
             }
           }
+        },
+        resultDialog: {
+          title: "Aplicación OAuth registrada",
+          description: "Guarde el client_secret ahora: se muestra una sola vez y no se puede recuperar. Puede rotarlo más adelante si se filtra.",
+          acknowledge: "He guardado el secreto de cliente",
+          fields: {
+            "client.client_id": "ID de cliente",
+            "client.client_secret": "Secreto de cliente"
+          }
         }
       },
       rotate_client_secret: {
         label: "Rotar Client Secret",
-        confirmText: "¿Rotar el secreto de este cliente OAuth? El secreto anterior dejará de funcionar de inmediato y cualquier integración que lo utilice fallará hasta que se actualice con el nuevo secreto. El nuevo secreto se muestra una sola vez."
+        confirmText: "¿Rotar el secreto de este cliente OAuth? El secreto anterior dejará de funcionar de inmediato y cualquier integración que lo utilice fallará hasta que se actualice con el nuevo secreto. El nuevo secreto se muestra una sola vez.",
+        resultDialog: {
+          title: "Secreto de cliente rotado",
+          description: "Guarde el nuevo secreto ahora: se muestra una sola vez. Actualice todas las integraciones antes de que termine el periodo de gracia del secreto anterior.",
+          acknowledge: "He actualizado mis integraciones",
+          fields: {
+            client_secret: "Nuevo secreto de cliente"
+          }
+        }
       },
       delete_oauth_application: {
         label: "Eliminar aplicación OAuth",

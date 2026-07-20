@@ -8,6 +8,8 @@ import {
   resolveActionLabel,
   resolveActionConfirm,
   resolveActionSuccess,
+  resolveActionResultDialog,
+  translateAction,
   translateMetadataDocument,
 } from './i18n-resolver';
 
@@ -39,6 +41,29 @@ describe('ObjectTranslationDataSchema (_views/_actions extensions)', () => {
     expect(data._actions?.convert_lead.label).toBe('转化线索');
     expect(data._actions?.convert_lead.confirmText).toBe('确定要转化此线索吗？');
     expect(data._actions?.convert_lead.successMessage).toBe('线索转化成功！');
+  });
+
+  it('accepts _actions entries with a resultDialog node (dotted field paths stay literal keys)', () => {
+    const data = ObjectTranslationDataSchema.parse({
+      label: '用户',
+      _actions: {
+        create_user: {
+          label: '创建用户',
+          resultDialog: {
+            title: '用户已创建',
+            description: '请立即复制临时密码——它只显示一次，不会被存储。',
+            acknowledge: '我已保存该密码',
+            fields: {
+              'user.email': '邮箱',
+              temporaryPassword: '临时密码',
+            },
+          },
+        },
+      },
+    });
+    expect(data._actions?.create_user.resultDialog?.title).toBe('用户已创建');
+    expect(data._actions?.create_user.resultDialog?.fields?.['user.email']).toBe('邮箱');
+    expect(data._actions?.create_user.resultDialog?.fields?.temporaryPassword).toBe('临时密码');
   });
 });
 
@@ -211,6 +236,93 @@ describe('resolveActionLabel + confirm + success', () => {
     expect(
       resolveActionLabel(undefined, { name: 'nameless_action' }),
     ).toBe('nameless_action');
+  });
+});
+
+describe('resolveActionResultDialog + translateAction', () => {
+  const dialogBundle: TranslationBundle = {
+    'zh-CN': {
+      objects: {
+        sys_user: {
+          label: '用户',
+          _actions: {
+            create_user: {
+              resultDialog: {
+                title: '用户已创建',
+                description: '请立即复制临时密码——它只显示一次，不会被存储。',
+                acknowledge: '我已保存该密码',
+                fields: {
+                  'user.email': '邮箱',
+                  temporaryPassword: '临时密码',
+                },
+              },
+            },
+          },
+        },
+      },
+      globalActions: {
+        export_secrets: {
+          resultDialog: { title: '密钥已导出' },
+        },
+      },
+    },
+  };
+
+  const createUser = {
+    name: 'create_user',
+    label: 'Create User',
+    objectName: 'sys_user',
+    resultDialog: {
+      title: 'User Created',
+      description: 'Copy the temporary password now — it is shown only once and never stored.',
+      acknowledge: 'I have saved this password',
+      fields: [
+        { path: 'user.email', label: 'Email', format: 'text' },
+        { path: 'user.phoneNumber', label: 'Phone Number', format: 'text' },
+        { path: 'temporaryPassword', label: 'Temporary Password', format: 'secret' },
+      ],
+    },
+  };
+
+  it('overlays title/description/acknowledge and per-path field labels', () => {
+    const out = resolveActionResultDialog(dialogBundle, createUser, { locale: 'zh-CN' });
+    expect(out?.title).toBe('用户已创建');
+    expect(out?.description).toBe('请立即复制临时密码——它只显示一次，不会被存储。');
+    expect(out?.acknowledge).toBe('我已保存该密码');
+    expect(out?.fields?.[0]).toEqual({ path: 'user.email', label: '邮箱', format: 'text' });
+    // Untranslated field keeps its literal label; formats survive the overlay.
+    expect(out?.fields?.[1]).toEqual({ path: 'user.phoneNumber', label: 'Phone Number', format: 'text' });
+    expect(out?.fields?.[2]).toEqual({ path: 'temporaryPassword', label: '临时密码', format: 'secret' });
+    // Source spec is not mutated.
+    expect(createUser.resultDialog.title).toBe('User Created');
+    expect(createUser.resultDialog.fields[0].label).toBe('Email');
+  });
+
+  it('falls back to the literal spec when the locale has no entry', () => {
+    const out = resolveActionResultDialog(dialogBundle, createUser, { locale: 'ja-JP', fallbackChain: [] });
+    expect(out?.title).toBe('User Created');
+    expect(out?.fields?.[0].label).toBe('Email');
+  });
+
+  it('resolves globalActions for object-less actions', () => {
+    const out = resolveActionResultDialog(
+      dialogBundle,
+      { name: 'export_secrets', resultDialog: { title: 'Secrets exported' } },
+      { locale: 'zh-CN' },
+    );
+    expect(out?.title).toBe('密钥已导出');
+  });
+
+  it('returns undefined when the action has no resultDialog', () => {
+    expect(
+      resolveActionResultDialog(dialogBundle, { name: 'create_user', objectName: 'sys_user' }, { locale: 'zh-CN' }),
+    ).toBeUndefined();
+  });
+
+  it('translateAction carries the translated resultDialog', () => {
+    const out = translateAction(createUser, dialogBundle, { locale: 'zh-CN' });
+    expect(out.resultDialog?.title).toBe('用户已创建');
+    expect(out.resultDialog?.fields?.[2].label).toBe('临时密码');
   });
 });
 

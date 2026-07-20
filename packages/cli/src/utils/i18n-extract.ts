@@ -27,8 +27,10 @@
  *   objects.<name>._actions.<action>.successMessage
  *   objects.<name>._actions.<action>.params.<param>.label / .helpText / .placeholder
  *   objects.<name>._actions.<action>.params.<param>.options.<value>
+ *   objects.<name>._actions.<action>.resultDialog.title / .description / .acknowledge
+ *   objects.<name>._actions.<action>.resultDialog.fields.<path>
  *   globalActions.<action>.label / .confirmText / .successMessage
- *   globalActions.<action>.params.<param>.* (same shape as object actions)
+ *   globalActions.<action>.params.<param>.* / .resultDialog.* (same shape as object actions)
  *   apps.<app>.label / .description
  *   apps.<app>.navigation.<id>.label
  *   dashboards.<dash>.label / .description
@@ -199,6 +201,43 @@ function pushActionParams(
   }
 }
 
+/**
+ * Emit `resultDialog.{title,description,acknowledge}` and
+ * `resultDialog.fields.<path>` entries under an action's translation root.
+ * Mirrors `ActionResultDialogTranslationSchema` in @objectstack/spec and the
+ * client-side `actionResultDialog` resolver. Field entries are keyed by the
+ * LITERAL result-field path (`"user.email"`) — the dot stays inside a single
+ * path segment, matching how resolvers index the record without splitting.
+ */
+function pushActionResultDialog(
+  out: ExpectedEntry[],
+  actionRoot: string[],
+  action: any,
+  kind: ExpectedEntry['source'],
+  objectName?: string,
+): void {
+  const dialog = action?.resultDialog;
+  if (!dialog || typeof dialog !== 'object') return;
+  const base = [...actionRoot, 'resultDialog'];
+  if (typeof dialog.title === 'string' && dialog.title.length > 0) {
+    pushEntry(out, [...base, 'title'], dialog.title, kind, { objectName });
+  }
+  if (typeof dialog.description === 'string' && dialog.description.length > 0) {
+    pushEntry(out, [...base, 'description'], dialog.description, kind, { objectName });
+  }
+  if (typeof dialog.acknowledge === 'string' && dialog.acknowledge.length > 0) {
+    pushEntry(out, [...base, 'acknowledge'], dialog.acknowledge, kind, { objectName });
+  }
+  if (Array.isArray(dialog.fields)) {
+    for (const field of dialog.fields) {
+      if (!field || typeof field !== 'object') continue;
+      if (typeof field.path !== 'string' || field.path.length === 0) continue;
+      if (typeof field.label !== 'string' || field.label.length === 0) continue;
+      pushEntry(out, [...base, 'fields', field.path], field.label, kind, { objectName });
+    }
+  }
+}
+
 /** Collect every translatable entry from a normalized stack config. */
 export function collectExpectedEntries(config: any): ExpectedEntry[] {
   const out: ExpectedEntry[] = [];
@@ -286,6 +325,7 @@ export function collectExpectedEntries(config: any): ExpectedEntry[] {
           pushEntry(out, ['objects', objectName, '_actions', aname, 'successMessage'], action.successMessage, 'action', { objectName });
         }
         pushActionParams(out, ['objects', objectName, '_actions', aname], action, 'action', objectName);
+        pushActionResultDialog(out, ['objects', objectName, '_actions', aname], action, 'action', objectName);
       }
     }
   }
@@ -320,6 +360,7 @@ export function collectExpectedEntries(config: any): ExpectedEntry[] {
       pushEntry(out, [...root, 'successMessage'], action.successMessage, kind, { objectName });
     }
     pushActionParams(out, root, action, kind, objectName);
+    pushActionResultDialog(out, root, action, kind, objectName);
   }
 
   // ── Apps + navigation ────────────────────────────────────────────
