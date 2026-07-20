@@ -89,6 +89,23 @@ describe('createDispatcherPlugin — HTTP route registration', () => {
     expect(routes).toContain('POST /api/v1/packages');
   });
 
+  // Regression: the in-app notifications surface (ADR-0030) — inbox list +
+  // receipt mark-read — had a `handleNotification` dispatch() branch and a
+  // discovery entry, but NO server.<verb>() registration, so every
+  // `/api/v1/notifications*` request 404'd on the standalone / `os dev` server
+  // (only the cloud hosts' hono catch-all reached it). That left mark-read with
+  // no working endpoint — the console's direct receipt write is rejected by
+  // ADR-0103's engine-owned gate — so unread notifications could never clear.
+  it('mounts /notifications (GET list, POST read, POST read/all) so mark-read reaches dispatch()', async () => {
+    const { server, routes } = makeFakeServer();
+    const plugin = createDispatcherPlugin({ prefix: '/api/v1', securityHeaders: false });
+    await plugin.start?.(makeCtx(server));
+
+    expect(routes).toContain('GET /api/v1/notifications');
+    expect(routes).toContain('POST /api/v1/notifications/read');
+    expect(routes).toContain('POST /api/v1/notifications/read/all');
+  });
+
   it('also mounts a known existing route (sanity that start() ran)', async () => {
     const { server, routes } = makeFakeServer();
     const plugin = createDispatcherPlugin({ prefix: '/api/v1', securityHeaders: false });

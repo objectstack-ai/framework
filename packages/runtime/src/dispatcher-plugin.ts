@@ -691,6 +691,43 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
                 }
             });
 
+            // ── In-app notifications (ADR-0030) ─────────────────────────
+            // The inbox list + receipt mark-read surface backed by the
+            // messaging service. `handleNotification` + its discovery entry
+            // already existed, but only the cloud hosts' @objectstack/hono
+            // catch-all reached it — the standalone / `os dev` server mounts
+            // ONLY the explicit routes here, so every `/api/v1/notifications*`
+            // request 404'd (mark-read had no working endpoint: the console's
+            // direct receipt write is rejected by ADR-0103's engine-owned
+            // gate, and this REST fallback was unreachable). Mount them
+            // explicitly so read-state actually persists in every deployment.
+            server.get(`${prefix}/notifications`, async (req: any, res: any) => {
+                try {
+                    const result = await dispatcher.dispatch('GET', '/notifications', undefined, req.query, { request: req });
+                    sendResult(result, res);
+                } catch (err: any) {
+                    errorResponse(err, res);
+                }
+            });
+
+            server.post(`${prefix}/notifications/read`, async (req: any, res: any) => {
+                try {
+                    const result = await dispatcher.dispatch('POST', '/notifications/read', req.body, req.query, { request: req });
+                    sendResult(result, res);
+                } catch (err: any) {
+                    errorResponse(err, res);
+                }
+            });
+
+            server.post(`${prefix}/notifications/read/all`, async (req: any, res: any) => {
+                try {
+                    const result = await dispatcher.dispatch('POST', '/notifications/read/all', req.body, req.query, { request: req });
+                    sendResult(result, res);
+                } catch (err: any) {
+                    errorResponse(err, res);
+                }
+            });
+
             // ── Packages ────────────────────────────────────────────────
             // Single pipeline (ADR-0076 D11 / OQ#9): every package route flows
             // through dispatch() — like analytics / i18n / automation / AI —

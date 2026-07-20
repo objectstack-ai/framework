@@ -1,12 +1,14 @@
 ---
 "@objectstack/plugin-audit": patch
 "@objectstack/service-storage": patch
+"@objectstack/runtime": patch
 ---
 
-feat(i18n): localize collaboration notification titles and the storage objects
+feat(i18n): localize collaboration notification titles and the storage objects; wire the notifications REST routes
 
-Two gaps left the notification surface English-only on localized workspaces
-(observed as `sys_file "repro.png" assigned to you` over an all-Chinese UI):
+Three gaps behind one report (a `sys_file "repro.png" assigned to you`
+notification that was English on an all-Chinese workspace, opened an English
+detail page, and never cleared its unread state):
 
 - **plugin-audit** — the assignment (`collab.assignment`) and @mention
   (`collab.mention`) bell titles were hardcoded English literals built from the
@@ -28,3 +30,14 @@ Two gaps left the notification surface English-only on localized workspaces
   `i18n.loadTranslations` on `kernel:ready`, matching service-messaging.
   (`sys_attachment` stays in platform-objects' bundles pending the
   storage-domain decomposition.)
+
+- **runtime** — the in-app notifications REST surface (`GET
+  /api/v1/notifications`, `POST /api/v1/notifications/read`, `POST
+  /api/v1/notifications/read/all`; ADR-0030) had its `handleNotification`
+  dispatch branch and discovery entry, but no `server.<verb>()` mount in
+  `dispatcher-plugin`, so only the cloud hosts' hono catch-all reached it — the
+  standalone / `os dev` server 404'd every request. That left mark-read with no
+  working endpoint (the console's direct `sys_notification_receipt` write is
+  rejected by ADR-0103's engine-owned gate), so unread notifications could never
+  clear. The three routes are now mounted explicitly, guarded by the
+  route-registration regression test.
