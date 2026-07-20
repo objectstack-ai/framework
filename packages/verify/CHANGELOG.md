@@ -1,5 +1,34 @@
 # @objectstack/verify
 
+## 16.0.0-rc.1
+
+### Patch Changes
+
+- Updated dependencies [6289ec3]
+- Updated dependencies [8efa395]
+- Updated dependencies [bfa3c3f]
+- Updated dependencies [b320158]
+- Updated dependencies [ee0a499]
+- Updated dependencies [9d897b3]
+- Updated dependencies [62a2117]
+- Updated dependencies [f8c1b69]
+- Updated dependencies [674457a]
+- Updated dependencies [06ff734]
+  - @objectstack/spec@16.0.0-rc.1
+  - @objectstack/rest@16.0.0-rc.1
+  - @objectstack/plugin-hono-server@16.0.0-rc.1
+  - @objectstack/service-automation@16.0.0-rc.1
+  - @objectstack/runtime@16.0.0-rc.1
+  - @objectstack/plugin-security@16.0.0-rc.1
+  - @objectstack/plugin-sharing@16.0.0-rc.1
+  - @objectstack/objectql@16.0.0-rc.1
+  - @objectstack/core@16.0.0-rc.1
+  - @objectstack/driver-sqlite-wasm@16.0.0-rc.1
+  - @objectstack/plugin-auth@16.0.0-rc.1
+  - @objectstack/service-analytics@16.0.0-rc.1
+  - @objectstack/service-datasource@16.0.0-rc.1
+  - @objectstack/service-settings@16.0.0-rc.1
+
 ## 16.0.0-rc.0
 
 ### Patch Changes

@@ -1,5 +1,98 @@
 # @objectstack/spec
 
+## 16.0.0-rc.1
+
+### Minor Changes
+
+- 6289ec3: feat(i18n): translation slot for action `resultDialog` copy — the one-shot secret-reveal dialogs are now localizable
+
+  The post-success `resultDialog` (temporary passwords, 2FA backup codes, OAuth
+  client secrets) had no slot in the translation protocol, so its title /
+  description / acknowledge button / field labels always rendered the hardcoded
+  English metadata literals even on fully-translated locales.
+
+  - **spec.** `_actions.<action>` (object + object-first node) and
+    `globalActions.<action>` gain an optional `resultDialog` translation node
+    (`ActionResultDialogTranslationSchema`): `title`, `description`,
+    `acknowledge`, and `fields` keyed by the **literal** result-field path
+    (e.g. `"user.email"` — keys may contain dots; resolvers index the record
+    directly, never split on `.`). New `resolveActionResultDialog` overlay
+    resolver, wired into `translateAction` for API-boundary translation.
+  - **cli.** `os i18n extract` emits the new `resultDialog.*` keys (title /
+    description / acknowledge / `fields.<path>` for labelled fields), so
+    coverage and skeleton generation see them.
+  - **platform-objects.** en / zh-CN / ja-JP / es-ES bundles ship the
+    resultDialog copy for all six shipped dialogs: `sys_user.create_user`,
+    `sys_user.set_user_password`, `sys_two_factor.enable_two_factor`,
+    `sys_two_factor.regenerate_backup_codes`,
+    `sys_oauth_application.create_oauth_application`, and
+    `sys_oauth_application.rotate_client_secret`.
+
+  Client-side rendering lands in objectui (`actionResultDialog` resolver in
+  `@object-ui/i18n` + result-dialog handlers). Purely additive — untranslated
+  locales keep falling back to the metadata literals.
+
+- 8efa395: feat(approvals): server-computed `viewer` capability for precise decision-action gating
+
+  `getRequest` / `listRequests` now attach a per-viewer block —
+  `viewer: { can_act, is_submitter }` — computed from the caller's context
+  (`ApprovalRequestRow.viewer`):
+
+  - `can_act` — the caller is a _current pending approver_ (their user id is in the
+    request's resolved `pending_approvers` while it is still `pending`). This is
+    the same check the decision methods authorize with, so it already reflects
+    position/team/manager resolution — strictly more accurate than a client-side
+    identity guess.
+  - `is_submitter` — the caller submitted the request.
+
+  The declared decision actions on `sys_approval_request` now gate on it: approver
+  actions (approve/reject/reassign/send-back/request-info) use
+  `record.viewer.can_act`; submitter levers (remind/recall/resubmit) use
+  `record.viewer.is_submitter`. Previously approver actions only trimmed the
+  non-pending case, so a submitter viewing their own pending request saw buttons
+  they couldn't use (the backend 403'd); a position-addressed approver could be
+  wrongly hidden by the old client heuristic. Where `viewer` is absent (a row
+  surfaced outside a service read with a user context), the predicate fails closed.
+
+- bfa3c3f: **Broadcast a `transactionalBatch` capability bit in discovery so clients negotiate the atomic cross-object batch declaratively, instead of runtime-probing 404/405/501 (#3298).**
+
+  The atomic cross-object batch endpoint (`POST {basePath}/batch`, #1604 / ADR-0034 item 4) and its typed SDK surface (`client.data.batchTransaction`, #3271) already shipped, but discovery never told a client whether a backend actually supports it. Consumers (notably ObjectUI's `ObjectStackAdapter`) had to _probe_: fire a `/batch`, read `404`/`405` (no route) or `501` (no runtime transaction), and only then fall back to non-atomic client-side simulation. That is "find out by calling", not capability negotiation — it cannot be decided at connect time and cannot serve as the "minimum backend supports `/batch`" gate that blocks hard-deleting the non-atomic fallback downstream.
+
+  `WellKnownCapabilitiesSchema` gains a required `transactionalBatch: boolean`, and **every** discovery producer fills it honestly (`declared === enforced`), so it never becomes a declared-but-unpopulated bit:
+
+  - **`@objectstack/metadata-protocol`** (`getDiscovery`) — reports whether the runtime engine can honour a transaction (`typeof engine.transaction === 'function'`). The `/batch` handler runs its ops inside `engine.transaction()`, which degrades to a non-atomic passthrough (or 501) without one.
+  - **`@objectstack/rest`** (`/discovery`) — ANDs the engine signal with whether it actually mounts the route (`api.enableBatch`), so a server with batch disabled reports `false` even on a transaction-capable engine (never advertise an endpoint that would 404).
+  - **`@objectstack/plugin-hono-server`** (standalone discovery) — reports `false`: this minimal surface registers CRUD only and does not mount `/batch` (that ships with `@objectstack/rest`). Under-reporting is the safe direction — a client keeps its correct-but-slower fallback rather than losing atomicity.
+  - **`@objectstack/client`** — already normalizes hierarchical `capabilities` to flat booleans, so `client.capabilities.transactionalBatch` is exposed (and now typed) for declarative consumers.
+
+  The bit follows the existing capability semantics: `true` ⟺ the `/batch` route is mounted **and** the runtime can honour a transaction — the exact condition under which the endpoint returns `200` rather than `404`/`405`/`501`. Additive and behavior-preserving; only the discovery payload gains a field.
+
+- 62a2117: **Split the overloaded `managedBy: 'system'` bucket with an explicit `engine-owned` value (ADR-0103 addendum, #3343).** ADR-0103 deferred the enum split ("revisitable later as a rename") because a new `managedBy` value would fall through to the fully-editable `platform` default on deployed Console clients. Both reasons against it are now retired — the server-side write guard / `apiMethods` reconciliation / `/me/permissions` clamp make that fallthrough cosmetic (the write is rejected regardless of what the client renders), and objectui#2712 closed the UI union — so v16 lands it, **additively**.
+
+  - **New enum value `engine-owned`** with the same all-locked default affordance row as `system` (`create/import/edit/delete: false`, `exportCsv: true`). It joins `ENGINE_OWNED_BUCKETS` (the engine write guard) and `GUARDED_WRITE_BUCKETS` (the `/me/permissions` clamp); the guard, `reconcileManagedApiMethods`, and the clamp mechanisms are unchanged — `engine-owned` is an explicit member of the set they already covered by resolved affordance.
+  - **20 objects relabelled `system → engine-owned`** — the ones the engine owns end to end and that declared no write-opening `userActions` (the metadata store, jobs, approval runtime rows, sharing rows, `sys_automation_run`, the messaging delivery/receipt pipeline, `sys_secret`, settings). One-line, behaviour-identical per object.
+  - **8 admin/user-writable objects keep `managedBy: 'system'`** (the RBAC link tables, `sys_user_preference`, `sys_approval_delegation`, the messaging config grids) — `system` now reads as "engine-managed schema, writable via `userActions`".
+
+  Behaviour-, enforcement- and wire-identical: resolved affordances, the guard verdict, the 405 `apiMethods` reconciliation, and the permissions clamp are the same before and after — this is a self-documenting relabel, not a policy change. No data migration (`managedBy` is schema metadata) and no code branches on the `'system'` literal. Retiring the overloaded `system` entirely (moving the 8 writable objects to a dedicated bucket) is a breaking rename deferred to v17.
+
+- 06ff734: feat(spec)!: remove deprecated `aiStudio`/`aiSeat` capability aliases (#3308)
+
+  **BREAKING** (shipped as minor per the launch-window convention). The one-cycle
+  deprecation window from #3265 is over: the legacy camelCase `requires` spellings
+  `aiStudio`/`aiSeat` are no longer canonicalized to `ai-studio`/`ai-seat` — they
+  are now plain unknown tokens, rejected by `defineStack` like any other typo.
+
+  - Removed exports `DEPRECATED_PLATFORM_CAPABILITY_ALIASES` and
+    `canonicalizePlatformCapability` from `@objectstack/spec`; `isKnownPlatformCapability`
+    no longer canonicalizes.
+  - `defineStack` no longer rewrites aliases (the `canonicalizeStackRequires` pass
+    is gone); the serve resolver no longer canonicalizes raw-artifact `requires`.
+
+  Migration: use the canonical kebab-case tokens `ai-studio` / `ai-seat`. All
+  first-party configs were migrated in #862/#863; only stacks still carrying the
+  legacy spelling are affected. Cloud's `objectos-runtime` (pinned to an older
+  framework) follows on its next `.framework-sha` bump.
+
 ## 16.0.0-rc.0
 
 ### Major Changes

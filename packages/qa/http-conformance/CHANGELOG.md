@@ -1,5 +1,11 @@
 # @objectstack/http-conformance
 
+## 0.0.4-rc.1
+
+### Patch Changes
+
+- @objectstack/core@16.0.0-rc.1
+
 ## 0.0.4-rc.0
 
 ### Patch Changes

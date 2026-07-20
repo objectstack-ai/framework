@@ -1,5 +1,68 @@
 # @objectstack/plugin-approvals
 
+## 16.0.0-rc.1
+
+### Minor Changes
+
+- e412fb6: feat(approvals): declare file attachments on approve/reject decisions
+
+  The declared `approval_approve` / `approval_reject` actions on
+  `sys_approval_request` gain an optional multi-file `attachments` param
+  (`type: 'file'`, `multiple`). The console renders `type:'file'` action params
+  through the shared upload widget (objectui ADR-0059) and POSTs the resolved
+  `attachments: string[]`, so a reviewer can attach supporting files to a
+  decision through the generic declared-action dialog — letting the approvals
+  inbox retire its hand-wired attachment composer (objectui#2698).
+
+  Purely additive metadata: the decision route already forwards
+  `body.attachments` to `ApprovalService.decide`, and the
+  `sys_approval_action.attachments` column (file, multiple) already persists them
+  (#3266/#3274). No service or route change.
+
+- 8efa395: feat(approvals): server-computed `viewer` capability for precise decision-action gating
+
+  `getRequest` / `listRequests` now attach a per-viewer block —
+  `viewer: { can_act, is_submitter }` — computed from the caller's context
+  (`ApprovalRequestRow.viewer`):
+
+  - `can_act` — the caller is a _current pending approver_ (their user id is in the
+    request's resolved `pending_approvers` while it is still `pending`). This is
+    the same check the decision methods authorize with, so it already reflects
+    position/team/manager resolution — strictly more accurate than a client-side
+    identity guess.
+  - `is_submitter` — the caller submitted the request.
+
+  The declared decision actions on `sys_approval_request` now gate on it: approver
+  actions (approve/reject/reassign/send-back/request-info) use
+  `record.viewer.can_act`; submitter levers (remind/recall/resubmit) use
+  `record.viewer.is_submitter`. Previously approver actions only trimmed the
+  non-pending case, so a submitter viewing their own pending request saw buttons
+  they couldn't use (the backend 403'd); a position-addressed approver could be
+  wrongly hidden by the old client heuristic. Where `viewer` is absent (a row
+  surfaced outside a service read with a user context), the predicate fails closed.
+
+### Patch Changes
+
+- 62a2117: **Split the overloaded `managedBy: 'system'` bucket with an explicit `engine-owned` value (ADR-0103 addendum, #3343).** ADR-0103 deferred the enum split ("revisitable later as a rename") because a new `managedBy` value would fall through to the fully-editable `platform` default on deployed Console clients. Both reasons against it are now retired — the server-side write guard / `apiMethods` reconciliation / `/me/permissions` clamp make that fallthrough cosmetic (the write is rejected regardless of what the client renders), and objectui#2712 closed the UI union — so v16 lands it, **additively**.
+
+  - **New enum value `engine-owned`** with the same all-locked default affordance row as `system` (`create/import/edit/delete: false`, `exportCsv: true`). It joins `ENGINE_OWNED_BUCKETS` (the engine write guard) and `GUARDED_WRITE_BUCKETS` (the `/me/permissions` clamp); the guard, `reconcileManagedApiMethods`, and the clamp mechanisms are unchanged — `engine-owned` is an explicit member of the set they already covered by resolved affordance.
+  - **20 objects relabelled `system → engine-owned`** — the ones the engine owns end to end and that declared no write-opening `userActions` (the metadata store, jobs, approval runtime rows, sharing rows, `sys_automation_run`, the messaging delivery/receipt pipeline, `sys_secret`, settings). One-line, behaviour-identical per object.
+  - **8 admin/user-writable objects keep `managedBy: 'system'`** (the RBAC link tables, `sys_user_preference`, `sys_approval_delegation`, the messaging config grids) — `system` now reads as "engine-managed schema, writable via `userActions`".
+
+  Behaviour-, enforcement- and wire-identical: resolved affordances, the guard verdict, the 405 `apiMethods` reconciliation, and the permissions clamp are the same before and after — this is a self-documenting relabel, not a policy change. No data migration (`managedBy` is schema metadata) and no code branches on the `'system'` literal. Retiring the overloaded `system` entirely (moving the 8 writable objects to a dedicated bucket) is a breaking rename deferred to v17.
+
+- Updated dependencies [6289ec3]
+- Updated dependencies [8efa395]
+- Updated dependencies [bfa3c3f]
+- Updated dependencies [7125007]
+- Updated dependencies [62a2117]
+- Updated dependencies [06ff734]
+  - @objectstack/spec@16.0.0-rc.1
+  - @objectstack/platform-objects@16.0.0-rc.1
+  - @objectstack/formula@16.0.0-rc.1
+  - @objectstack/metadata-core@16.0.0-rc.1
+  - @objectstack/core@16.0.0-rc.1
+
 ## 16.0.0-rc.0
 
 ### Minor Changes
