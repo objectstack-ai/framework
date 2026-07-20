@@ -64,7 +64,7 @@ export const ViewDataSchema = lazySchema(() => z.discriminatedUnion('provider', 
  * ```ts
  * filter: [
  *   { field: 'status', operator: 'equals', value: 'active' },
- *   { field: 'close_date', operator: 'this_quarter' },
+ *   { field: 'close_date', operator: 'after', value: '2024-01-01' },
  * ]
  * ```
  */
@@ -72,8 +72,18 @@ export const ViewFilterRuleSchema = lazySchema(() => z.object({
   /** Field name to filter on */
   field: z.string().describe('Field name to filter on'),
   /** Filter operator */
-  operator: z.string().describe('Filter operator (e.g. equals, not_equals, contains, this_quarter)'),
-  /** Filter value (optional for unary operators like is_null, this_quarter) */
+  operator: z.enum([
+    'equals', 'not_equals',
+    'contains', 'not_contains',
+    'starts_with', 'ends_with',
+    'greater_than', 'less_than',
+    'greater_than_or_equal', 'less_than_or_equal',
+    'in', 'not_in',
+    'is_empty', 'is_not_empty',
+    'is_null', 'is_not_null',
+    'before', 'after', 'between',
+  ]).describe('Filter operator'),
+  /** Filter value (optional for unary operators like is_null, is_empty) */
   value: z.union([z.string(), z.number(), z.boolean(), z.null(), z.array(z.union([z.string(), z.number()]))])
     .optional().describe('Filter value'),
 }).describe('View filter rule'));
@@ -551,13 +561,10 @@ export const ListViewSchema = lazySchema(() => z.object({
     z.array(ListColumnSchema), // Enhanced: detailed column config
   ]).describe('Fields to display as columns'),
   filter: z.array(ViewFilterRuleSchema).optional().describe('Filter criteria (JSON Rules)'),
-  sort: z.union([
-    z.string(), //Legacy "field desc"
-    z.array(z.object({
+  sort: z.array(z.object({
       field: z.string(),
-      order: z.enum(['asc', 'desc'])
-    }))
-  ]).optional(),
+      order: z.enum(['asc', 'desc']),
+    })).optional(),
   
   /** Search & Filter */
   searchableFields: z.array(z.string()).optional().describe('Fields enabled for search'),

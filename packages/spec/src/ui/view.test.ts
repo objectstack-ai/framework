@@ -292,10 +292,10 @@ describe('ListViewSchema', () => {
     expect(() => ListViewSchema.parse(listView)).not.toThrow();
   });
 
-  it('should accept legacy string sort format', () => {
+  it('should accept array sort format', () => {
     const listView: ListView = {
       columns: ['name'],
-      sort: 'created_at desc',
+      sort: [{ field: 'created_at', order: 'desc' }],
     };
 
     expect(() => ListViewSchema.parse(listView)).not.toThrow();
@@ -734,7 +734,7 @@ describe('ViewSchema', () => {
             type: 'grid',
             columns: ['name', 'account_name', 'amount', 'stage', 'close_date'],
             filter: [
-              { field: 'close_date', operator: 'this_quarter' },
+              { field: 'close_date', operator: 'after', value: '2024-01-01' },
             ],
             sort: [{ field: 'amount', order: 'desc' }],
           },
@@ -2478,14 +2478,14 @@ describe('ViewFilterRuleSchema', () => {
   it('should accept a unary filter rule without value', () => {
     const rule = ViewFilterRuleSchema.parse({
       field: 'close_date',
-      operator: 'this_quarter',
+      operator: 'is_empty',
     });
     expect(rule.value).toBeUndefined();
   });
 
   it('should accept boolean and number filter values', () => {
     expect(() => ViewFilterRuleSchema.parse({ field: 'archived', operator: 'equals', value: false })).not.toThrow();
-    expect(() => ViewFilterRuleSchema.parse({ field: 'amount', operator: 'gte', value: 1000 })).not.toThrow();
+    expect(() => ViewFilterRuleSchema.parse({ field: 'amount', operator: 'greater_than_or_equal', value: 1000 })).not.toThrow();
   });
 
   it('should accept array filter values (for IN operator)', () => {
