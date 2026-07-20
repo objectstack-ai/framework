@@ -43,6 +43,37 @@ export function registerScreenNodes(engine: AutomationEngine, ctx: PluginContext
         icon: 'window', category: 'human', source: 'builtin',
         // Human-input nodes suspend the flow awaiting input.
         supportsPause: true, isAsync: true,
+        // Designer form (ADR-0018, #3304) — mirrors objectui's hardcoded `screen`
+        // field group: flat input list OR an object form, plus title/description.
+        // `visibleWhen` is bare CEL (xExpression), `defaults` a free-form keyValue
+        // map (values may be `{var}` templates → `true`-permissive).
+        configSchema: {
+          type: 'object',
+          properties: {
+            title: { type: 'string', title: 'Title', description: 'Heading shown above the screen.' },
+            description: { type: 'string', format: 'multiline', title: 'Description', description: 'Body text. Interpolates {var} references (e.g. {approval_path}).' },
+            fields: {
+              type: 'array',
+              title: 'Fields',
+              description: 'Input fields collected on this screen. Leave empty for a message-only screen.',
+              items: {
+                type: 'object',
+                properties: {
+                  name: { type: 'string', title: 'Name' },
+                  label: { type: 'string', title: 'Label' },
+                  type: { type: 'string', title: 'Type' },
+                  required: { type: 'boolean', title: 'Required' },
+                  visibleWhen: { type: 'string', title: 'Visible when', xExpression: 'expression' },
+                },
+              },
+            },
+            waitForInput: { type: 'boolean', title: 'Wait for input', description: 'Pause to show this screen even with no fields (a message / confirmation). A field-less screen with this off is a server pass-through.' },
+            objectName: { type: 'string', title: 'Object form', xRef: { kind: 'object' }, description: 'Render this object’s full create/edit form (incl. master-detail) instead of a flat field list.' },
+            idVariable: { type: 'string', title: 'Saved-record variable', description: 'Object form only: variable bound to the saved record’s id, for later steps.' },
+            mode: { type: 'string', enum: ['create', 'edit'], default: 'create', title: 'Form mode', description: 'Object form only.' },
+            defaults: { type: 'object', additionalProperties: true, title: 'Form defaults', description: 'Object form only: prefilled values (e.g. account → {account_id}).' },
+          },
+        },
       }),
       async execute(node, variables, context) {
         const cfg = (node.config ?? {}) as Record<string, unknown>;

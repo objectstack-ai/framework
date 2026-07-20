@@ -41,6 +41,22 @@ export function registerCrudNodes(engine: AutomationEngine, ctx: PluginContext):
                 type: 'get_record', version: '1.0.0', name: 'Get Records',
                 description: 'Query records from an object.',
                 icon: 'search', category: 'data', source: 'builtin',
+                // Structured designer form (ADR-0018, #3304) — mirrors objectui's
+                // hardcoded `get_record` field group. `filter` is a free-form
+                // string-keyed map (JSON-Schema `additionalProperties`), which the
+                // designer renders with its flat keyValue editor; values stay
+                // `true`-permissive because real metadata carries operator objects
+                // (e.g. `{"$ne": null}`) alongside `{var}` templates and literals.
+                configSchema: {
+                    type: 'object',
+                    properties: {
+                        objectName: { type: 'string', title: 'Object', xRef: { kind: 'object' } },
+                        filter: { type: 'object', additionalProperties: true, title: 'Filter', description: 'Field/value pairs to match (e.g. status → active). Operator values like {"$ne": null} are preserved.' },
+                        limit: { type: 'integer', title: 'Limit' },
+                        outputVariable: { type: 'string', title: 'Output variable' },
+                    },
+                    required: ['objectName'],
+                },
             }),
             async execute(node, variables, context) {
                 const cfg = (node.config ?? {}) as Record<string, unknown>;
@@ -86,6 +102,17 @@ export function registerCrudNodes(engine: AutomationEngine, ctx: PluginContext):
                 type: 'create_record', version: '1.0.0', name: 'Create Record',
                 description: 'Insert a new record into an object.',
                 icon: 'plus-circle', category: 'data', source: 'builtin',
+                // Designer form (ADR-0018, #3304) — see get_record for the
+                // keyValue-map rationale.
+                configSchema: {
+                    type: 'object',
+                    properties: {
+                        objectName: { type: 'string', title: 'Object', xRef: { kind: 'object' } },
+                        fields: { type: 'object', additionalProperties: true, title: 'Field values', description: 'Field values to write on the new record.' },
+                        outputVariable: { type: 'string', title: 'Output variable' },
+                    },
+                    required: ['objectName'],
+                },
             }),
             async execute(node, variables, context) {
                 const cfg = (node.config ?? {}) as Record<string, unknown>;
@@ -135,6 +162,17 @@ export function registerCrudNodes(engine: AutomationEngine, ctx: PluginContext):
                 type: 'update_record', version: '1.0.0', name: 'Update Records',
                 description: 'Update records matching a filter.',
                 icon: 'edit', category: 'data', source: 'builtin',
+                // Designer form (ADR-0018, #3304) — see get_record for the
+                // keyValue-map rationale.
+                configSchema: {
+                    type: 'object',
+                    properties: {
+                        objectName: { type: 'string', title: 'Object', xRef: { kind: 'object' } },
+                        filter: { type: 'object', additionalProperties: true, title: 'Filter', description: 'Field/value pairs identifying the record(s) to update (e.g. id → {recordId}).' },
+                        fields: { type: 'object', additionalProperties: true, title: 'Field values', description: 'Field values to write.' },
+                    },
+                    required: ['objectName'],
+                },
             }),
             async execute(node, variables, context) {
                 const cfg = (node.config ?? {}) as Record<string, unknown>;
@@ -171,6 +209,16 @@ export function registerCrudNodes(engine: AutomationEngine, ctx: PluginContext):
                 type: 'delete_record', version: '1.0.0', name: 'Delete Records',
                 description: 'Delete records matching a filter.',
                 icon: 'trash', category: 'data', source: 'builtin',
+                // Designer form (ADR-0018, #3304) — see get_record for the
+                // keyValue-map rationale.
+                configSchema: {
+                    type: 'object',
+                    properties: {
+                        objectName: { type: 'string', title: 'Object', xRef: { kind: 'object' } },
+                        filter: { type: 'object', additionalProperties: true, title: 'Filter', description: 'Field/value pairs identifying the record(s) to delete.' },
+                    },
+                    required: ['objectName'],
+                },
             }),
             async execute(node, variables, context) {
                 const cfg = (node.config ?? {}) as Record<string, unknown>;

@@ -57,6 +57,18 @@ export function registerLogicNodes(engine: AutomationEngine, ctx: PluginContext)
                 type: 'assignment', version: '1.0.0', name: 'Assignment',
                 description: 'Set flow variables.',
                 icon: 'variable', category: 'logic', source: 'builtin',
+                // Designer form (ADR-0018, #3304): the canonical Studio shape — a
+                // single free-form `assignments` map, rendered by the designer's
+                // flat keyValue editor. Values stay `true`-permissive (literals,
+                // `{var}` templates, numbers…). The legacy array / bare-config
+                // shapes the executor also accepts are read-compatible and not
+                // offered for new authoring. No `required`: an empty node is valid.
+                configSchema: {
+                    type: 'object',
+                    properties: {
+                        assignments: { type: 'object', additionalProperties: true, title: 'Assignments', description: 'Set variables: each key is a variable, each value an expression or literal.' },
+                    },
+                },
             }),
             async execute(node, variables, context) {
                 const config = (node.config ?? {}) as Record<string, unknown>;
