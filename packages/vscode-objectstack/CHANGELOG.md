@@ -1,5 +1,7 @@
 # objectstack-vscode
 
+## 16.0.0-rc.1
+
 ## 16.0.0-rc.0
 
 ## 15.1.1

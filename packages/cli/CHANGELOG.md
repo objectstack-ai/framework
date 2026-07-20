@@ -1,5 +1,121 @@
 # @objectstack/cli
 
+## 16.0.0-rc.1
+
+### Minor Changes
+
+- 06ff734: feat(spec)!: remove deprecated `aiStudio`/`aiSeat` capability aliases (#3308)
+
+  **BREAKING** (shipped as minor per the launch-window convention). The one-cycle
+  deprecation window from #3265 is over: the legacy camelCase `requires` spellings
+  `aiStudio`/`aiSeat` are no longer canonicalized to `ai-studio`/`ai-seat` — they
+  are now plain unknown tokens, rejected by `defineStack` like any other typo.
+
+  - Removed exports `DEPRECATED_PLATFORM_CAPABILITY_ALIASES` and
+    `canonicalizePlatformCapability` from `@objectstack/spec`; `isKnownPlatformCapability`
+    no longer canonicalizes.
+  - `defineStack` no longer rewrites aliases (the `canonicalizeStackRequires` pass
+    is gone); the serve resolver no longer canonicalizes raw-artifact `requires`.
+
+  Migration: use the canonical kebab-case tokens `ai-studio` / `ai-seat`. All
+  first-party configs were migrated in #862/#863; only stacks still carrying the
+  legacy spelling are affected. Cloud's `objectos-runtime` (pinned to an older
+  framework) follows on its next `.framework-sha` bump.
+
+### Patch Changes
+
+- 6289ec3: feat(i18n): translation slot for action `resultDialog` copy — the one-shot secret-reveal dialogs are now localizable
+
+  The post-success `resultDialog` (temporary passwords, 2FA backup codes, OAuth
+  client secrets) had no slot in the translation protocol, so its title /
+  description / acknowledge button / field labels always rendered the hardcoded
+  English metadata literals even on fully-translated locales.
+
+  - **spec.** `_actions.<action>` (object + object-first node) and
+    `globalActions.<action>` gain an optional `resultDialog` translation node
+    (`ActionResultDialogTranslationSchema`): `title`, `description`,
+    `acknowledge`, and `fields` keyed by the **literal** result-field path
+    (e.g. `"user.email"` — keys may contain dots; resolvers index the record
+    directly, never split on `.`). New `resolveActionResultDialog` overlay
+    resolver, wired into `translateAction` for API-boundary translation.
+  - **cli.** `os i18n extract` emits the new `resultDialog.*` keys (title /
+    description / acknowledge / `fields.<path>` for labelled fields), so
+    coverage and skeleton generation see them.
+  - **platform-objects.** en / zh-CN / ja-JP / es-ES bundles ship the
+    resultDialog copy for all six shipped dialogs: `sys_user.create_user`,
+    `sys_user.set_user_password`, `sys_two_factor.enable_two_factor`,
+    `sys_two_factor.regenerate_backup_codes`,
+    `sys_oauth_application.create_oauth_application`, and
+    `sys_oauth_application.rotate_client_secret`.
+
+  Client-side rendering lands in objectui (`actionResultDialog` resolver in
+  `@object-ui/i18n` + result-dialog handlers). Purely additive — untranslated
+  locales keep falling back to the metadata literals.
+
+- Updated dependencies [6289ec3]
+- Updated dependencies [e412fb6]
+- Updated dependencies [8efa395]
+- Updated dependencies [a276969]
+- Updated dependencies [bfa3c3f]
+- Updated dependencies [a791200]
+- Updated dependencies [1965549]
+- Updated dependencies [bfa3c3f]
+- Updated dependencies [7125007]
+- Updated dependencies [b320158]
+- Updated dependencies [ee0a499]
+- Updated dependencies [9d897b3]
+- Updated dependencies [62a2117]
+- Updated dependencies [f8c1b69]
+- Updated dependencies [674457a]
+- Updated dependencies [06ff734]
+  - @objectstack/spec@16.0.0-rc.1
+  - @objectstack/platform-objects@16.0.0-rc.1
+  - @objectstack/plugin-approvals@16.0.0-rc.1
+  - @objectstack/console@16.0.0-rc.1
+  - @objectstack/rest@16.0.0-rc.1
+  - @objectstack/plugin-hono-server@16.0.0-rc.1
+  - @objectstack/client@16.0.0-rc.1
+  - @objectstack/formula@16.0.0-rc.1
+  - @objectstack/service-automation@16.0.0-rc.1
+  - @objectstack/plugin-audit@16.0.0-rc.1
+  - @objectstack/service-storage@16.0.0-rc.1
+  - @objectstack/runtime@16.0.0-rc.1
+  - @objectstack/plugin-security@16.0.0-rc.1
+  - @objectstack/plugin-sharing@16.0.0-rc.1
+  - @objectstack/service-messaging@16.0.0-rc.1
+  - @objectstack/objectql@16.0.0-rc.1
+  - @objectstack/account@16.0.0-rc.1
+  - @objectstack/setup@16.0.0-rc.1
+  - @objectstack/cloud-connection@16.0.0-rc.1
+  - @objectstack/core@16.0.0-rc.1
+  - @objectstack/lint@16.0.0-rc.1
+  - @objectstack/mcp@16.0.0-rc.1
+  - @objectstack/metadata@16.0.0-rc.1
+  - @objectstack/observability@16.0.0-rc.1
+  - @objectstack/driver-memory@16.0.0-rc.1
+  - @objectstack/driver-mongodb@16.0.0-rc.1
+  - @objectstack/driver-sql@16.0.0-rc.1
+  - @objectstack/driver-sqlite-wasm@16.0.0-rc.1
+  - @objectstack/plugin-auth@16.0.0-rc.1
+  - @objectstack/plugin-email@16.0.0-rc.1
+  - @objectstack/plugin-reports@16.0.0-rc.1
+  - @objectstack/plugin-webhooks@16.0.0-rc.1
+  - @objectstack/service-analytics@16.0.0-rc.1
+  - @objectstack/service-cache@16.0.0-rc.1
+  - @objectstack/service-datasource@16.0.0-rc.1
+  - @objectstack/service-job@16.0.0-rc.1
+  - @objectstack/service-package@16.0.0-rc.1
+  - @objectstack/service-queue@16.0.0-rc.1
+  - @objectstack/service-realtime@16.0.0-rc.1
+  - @objectstack/service-settings@16.0.0-rc.1
+  - @objectstack/service-sms@16.0.0-rc.1
+  - @objectstack/trigger-api@16.0.0-rc.1
+  - @objectstack/trigger-record-change@16.0.0-rc.1
+  - @objectstack/trigger-schedule@16.0.0-rc.1
+  - @objectstack/types@16.0.0-rc.1
+  - @objectstack/verify@16.0.0-rc.1
+  - @objectstack/plugin-pinyin-search@16.0.0-rc.1
+
 ## 16.0.0-rc.0
 
 ### Minor Changes
