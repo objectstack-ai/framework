@@ -318,6 +318,12 @@ describe('skills catalog boundary', () => {
       'packages/create-objectstack',
       // this file mentions the bare form on purpose (needle + error message)
       ':(exclude)packages/create-objectstack/src/template-consistency.test.ts',
+      // CHANGELOGs are auto-generated from changeset prose and legitimately
+      // quote a removed command in past tense while documenting its removal
+      // (#3101: "…advertised `skills add objectstack-ai/framework --all` … now
+      // scoped to the /skills subpath"). Documenting a fix is not advertising
+      // the anti-pattern — only real customer-facing surfaces count.
+      ':(exclude)**/CHANGELOG.md',
     ];
     let candidates = '';
     try {
