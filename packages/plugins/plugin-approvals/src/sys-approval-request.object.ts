@@ -236,8 +236,12 @@ export const SysApprovalRequest = ObjectSchema.create({
   // (and their params) ship as metadata, not as hand-written buttons. Each
   // targets the existing approvals REST route; `{id}` resolves from the row
   // and `actorId` defaults to the caller server-side. The service remains the
-  // authority on who may act (pending-approver check) — `visible` only trims
-  // the obvious non-pending case.
+  // authority on who may act; `visible` gates on the server-computed
+  // per-viewer block (#3310): approver actions on `record.viewer.can_act`
+  // (the caller is a current pending approver — same check the service
+  // authorizes a decision with, so position/team approvers resolve correctly),
+  // submitter actions on `record.viewer.is_submitter`. `viewer` is attached by
+  // getRequest/listRequests; where it is absent the predicate fails closed.
   actions: [
     {
       name: 'approval_approve',
@@ -253,7 +257,7 @@ export const SysApprovalRequest = ObjectSchema.create({
         // string[]`; the decision route persists them on `sys_approval_action`.
         { name: 'attachments', label: 'Attachments', type: 'file', multiple: true, required: false },
       ],
-      visible: 'record.status == "pending"',
+      visible: 'record.viewer.can_act',
       locations: ['record_section', 'list_item'],
       successMessage: 'Approved.',
       refreshAfter: true,
@@ -269,7 +273,7 @@ export const SysApprovalRequest = ObjectSchema.create({
         { name: 'comment', label: 'Comment', type: 'textarea', required: false },
         { name: 'attachments', label: 'Attachments', type: 'file', multiple: true, required: false },
       ],
-      visible: 'record.status == "pending"',
+      visible: 'record.viewer.can_act',
       confirmText: 'Reject this request? A rejection is final for every approver.',
       locations: ['record_section', 'list_item'],
       successMessage: 'Rejected.',
@@ -291,7 +295,7 @@ export const SysApprovalRequest = ObjectSchema.create({
         { field: 'submitter_id', name: 'to', label: 'New approver', required: true, helpText: 'User to hand this step to' },
         { name: 'comment', label: 'Comment', type: 'textarea', required: false },
       ],
-      visible: 'record.status == "pending"',
+      visible: 'record.viewer.can_act',
       locations: ['record_section'],
       successMessage: 'Reassigned.',
       refreshAfter: true,
@@ -299,8 +303,8 @@ export const SysApprovalRequest = ObjectSchema.create({
 
     // ── Approver secondary decisions ────────────────────────────────
     // Send back for revision / request more info (ADR-0044). Both are approver
-    // actions on a pending request; the service is the authority on who may act,
-    // so `visible` only trims the non-pending case (matching approve/reject).
+    // actions, so `visible` gates on `record.viewer.can_act` (a current pending
+    // approver) — same as approve/reject. The service stays the authority.
     {
       name: 'approval_send_back',
       label: 'Send back',
@@ -311,7 +315,7 @@ export const SysApprovalRequest = ObjectSchema.create({
       params: [
         { name: 'comment', label: 'Reason', type: 'textarea', required: false },
       ],
-      visible: 'record.status == "pending"',
+      visible: 'record.viewer.can_act',
       locations: ['record_section'],
       successMessage: 'Sent back for revision.',
       refreshAfter: true,
@@ -326,7 +330,7 @@ export const SysApprovalRequest = ObjectSchema.create({
       params: [
         { name: 'comment', label: 'What do you need?', type: 'textarea', required: true },
       ],
-      visible: 'record.status == "pending"',
+      visible: 'record.viewer.can_act',
       locations: ['record_section'],
       successMessage: 'Information requested.',
       refreshAfter: true,
@@ -334,10 +338,10 @@ export const SysApprovalRequest = ObjectSchema.create({
 
     // ── Submitter continuity actions ────────────────────────────────
     // Remind / recall (pending) and resubmit / recall (returned). These are the
-    // submitter's own levers, so `visible` gates on `submitter_id == ctx.user.id`
-    // — the current user is exposed via the console's predicate scope. The
-    // service re-checks ownership; the predicate keeps a non-submitter from ever
-    // seeing a button they cannot use.
+    // submitter's own levers, so `visible` gates on `record.viewer.is_submitter`
+    // (server-computed on the current viewer). The service re-checks ownership;
+    // the predicate keeps a non-submitter from ever seeing a button they cannot
+    // use.
     {
       name: 'approval_remind',
       label: 'Send reminder',
@@ -348,7 +352,7 @@ export const SysApprovalRequest = ObjectSchema.create({
       params: [
         { name: 'comment', label: 'Note', type: 'textarea', required: false },
       ],
-      visible: 'record.status == "pending" && record.submitter_id == ctx.user.id',
+      visible: 'record.status == "pending" && record.viewer.is_submitter',
       locations: ['record_section'],
       successMessage: 'Reminder sent.',
       refreshAfter: true,
@@ -365,7 +369,7 @@ export const SysApprovalRequest = ObjectSchema.create({
       ],
       // Recall applies while the request is live for the submitter — pending
       // (withdraw) or returned (abandon the revision instead of resubmitting).
-      visible: '(record.status == "pending" || record.status == "returned") && record.submitter_id == ctx.user.id',
+      visible: '(record.status == "pending" || record.status == "returned") && record.viewer.is_submitter',
       confirmText: 'Recall this request? Approvers can no longer act on it and the record is unlocked.',
       locations: ['record_section'],
       successMessage: 'Recalled.',
@@ -381,7 +385,7 @@ export const SysApprovalRequest = ObjectSchema.create({
       params: [
         { name: 'comment', label: 'What changed?', type: 'textarea', required: false },
       ],
-      visible: 'record.status == "returned" && record.submitter_id == ctx.user.id',
+      visible: 'record.status == "returned" && record.viewer.is_submitter',
       locations: ['record_section'],
       successMessage: 'Resubmitted.',
       refreshAfter: true,

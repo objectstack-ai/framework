@@ -61,15 +61,16 @@ describe('sys_approval_request declared actions', () => {
     }
   });
 
-  it('gates submitter-only levers on the current user; approver actions only on pending', () => {
+  it('gates on the server-computed viewer block (#3310): approver actions on can_act, submitter levers on is_submitter', () => {
     for (const name of ['approval_remind', 'approval_recall', 'approval_resubmit']) {
-      expect(vis(name)).toContain('record.submitter_id == ctx.user.id');
+      expect(vis(name)).toContain('record.viewer.is_submitter');
+      expect(vis(name)).not.toContain('can_act');
     }
-    // Approver-side actions defer who-can-act to the service; they only trim the
-    // non-pending case in the UI.
     for (const name of ['approval_approve', 'approval_reject', 'approval_send_back', 'approval_request_info', 'approval_reassign']) {
-      expect(vis(name)).toContain('record.status == "pending"');
+      expect(vis(name)).toContain('record.viewer.can_act');
+      // who-can-act is server-derived, never a client identity guess
       expect(vis(name)).not.toContain('ctx.user.id');
+      expect(vis(name)).not.toContain('is_submitter');
     }
   });
 

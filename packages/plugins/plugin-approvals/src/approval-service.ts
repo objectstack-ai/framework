@@ -2174,6 +2174,7 @@ export class ApprovalService implements IApprovalService {
     const rows = await this.engine.find('sys_approval_request', findOpts);
     const list = Array.isArray(rows) ? rows.map(rowFromRequest) : [];
     await this.enrichRows(list);
+    this.attachViewers(list, context);
     return list;
   }
 
@@ -2221,6 +2222,7 @@ export class ApprovalService implements IApprovalService {
     await this.enrichRows([row]);
     await this.attachFlowSteps(row);
     await this.attachDecisionProgress(row, rows[0]);
+    this.attachViewers([row], context);
     return row;
   }
 
@@ -2268,6 +2270,26 @@ export class ApprovalService implements IApprovalService {
       }
       (row as any).decision_progress = progress;
     } catch { /* display-only enrichment */ }
+  }
+
+  /**
+   * Attach the per-viewer capability block (#3310) from the caller's context.
+   * `can_act` mirrors the exact authorization the decision methods enforce — the
+   * caller's user id is in the resolved `pending_approvers` while the request is
+   * still `pending` (position/team/manager approvers are already resolved to
+   * concrete user ids at open time, so a plain membership test is faithful).
+   * `is_submitter` is a straight owner check. System/tokenless contexts get a
+   * both-false block. Cheap + synchronous — safe on list reads.
+   */
+  private attachViewers(rows: ApprovalRequestRow[], context: SharingExecutionContext): void {
+    const uid = (context as any)?.userId != null ? String((context as any).userId) : null;
+    for (const row of rows) {
+      const pending = row.pending_approvers ?? [];
+      (row as any).viewer = {
+        can_act: row.status === 'pending' && !!uid && pending.includes(uid),
+        is_submitter: !!uid && row.submitter_id != null && String(row.submitter_id) === uid,
+      };
+    }
   }
 
   /**

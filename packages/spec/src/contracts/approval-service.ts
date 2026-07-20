@@ -112,6 +112,28 @@ export interface ApprovalRequestRow {
     need: number;
     groups?: Array<{ group: string; got: number; need: number; satisfied: boolean }>;
   };
+
+  /**
+   * Server-computed capability for THE CURRENT VIEWER (#3310), attached by
+   * `getRequest` / `listRequests` from the caller's context. Lets a client gate
+   * decision actions precisely without re-deriving identity resolution:
+   * declared approver actions use `record.viewer.can_act`, submitter actions use
+   * `record.viewer.is_submitter`.
+   *
+   * - `can_act` — the caller is a *current pending approver* (their user id is in
+   *   the request's resolved `pending_approvers` while it is still `pending`).
+   *   This mirrors the exact check the service uses to authorize a decision, so
+   *   it is strictly more accurate than a client-side identity guess (it already
+   *   reflects position/team/manager resolution baked into `pending_approvers`).
+   * - `is_submitter` — the caller submitted the request.
+   *
+   * Absent when the row is surfaced outside a service read with a user context
+   * (e.g. a raw data-API grid); a `record.viewer.*` predicate then fails closed.
+   */
+  viewer?: {
+    can_act: boolean;
+    is_submitter: boolean;
+  };
 }
 
 /** Kinds of entries on a request's audit trail. */
