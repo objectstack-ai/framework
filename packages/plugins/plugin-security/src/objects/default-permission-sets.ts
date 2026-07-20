@@ -22,10 +22,18 @@ import {
  * permission sets keep their `*` wildcard so they can rescue data
  * directly when needed.
  *
- * Each entry mirrors the `managedBy: 'better-auth'` flag declared on
- * the corresponding object schema in `packages/platform-objects/src/identity/`.
+ * This is the COMPILE-TIME BASELINE. At `kernel:ready` it is unioned with the
+ * live registry by `applyManagedWriteDenies` (see `managed-object-write-denies.ts`),
+ * which injects a deny entry for every registered `managedBy: 'better-auth'`
+ * object the baseline missed — so a newly-declared identity table is covered
+ * automatically without editing this list. The baseline still matters: it covers
+ * the pre-`kernel:ready` window and hook-less test-stub kernels where the
+ * registry may be empty. `objects/default-permission-sets.test.ts` pins this
+ * list bidirectionally against the `@objectstack/platform-objects` schemas so it
+ * cannot silently rot again (the drift that motivated ADR-0092's registry-driven
+ * rule).
  */
-const BETTER_AUTH_MANAGED_OBJECTS = [
+export const BETTER_AUTH_MANAGED_OBJECTS = [
   'sys_user',
   'sys_account',
   'sys_session',
@@ -39,10 +47,15 @@ const BETTER_AUTH_MANAGED_OBJECTS = [
   'sys_verification',
   'sys_jwks',
   'sys_device_code',
+  'sys_scim_provider',
+  'sys_sso_provider',
   'sys_oauth_application',
   'sys_oauth_access_token',
   'sys_oauth_refresh_token',
   'sys_oauth_consent',
+  'sys_oauth_resource',
+  'sys_oauth_client_resource',
+  'sys_oauth_client_assertion',
 ] as const;
 
 const denyWritesOnManagedObjects = (): Record<string, {

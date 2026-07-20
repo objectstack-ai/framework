@@ -3284,3 +3284,59 @@ describe('SecurityPlugin — ADR-0090 D10 agent intersection', () => {
     expect(d.principal.onBehalfOf?.userId).toBe(DELEGATOR);
   });
 });
+
+// ---------------------------------------------------------------------------
+// [#3325] Registry-driven managed-object write denies — reference-sharing pin.
+// runBootstrap unions the better-auth denies from the LIVE registry into the
+// in-memory bootstrapPermissionSets — the SAME array the evaluator resolves and
+// bootstrapPlatformAdmin serializes. This pins that a registry object the static
+// baseline does NOT list still gets denied (the one real implementation risk:
+// if the registry ever cloned items, the in-place mutation would stop reaching
+// the evaluator).
+// ---------------------------------------------------------------------------
+describe('managed-object write denies wiring (#3325)', () => {
+  it('injects a registry-only better-auth object into the shared default sets', async () => {
+    const ql: any = {
+      registerMiddleware: vi.fn(),
+      getSchema: () => undefined,
+      findOne: async () => null,
+      find: async () => [],
+      count: async () => 0,
+      insert: async (_o: string, d: any) => ({ id: d?.id ?? 'x' }),
+      update: async () => {},
+      // A better-auth object the static BETTER_AUTH_MANAGED_OBJECTS list does NOT contain.
+      _registry: {
+        listItems: (type: string) =>
+          type === 'object' ? [{ name: 'sys_fake_identity', managedBy: 'better-auth' }] : [],
+      },
+    };
+    const services: Record<string, any> = {
+      manifest: { register: vi.fn() },
+      objectql: ql,
+      metadata: { get: async () => null, list: async () => [] },
+    };
+    const ctx: any = {
+      logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+      registerService: vi.fn(),
+      getService: (name: string) => {
+        if (!(name in services)) throw new Error(`service not registered: ${name}`);
+        return services[name];
+      },
+      // No `hook` → start() runs runBootstrap synchronously via the fallback,
+      // and the transform executes in runBootstrap's synchronous prefix (before
+      // the first await), so the mutation is visible right after start() resolves.
+    };
+    const plugin = new SecurityPlugin();
+    await plugin.init(ctx);
+    await plugin.start(ctx);
+
+    const sets = (plugin as any).bootstrapPermissionSets as any[];
+    const member = sets.find((s) => s.name === 'member_default');
+    expect(member.objects.sys_fake_identity).toEqual({
+      allowRead: true, allowCreate: false, allowEdit: false, allowDelete: false,
+    });
+    // admin_full_access keeps its bare wildcard — never denied.
+    const admin = sets.find((s) => s.name === 'admin_full_access');
+    expect(admin.objects.sys_fake_identity).toBeUndefined();
+  });
+});

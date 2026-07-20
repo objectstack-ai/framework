@@ -15,6 +15,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { bootstrapPlatformAdmin } from './bootstrap-platform-admin.js';
+import { applyManagedWriteDenies } from './managed-object-write-denies.js';
 
 /** Minimal in-memory ql. Only `sys_permission_set` is modeled; the admin-
  *  promotion tables return empty, so promotion short-circuits and we assert the
@@ -105,5 +106,38 @@ describe('bootstrapPlatformAdmin — insert-once vs resync (#2705)', () => {
     expect(r.resynced).toBe(0);
     expect(row(ql)).toBeTruthy();
     expect(JSON.parse(row(ql)!.system_permissions)).toEqual(['setup.access']);
+  });
+});
+
+// #3325 — the transform runs upstream in runBootstrap; here we confirm that once
+// a set has been enriched by applyManagedWriteDenies, bootstrapPlatformAdmin
+// serializes the injected denies into the seeded object_permissions JSON.
+describe('bootstrapPlatformAdmin — managed write denies land in the seed row (#3325)', () => {
+  const schemas = [
+    { name: 'sys_sso_provider', managedBy: 'better-auth' },
+    { name: 'crm_lead', managedBy: 'platform' },
+  ];
+  // member_default is a target set; give it the wildcard shape the real one has.
+  const enriched = () => {
+    const set = { name: 'member_default', label: 'Member', objects: { '*': { allowRead: true, allowCreate: true } } } as any;
+    applyManagedWriteDenies([set], schemas);
+    return set;
+  };
+
+  it('fresh DB: the injected deny serializes into object_permissions', async () => {
+    const ql = makeQl([]);
+    await bootstrapPlatformAdmin(ql, [enriched()]);
+    const perms = JSON.parse(row(ql)!.object_permissions);
+    expect(perms.sys_sso_provider).toEqual({ allowRead: true, allowCreate: false, allowEdit: false, allowDelete: false });
+    expect(perms.crm_lead).toBeUndefined(); // platform bucket never denied
+  });
+
+  it('resync: reconciles a stale platform-owned row that predates the deny', async () => {
+    const ql = makeQl([
+      { id: 'ps_old', name: 'member_default', system_permissions: '[]', object_permissions: '{}', managed_by: null },
+    ]);
+    const r = await bootstrapPlatformAdmin(ql, [enriched()], { resync: true });
+    expect(r.resynced).toBe(1);
+    expect(JSON.parse(row(ql)!.object_permissions).sys_sso_provider.allowCreate).toBe(false);
   });
 });
