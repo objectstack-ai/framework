@@ -213,6 +213,13 @@ or the call returns 403 (`FORBIDDEN: actor '…' is not a pending approver`); a
 request that isn't pending returns 409 (`INVALID_STATE`). Always go through
 these endpoints — never resume the flow run directly.
 
+A decision may carry **file attachments** — `attachments: string[]` of `sys_file`
+ids — recorded on its audit row (e.g. a signed contract on the approve):
+
+```jsonc
+POST .../approve   { "comment": "Signed.", "attachments": ["file_abc", "file_def"] }
+```
+
 <Callout type="info">
 **With `behavior: 'unanimous'`, an approve is not the end.** Every approver but
 the last only trims `pending_approvers`; the request stays `pending`
@@ -230,6 +237,64 @@ the `approve` or `reject` branch.
 Statuses in full: `pending`, `approved`, `rejected`, `recalled`, `returned`.
 
 </Steps>
+
+### Beyond approve/reject — the full decision surface
+
+`approve` / `reject` move the flow; the rest are thread interactions and
+continuity levers on the same request. All are `POST
+/api/v1/approvals/requests/:id/<verb>`; the service enforces who may call each:
+
+| Verb | Route | Who | Effect |
+|:---|:---|:---|:---|
+| `approve` / `reject` | `/approve` `/reject` | pending approver | Records the decision (finalizes per `behavior`). Accepts `comment`, `attachments`. |
+| `reassign` | `/reassign` | pending approver | Hands one slot to another user (`to`); the request stays pending. |
+| `revise` (send back) | `/revise` | pending approver | Ends this round as **`returned`**, unlocks the record for rework (ADR-0044). |
+| `request-info` | `/request-info` | pending approver | Asks the submitter for more info; the request **stays pending**. `comment` required. |
+| `remind` | `/remind` | submitter | Nudges the pending approvers (publishes a notification topic). |
+| `recall` | `/recall` | submitter | Withdraws a `pending` (or abandons a `returned`) request → **`recalled`**. |
+| `resubmit` | `/resubmit` | submitter | After a send-back, re-enters the approval node and opens the next round (ADR-0044). |
+| `comment` | `/comment` | participant | Free-form reply on the request thread; accepts `attachments`. |
+
+**Send-back → resubmit (ADR-0044).** An approver who wants changes rather than a
+hard reject calls `revise`: the round finalizes `returned`, the record unlocks,
+and the run parks at a wait point. The submitter reworks the record and
+`resubmit`s (a fresh round opens for all approvers) or `recall`s (abandons it).
+Past the node's `maxRevisions` budget (default 3) a send-back **auto-rejects**
+instead. The flow's approval node must declare a `revise` edge for send-back to
+be available.
+
+### Acting on requests in the console
+
+You rarely call these routes by hand. The decision verbs above ship as
+**server-declared actions** on `sys_approval_request` (`actions[]` in its object
+metadata) — `approval_approve`, `approval_reject`, `approval_reassign`,
+`approval_send_back`, `approval_request_info`, `approval_remind`,
+`approval_recall`, `approval_resubmit`. The console's generic action runtime
+renders and executes them wherever the object is surfaced — the **Approvals
+inbox** included — so a decision (comment, a file-upload for `attachments`, the
+reassign user-picker) is collected by the generic action dialog with **no
+per-action UI code**. New decision capabilities ship as backend metadata, not
+hand-written buttons.
+
+Each action's visibility is gated by a **server-computed per-viewer block** the
+service attaches to every request it returns:
+
+```jsonc
+// getRequest / listRequests responses carry, per the calling user:
+"viewer": { "can_act": true, "is_submitter": false }
+```
+
+- `can_act` — the caller is a **current pending approver** (their id is in the
+  resolved `pending_approvers` while the request is `pending`). This is the same
+  check the decision routes authorize with, so it already reflects
+  position/team/manager resolution.
+- `is_submitter` — the caller submitted the request.
+
+Approver actions gate on `record.viewer.can_act`, submitter levers
+(remind/recall/resubmit) on `record.viewer.is_submitter`. So a submitter viewing
+their own pending request never sees Approve/Reject/Reassign (buttons the server
+would 403 anyway), and a position-addressed approver is never wrongly hidden.
+The service stays the sole authority — the predicate only trims the UI.
 
 ### Timeouts and escalation
 
@@ -286,7 +351,7 @@ in-flight request, `reassign` hands one slot to another user directly.
 | Code | HTTP | Meaning |
 |:---|:---|:---|
 | `VALIDATION_FAILED` | 400 | Malformed request |
-| `FORBIDDEN` | 403 | Actor isn't a pending approver |
+| `FORBIDDEN` | 403 | Actor may not take this action (not a pending approver, or not the submitter for a submitter-only verb) |
 | `REQUEST_NOT_FOUND` | 404 | No such request |
 | `DUPLICATE_REQUEST` | 409 | A pending request already exists for this record |
 | `INVALID_STATE` | 409 | The request is no longer pending |
