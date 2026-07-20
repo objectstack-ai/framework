@@ -3,7 +3,7 @@
 
 # Metadata protocol upgrade guide
 
-Current protocol: **15.0.0** · chain support floor: **protocol 10** · generated from the ADR-0087 registries (`@objectstack/spec` `conversions/` + `migrations/`).
+Current protocol: **16.0.0** · chain support floor: **protocol 10** · generated from the ADR-0087 registries (`@objectstack/spec` `conversions/` + `migrations/`).
 
 ## How to upgrade — from any past major
 
@@ -103,6 +103,16 @@ Protocol 15 unified the conditional-visibility predicate under `visibleWhen` (AD
 - **`ui-schemas-strict-unknown-keys`** — `view form fields/sections · page components (undeclared keys)` → declared keys only (`visibleWhen` for visibility predicates)
   - Why not automatic: The `.strict()` flip (ADR-0089 D3a) turns a previously silently-stripped unknown key into a parse error. There is no mapping target for an arbitrary unknown key — auto-deleting it would be exactly the silent data loss ADR-0078 bans — so each occurrence needs the author to decide: fix the typo, move it to the right layer, or delete dead metadata.
   - Done when: `objectstack validate` passes with no unknown-key parse errors on form fields, form sections, or page components.
+
+## Protocol 15 → 16
+
+Protocol 16 flipped `DashboardWidgetSchema` to `.strict()` (framework#3251, ADR-0021 endpoint): an undeclared top-level widget key is now a loud parse error instead of a silent strip (ADR-0049 enforce-or-remove, ADR-0078 no-silently-inert). The inline analytics shape it most often catches (`object`+`categoryField`+`valueField`+`aggregate`, pivot `rowField`/`columnField`) was already removed at protocol 9, so no mechanical rewrite applies; the residue is the strictness itself, delegated to the author because an arbitrary unknown key has no lossless canonical target.
+
+### Semantic (delegated to you, with acceptance criteria)
+
+- **`dashboard-widget-strict-unknown-keys`** — `dashboard widgets (undeclared top-level keys — legacy inline analytics, objectui-internal `component`/`data`, or typos)` → declared keys only (`dataset` + `dimensions` + `values` for analytics; `options` for renderer-specific extras)
+  - Why not automatic: The `.strict()` flip turns a previously silently-stripped unknown key into a parse error. There is no mapping target for an arbitrary unknown key — auto-deleting it would be exactly the silent data loss ADR-0078 bans — so each occurrence needs the author to decide: bind a `dataset` and select `dimensions`/`values`, move a renderer setting under `options`, or delete the dead key.
+  - Done when: `objectstack validate` passes with no unknown-key parse errors on dashboard widgets.
 
 ---
 
