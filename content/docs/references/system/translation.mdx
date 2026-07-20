@@ -16,12 +16,28 @@ Translation data for a single field.
 ## TypeScript Usage
 
 ```typescript
-import { AppTranslationBundle, CoverageBreakdownEntry, FieldTranslation, Locale, MessageFormat, ObjectTranslationData, ObjectTranslationNode, TranslationBundle, TranslationConfig, TranslationCoverageResult, TranslationData, TranslationDiffItem, TranslationDiffStatus, TranslationFileOrganization } from '@objectstack/spec/system';
-import type { AppTranslationBundle, CoverageBreakdownEntry, FieldTranslation, Locale, MessageFormat, ObjectTranslationData, ObjectTranslationNode, TranslationBundle, TranslationConfig, TranslationCoverageResult, TranslationData, TranslationDiffItem, TranslationDiffStatus, TranslationFileOrganization } from '@objectstack/spec/system';
+import { ActionResultDialogTranslation, AppTranslationBundle, CoverageBreakdownEntry, FieldTranslation, Locale, MessageFormat, ObjectTranslationData, ObjectTranslationNode, TranslationBundle, TranslationConfig, TranslationCoverageResult, TranslationData, TranslationDiffItem, TranslationDiffStatus, TranslationFileOrganization } from '@objectstack/spec/system';
+import type { ActionResultDialogTranslation, AppTranslationBundle, CoverageBreakdownEntry, FieldTranslation, Locale, MessageFormat, ObjectTranslationData, ObjectTranslationNode, TranslationBundle, TranslationConfig, TranslationCoverageResult, TranslationData, TranslationDiffItem, TranslationDiffStatus, TranslationFileOrganization } from '@objectstack/spec/system';
 
 // Validate data
-const result = AppTranslationBundle.parse(data);
+const result = ActionResultDialogTranslation.parse(data);
 ```
+
+---
+
+## ActionResultDialogTranslation
+
+Translations for an action result dialog
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **title** | `string` | optional | Translated result dialog title |
+| **description** | `string` | optional | Translated result dialog description |
+| **acknowledge** | `string` | optional | Translated acknowledge button label |
+| **fields** | `Record<string, string>` | optional | Result field labels keyed by the literal field path declared in the action metadata (keys may contain dots) |
+
 
 ---
 
@@ -110,7 +126,7 @@ Translation data for a single object
 | **description** | `string` | optional | Translated object description |
 | **fields** | `Record<string, { label?: string; help?: string; placeholder?: string; options?: Record<string, string> }>` | optional | Field-level translations |
 | **_views** | `Record<string, { label?: string; description?: string; emptyState?: object }>` | optional | View translations keyed by view name |
-| **_actions** | `Record<string, { label?: string; confirmText?: string; successMessage?: string; params?: Record<string, { label?: string; helpText?: string; placeholder?: string; options?: Record<string, string> }> }>` | optional | Action translations keyed by action name |
+| **_actions** | `Record<string, { label?: string; confirmText?: string; successMessage?: string; params?: Record<string, { label?: string; helpText?: string; placeholder?: string; options?: Record<string, string> }>; … }>` | optional | Action translations keyed by action name |
 | **_sections** | `Record<string, { label?: string; description?: string }>` | optional | Section translations keyed by section name |
 
 
@@ -132,7 +148,7 @@ Object-first aggregated translation node
 | **_options** | `Record<string, Record<string, string>>` | optional | Object-scoped picklist option translations keyed by field name |
 | **_views** | `Record<string, { label?: string; description?: string; emptyState?: object }>` | optional | View translations keyed by view name |
 | **_sections** | `Record<string, { label?: string }>` | optional | Section translations keyed by section name |
-| **_actions** | `Record<string, { label?: string; confirmMessage?: string; params?: Record<string, { label?: string; helpText?: string; placeholder?: string; options?: Record<string, string> }> }>` | optional | Action translations keyed by action name |
+| **_actions** | `Record<string, { label?: string; confirmMessage?: string; params?: Record<string, { label?: string; helpText?: string; placeholder?: string; options?: Record<string, string> }>; resultDialog?: object }>` | optional | Action translations keyed by action name |
 | **_notifications** | `Record<string, { title?: string; body?: string }>` | optional | Notification translations keyed by notification name |
 | **_errors** | `Record<string, string>` | optional | Error message translations keyed by error code |
 
@@ -195,7 +211,7 @@ Translation data for objects, apps, and UI messages
 | **apps** | `Record<string, { label: string; description?: string; navigation?: Record<string, { label: string }> }>` | optional | App translations keyed by app name |
 | **messages** | `Record<string, string>` | optional | UI message translations keyed by message ID |
 | **validationMessages** | `Record<string, string>` | optional | Translatable validation error messages keyed by rule name (e.g., `{"discount_limit": "折扣不能超过40%"}`) |
-| **globalActions** | `Record<string, { label?: string; confirmText?: string; successMessage?: string; params?: Record<string, { label?: string; helpText?: string; placeholder?: string; options?: Record<string, string> }> }>` | optional | Global action translations keyed by action name |
+| **globalActions** | `Record<string, { label?: string; confirmText?: string; successMessage?: string; params?: Record<string, { label?: string; helpText?: string; placeholder?: string; options?: Record<string, string> }>; … }>` | optional | Global action translations keyed by action name |
 | **dashboards** | `Record<string, { label?: string; description?: string; actions?: Record<string, { label?: string }>; widgets?: Record<string, { title?: string; description?: string }> }>` | optional | Dashboard translations keyed by dashboard name |
 | **settings** | `Record<string, { title?: string; description?: string; groups?: Record<string, { title?: string; description?: string }>; keys?: Record<string, { label?: string; help?: string; placeholder?: string; options?: Record<string, string> }>; … }>` | optional | Settings manifest translations keyed by namespace |
 | **metadataForms** | `Record<string, { label?: string; description?: string; sections?: Record<string, { label?: string; description?: string }>; fields?: Record<string, { label?: string; helpText?: string; placeholder?: string }> }>` | optional | Translations for metadata-type configuration forms keyed by metadata type |
