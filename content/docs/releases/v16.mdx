@@ -525,13 +525,11 @@ re-exports from `spec/ui` are dropped; import them from `@objectstack/spec`
 directly) and the removal of the Gantt mobile QR-share context action
 (#2687).
 
-> **Console vs. pin.** The Console section below is sourced from **objectui's
-> own changesets**, not only the `@objectstack/console` bundle-bump summaries
-> (a bump pins a SHA and can lag objectui `main`). Four 16.0-line frontend
-> changes had merged in objectui but landed *after* the `94d4876` pin — two of
-> them minor features — so they are not in the `rc.0` bundle yet; they ship
-> with the next console pin and are called out under
-> [Landed in objectui, pending the next console pin](#landed-in-objectui-pending-the-next-console-pin).
+> **Console vs. pin.** This section is sourced from **objectui's own
+> changesets**, not only the `@objectstack/console` bundle-bump summaries (a
+> bump pins a SHA and can lag objectui `main`). The `rc.0` bundle pins
+> `94d4876`; the pin has since advanced to `af1b0db` on `main` — that later
+> Console work is under [Landed since 16.0.0-rc.0](#landed-since-1600-rc0).
 
 ### Approvals inbox goes metadata-driven (#2678 line)
 
@@ -654,37 +652,138 @@ and curated capability labels + picker group headers localize (B5).
   editors are fixed (#2666); AgentPreview drops the removed agent
   `visibility` (#2665).
 
-### Landed in objectui, pending the next console pin
+### Console changes after the `rc.0` pin
 
-These 16.0-line frontend changes merged in objectui **after** the `94d4876`
-SHA that `@objectstack/console` `rc.0` pins, so they are not in the `rc.0`
-bundle — they ship with the next console pin (folded here for a complete
-frontend picture; sourced from objectui's changesets, not the bump summary):
+The four frontend changes that were pending when this page was first written
+(import wizard `auto` policy — objectui#2701; schema-driven `keyValue` /
+`numberList` flow mapping — objectui#2708; ActionParamDialog upload guard +
+`autonumber` — objectui#2707; system-field classifier consolidation —
+objectui#2706) **are now bundled**: the console pin advanced `94d4876 →
+af1b0db` on `main`. They plus a further wave of Console work are described
+under [Landed since 16.0.0-rc.0](#landed-since-1600-rc0) below.
 
-- **Import wizard defaults to the `auto` password policy (objectui#2701,
-  minor).** The Console counterpart to framework#3236: the "Sign-in setup for
-  imported users" selector gains an **Automatic (recommended)** option, now the
-  default (was "No password"). It decides per row server-side — reachable users
-  are invited (email / SMS), unreachable ones get a one-time password shown
-  once on the result screen — and the one-time-password reveal now surfaces
-  only the rows that actually fell back, not the whole batch.
-- **Schema-driven `keyValue` / `numberList` mapping in the flow inspector
-  (objectui#2708, minor).** `jsonSchemaToFlowFields` (ADR-0018) now maps an
-  object with `additionalProperties` and no fixed `properties` → a `keyValue`
-  editor, and a number/integer array → `numberList` — the objectui half of
-  framework#3304, giving previously schema-less flow nodes (assignment, the
-  CRUD quartet, script, subflow, screen) a server-driven config form.
-- **ActionParamDialog upload guard + `autonumber` mapping (objectui#2707,
-  ADR-0059 follow-up).** Confirm is disabled while a `file`/`image` param is
-  still uploading (its value only becomes the fileId once the presigned upload
-  settles), and the spec `autonumber` field/param spelling now maps to the
-  AutoNumber widget instead of falling through to a text input.
-- **System-field classification consolidated (objectui#2706).** The grid
-  record-detail drawer, record picker (`deriveLookupColumns`), and
-  `RecordDetailDrawer` route through the shared
-  `isSystemManagedField` / `SYSTEM_MANAGED_FIELD_NAMES` classifier, so the
-  framework-injected `owner_id` lands in the muted meta section consistently
-  (follow-up to the #2702 leading-column fix).
+## Landed since 16.0.0-rc.0
+
+These changes are on `main` after the `rc.0` cut and **roll into the next 16.0
+RC** — backend from the pending changesets, Console from the objectui pin
+advancing `94d4876 → af1b0db` (objectui #2706–#2736). Sourced from each repo's
+own changesets.
+
+### Breaking / behavior
+
+- **Deprecated `aiStudio` / `aiSeat` capability aliases removed (#3308,
+  breaking-as-minor).** The one-cycle deprecation window from #3265 is over:
+  the camelCase `requires` spellings are no longer canonicalized — they are now
+  plain unknown tokens `defineStack` rejects like any typo, and the serve
+  resolver stops rewriting them on raw artifacts. `canonicalizePlatformCapability`
+  / `DEPRECATED_PLATFORM_CAPABILITY_ALIASES` are dropped from `@objectstack/spec`.
+  **Migration:** use the canonical kebab-case `ai-studio` / `ai-seat`.
+- **Date arithmetic in a `Field.formula` is now a build-time error (#3306).**
+  `record.end_date - record.start_date + 1`, `today() + 30`, `record.date + n`
+  type-check clean (operands are `dyn`) but always faulted to `null` at
+  runtime. `objectstack build` / `validateStackExpressions` now types
+  `date`/`datetime` fields as `Timestamp` and **rejects arithmetic against a
+  number**, with a message pointing at `daysBetween(a, b)` / `daysFromNow(n)` /
+  `addDays(d, n)` / `addMonths(d, n)`. Only fires for genuinely-broken
+  expressions that already returned `null`; ordering, equality (#3183) and
+  string concatenation stay runtime-tolerated.
+- **Per-option `visibleWhen` enforced on `checkboxes`, and option values
+  matched by string form (objectui#2729, #3350).** Server-side per-option
+  gating already covered `select` / `multiselect` / `radio`; `checkboxes` was
+  omitted from `CHOICE_FIELD_TYPES`, so a gated option hidden in the UI was
+  still accepted from a crafted write. It is now re-evaluated element-wise on
+  insert/update/bulk. Separately, option matching now coerces both sides with
+  `String(...)` so a numeric option value submitted as a string (a normal JSON
+  round-trip) can no longer slip its gate. Fail-open on unbound `current_user`
+  is preserved.
+
+### New capabilities (backend)
+
+- **Formulas that compute dates/durations stop silently nulling (#3306).**
+  Two long-standing CEL gaps are closed alongside the build error above: the
+  null-guard idiom `cond ? <value> : null` now compiles and evaluates (an AST
+  pre-pass wraps the non-null branch in `dyn(...)`, so `true ? 5 : null` no
+  longer faults the type-unifier), and `floor(x)` / `ceil(x)` are registered
+  (round toward −∞ / +∞) and advertised in the catalog. Shipped template
+  formulas like `hr_employee.tenure_years` compute again.
+- **`engine-owned` becomes an explicit `managedBy` value (ADR-0103 addendum,
+  #3343).** The overloaded `system` bucket is split: a new `engine-owned` enum
+  value carries the same all-locked default affordance and joins the write
+  guard / `apiMethods` reconciliation / `/me/permissions` clamp that already
+  covered it by resolved affordance. **20 engine-owned objects** are relabelled
+  `system → engine-owned` (the metadata store, jobs, approval-runtime rows,
+  sharing rows, `sys_automation_run`, the messaging pipeline, `sys_secret`,
+  settings); **8 admin-writable objects keep `system`** (now reading as
+  "engine-managed schema, writable via `userActions`"). Enforcement-, wire- and
+  behavior-identical — a self-documenting relabel; the full `system` retirement
+  is a v17 rename.
+- **Approvals — precise decision-action gating (#3344).** `getRequest` /
+  `listRequests` attach a per-viewer `viewer: { can_act, is_submitter }`
+  computed server-side (`can_act` = the caller is a current pending approver by
+  the same check the decision methods authorize with). The declared decision
+  actions now gate on it — approver actions on `record.viewer.can_act`,
+  submitter levers on `record.viewer.is_submitter` — so a submitter no longer
+  sees approver buttons that 403, and a position-addressed approver is no
+  longer wrongly hidden by a client heuristic. Fails closed when `viewer` is
+  absent.
+- **Approvals — file attachments on approve/reject decisions (#3332).** The
+  declared `approval_approve` / `approval_reject` actions gain an optional
+  multi-file `attachments` param, rendered through the shared upload widget and
+  persisted to the existing `sys_approval_action.attachments` column — letting
+  the inbox retire its hand-wired attachment composer. Purely additive metadata.
+- **Discovery advertises a `transactionalBatch` capability bit (#3298).**
+  `WellKnownCapabilitiesSchema` gains a required `transactionalBatch: boolean`
+  so clients negotiate the atomic cross-object batch (`POST {basePath}/batch`)
+  declaratively at connect time instead of probing `404`/`405`/`501`. Every
+  discovery producer fills it honestly (`true` ⟺ the route is mounted **and**
+  the engine can honour a transaction); `@objectstack/plugin-hono-server`
+  under-reports `false` (the safe direction). Exposed as
+  `client.capabilities.transactionalBatch`.
+- **i18n — action `resultDialog` copy is translatable (#3347).** The one-shot
+  secret-reveal dialogs (temporary passwords, 2FA backup codes, OAuth client
+  secrets) gain an `ActionResultDialogTranslationSchema` slot
+  (`title` / `description` / `acknowledge` / `fields` keyed by literal
+  result-field path); `os i18n extract` emits the keys and en/zh-CN/ja-JP/es-ES
+  bundles ship copy for all six shipped dialogs.
+- **i18n — collaboration notifications and storage objects localize; the
+  notifications REST routes are wired (#3354).** Assignment / @mention bell
+  titles resolve through the i18n service in the **recipient's** locale (new
+  `assignedToYou` / `mentionedYou` templates), `sys_file` / `sys_upload_session`
+  ship their own translation bundle, and — the functional fix — `GET
+  /api/v1/notifications` + the two `read` routes are now explicitly mounted in
+  the standalone dispatcher (they only reached cloud's hono catch-all before),
+  so mark-as-read works on `os dev` / standalone instead of leaving unread
+  state that could never clear.
+
+### New in Console (objectui, now bundled `94d4876 → af1b0db`)
+
+- **Option-widget `visibleWhen` parity.** Per-option cascading + `dependsOn`
+  gating lands across the widget family so client and server agree on which
+  options are visible: `MultiSelectField` (objectui#2715/#2717), `RadioField`
+  (objectui#2728, single-sourcing the option resolver), and `CheckboxesField`
+  (objectui#2735) — the Console side of the framework enforcement above. A
+  `select` + `multiple` field renders as a multi-value chip picker (objectui#2709).
+- **Approvals inbox finishes going metadata-driven.** Participant gating aligns
+  with the server-computed `viewer` block (objectui#2719), and the bespoke
+  approve/reject composer is retired now that declared actions carry file
+  attachments (objectui#2710, pairing framework#3332).
+- **Related lists paginate by default (objectui#2711/#2722):** server-side
+  `$top` / `$skip` windows instead of loading every child row.
+- **Dashboard cleanup:** the pre-ADR-0021 inline-analytics renderer branches
+  are retired (objectui#2723, framework#3320), and dashboard bars draw on first
+  paint via a single settle re-mount (objectui#2727).
+- **`provider:'api'` data sources thread the host's authenticated fetch
+  (objectui#2725/#2732),** so external API-backed views carry the session's
+  credentials.
+- **Action result dialogs render the new translation slot (objectui#2736),** the
+  client half of framework#3347.
+- **`engine-owned` lifecycle bucket in the Console (objectui#2739 + the
+  #2712/#2724 `userActions` parser consolidation),** the UI union that unblocked
+  the framework enum split.
+- **Fixes:** kanban / calendar surface write failures instead of swallowing
+  them (objectui#2716); the earlier post-`rc.0` items (import wizard `auto`,
+  flow `keyValue`/`numberList`, ActionParamDialog upload guard, system-field
+  classifier) are included in this pin.
 
 ## Upgrade checklist
 
@@ -713,6 +812,13 @@ frontend picture; sourced from objectui's changesets, not the bump summary):
   legitimately need; otherwise generic writes are now rejected (ADR-0103).
 - **Approvals:** rewrite `ApproverType 'role'` → `org_membership_level` (or
   `position` if the value names one) before the alias is removed next major.
+- **Capability tokens:** replace any `aiStudio` / `aiSeat` in `requires` with
+  the canonical `ai-studio` / `ai-seat` — the aliases no longer canonicalize
+  and are now rejected as unknown tokens (#3308).
+- **Formulas:** replace date arithmetic in `Field.formula` / predicates
+  (`end - start + 1`, `today() + 30`) with `daysBetween` / `daysFromNow` /
+  `addDays` / `addMonths` — it is now a build-time error instead of a silent
+  runtime `null` (#3306).
 - **Identity import integrations:** pass `passwordPolicy: 'none'` explicitly
   if you relied on the old identity-only default.
 - **Sandbox:** update anything matching the old `exceeded timeout of Nms`
