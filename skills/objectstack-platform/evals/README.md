@@ -13,7 +13,7 @@ When implemented, evals will follow this structure:
 ```
 evals/
 ├── bootstrap/
-│   ├── test-definestack-keys.md        # no phantom keys (driver:, workflows:, roles:)
+│   ├── test-definestack-keys.md        # no phantom keys (driver:, workflows:, approvals:)
 │   ├── test-manifest-required-fields.md
 │   └── test-template-selection.md      # blank | todo | compliance | content | contracts | procurement
 ├── drivers-adapters/

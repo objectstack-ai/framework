@@ -76,7 +76,7 @@ options: [
 > **`multiple: true` lookup ≠ junction object.** A multi-value lookup is stored
 > and read as an **array of ids** on the record — it is NOT a junction table.
 > Reach for a **junction object** (two lookups) only when the relationship
-> itself carries attributes (role, added_at, …). (#1872)
+> itself carries attributes (position, added_at, …). (#1872)
 
 ## Media
 
