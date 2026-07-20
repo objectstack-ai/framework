@@ -28,7 +28,7 @@ export const SysApprovalRequest = ObjectSchema.create({
   pluralLabel: 'Approval Requests',
   icon: 'inbox',
   isSystem: true,
-  managedBy: 'system',
+  managedBy: 'engine-owned',
   description: 'Live approval instance tracked per submission',
   displayNameField: 'id',
   nameField: 'id', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)

@@ -25,7 +25,7 @@ export const SysImportJob = ObjectSchema.create({
   pluralLabel: 'Import Jobs',
   icon: 'upload',
   isSystem: true,
-  managedBy: 'system',
+  managedBy: 'engine-owned',
   description: 'Asynchronous bulk-import job state, progress, and history',
   displayNameField: 'object_name',
   nameField: 'object_name', // [ADR-0079] canonical primary-title pointer

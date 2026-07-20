@@ -21,7 +21,7 @@ export const SysJob = ObjectSchema.create({
   pluralLabel: 'Background Jobs',
   icon: 'clock',
   isSystem: true,
-  managedBy: 'system',
+  managedBy: 'engine-owned',
   description: 'Catalogue of registered background jobs',
   displayNameField: 'name',
   nameField: 'name', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)

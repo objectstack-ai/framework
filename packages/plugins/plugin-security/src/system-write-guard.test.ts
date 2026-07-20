@@ -1,5 +1,5 @@
 // Copyright (c) 2026 ObjectStack. Licensed under the Apache-2.0 license.
-// ADR-0103 — engine-owned write guard for the `system` / `append-only` buckets.
+// ADR-0103 — engine-owned write guard for the `engine-owned` / `system` / `append-only` buckets.
 
 import { describe, it, expect } from 'vitest';
 import { assertEngineOwnedWriteAllowed, ENGINE_OWNED_BUCKETS } from './system-write-guard.js';
@@ -12,7 +12,9 @@ const SYSTEM_CTX = { userId: 'u1', isSystem: true };
 // No session (raw-engine / transaction context) → bypasses.
 const CONTEXTLESS = { transaction: {} };
 
-const engineOwned = { name: 'sys_automation_run', managedBy: 'system' };
+const engineOwned = { name: 'sys_automation_run', managedBy: 'engine-owned' };
+// A `system` object with no userActions still resolves locked → engine-owned.
+const lockedSystem = { name: 'sys_thing', managedBy: 'system' };
 const appendOnly = { name: 'sys_audit_log', managedBy: 'append-only' };
 const writable = {
   name: 'sys_user_position',
@@ -34,15 +36,20 @@ function expectDenied(fn: () => void): void {
 }
 
 describe('assertEngineOwnedWriteAllowed (ADR-0103)', () => {
-  it('scopes to the system and append-only buckets only', () => {
-    expect([...ENGINE_OWNED_BUCKETS].sort()).toEqual(['append-only', 'system']);
+  it('scopes to the engine-owned, system and append-only buckets', () => {
+    expect([...ENGINE_OWNED_BUCKETS].sort()).toEqual(['append-only', 'engine-owned', 'system']);
   });
 
-  describe('engine-owned system/append-only objects', () => {
-    it('rejects user-context insert/update/delete', () => {
+  describe('engine-owned / system / append-only objects', () => {
+    it('rejects user-context insert/update/delete on an explicit engine-owned object', () => {
       for (const op of ['insert', 'update', 'delete', 'upsert', 'purge', 'transfer', 'restore']) {
         expectDenied(() => assertEngineOwnedWriteAllowed(engineOwned, op, USER_CTX));
       }
+    });
+
+    it('rejects user-context writes to a locked `system` object (no userActions)', () => {
+      expectDenied(() => assertEngineOwnedWriteAllowed(lockedSystem, 'insert', USER_CTX));
+      expectDenied(() => assertEngineOwnedWriteAllowed(lockedSystem, 'delete', USER_CTX));
     });
 
     it('rejects user-context writes to append-only objects too', () => {

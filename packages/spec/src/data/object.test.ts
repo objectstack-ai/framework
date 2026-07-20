@@ -1393,6 +1393,16 @@ describe('userActions row predicates + resolveCrudAffordances (objectui#2614)', 
     expect(aff.deletePredicates?.visibleWhen).toEqual({ dialect: 'cel', source: 'record.frozen != true' });
   });
 
+  it('engine-owned bucket resolves fully locked (same matrix as system/append-only, ADR-0103)', () => {
+    const locked = { create: false, import: false, edit: false, delete: false, exportCsv: true };
+    expect(resolveCrudAffordances({ managedBy: 'engine-owned' } as never)).toEqual(locked);
+    // Parity with the other engine-owned-default buckets.
+    expect(resolveCrudAffordances({ managedBy: 'system' } as never)).toEqual(locked);
+    expect(resolveCrudAffordances({ managedBy: 'append-only' } as never)).toEqual(locked);
+    // The enum accepts the new value.
+    expect(ObjectSchema.safeParse({ name: 'sys_thing', label: 'T', fields: { id: { type: 'text' } }, managedBy: 'engine-owned' }).success).toBe(true);
+  });
+
   it('object form without predicates behaves exactly like the boolean form', () => {
     const aff = resolveCrudAffordances({
       managedBy: 'config',

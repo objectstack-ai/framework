@@ -36,7 +36,7 @@ export const SysRecordShare = ObjectSchema.create({
   pluralLabel: 'Record Shares',
   icon: 'share',
   isSystem: true,
-  managedBy: 'system',
+  managedBy: 'engine-owned',
   description: 'Per-record sharing grant — extends OWD with explicit access',
   titleFormat: '{object_name}/{record_id} → {recipient_id} ({access_level})',
   highlightFields: ['object_name', 'record_id', 'recipient_id', 'access_level', 'source'],

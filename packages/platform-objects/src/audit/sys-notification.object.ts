@@ -31,7 +31,7 @@ export const SysNotification = ObjectSchema.create({
   pluralLabel: 'Notification Events',
   icon: 'bell',
   isSystem: true,
-  managedBy: 'system',
+  managedBy: 'engine-owned',
   // ADR-0057: one 90d window across the whole notification pipeline
   // (event → delivery → receipt/inbox), enforced by the LifecycleService
   // (the retired NotificationRetention sweeper kept the same default).

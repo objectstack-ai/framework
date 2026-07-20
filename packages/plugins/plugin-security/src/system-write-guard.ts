@@ -1,11 +1,13 @@
 // Copyright (c) 2026 ObjectStack. Licensed under the Apache-2.0 license.
 
 /**
- * ADR-0103 — engine-owned write guard for the `system` / `append-only` buckets.
+ * ADR-0103 — engine-owned write guard for the `engine-owned` / `system` /
+ * `append-only` buckets.
  *
- * `managedBy: 'system'` and `managedBy: 'append-only'` default to *engine-owned*:
- * rows a platform service owns end to end (the approval engine, the sharing
- * engine, the job runner, the messaging pipeline, …), written only via
+ * `managedBy: 'engine-owned'` (and the locked defaults of `system` /
+ * `append-only`) mean *engine-owned*: rows a platform service owns end to end
+ * (the approval engine, the sharing engine, the job runner, the messaging
+ * pipeline, …), written only via
  * `isSystem` / a service `SYSTEM_CTX` / a context-less engine call. Until this
  * guard that promise was enforced by nothing but UI affordances and default
  * permission sets — a wildcard admin could raw-write these rows through the
@@ -37,8 +39,13 @@
 import { resolveCrudAffordances } from '@objectstack/spec/data';
 import { PermissionDeniedError } from './errors.js';
 
-/** Buckets whose DEFAULT affordance row is engine-owned (no user writes). */
-export const ENGINE_OWNED_BUCKETS: ReadonlySet<string> = new Set(['system', 'append-only']);
+/**
+ * Buckets whose DEFAULT affordance row is engine-owned (no user writes). The
+ * explicit `engine-owned` bucket (ADR-0103) sits alongside `system` /
+ * `append-only`, whose locked defaults are engine-owned too; all three are
+ * guarded, and any member that opens a verb via `userActions` passes below.
+ */
+export const ENGINE_OWNED_BUCKETS: ReadonlySet<string> = new Set(['system', 'engine-owned', 'append-only']);
 
 /**
  * Engine write operation → the {@link resolveCrudAffordances} flag it needs.

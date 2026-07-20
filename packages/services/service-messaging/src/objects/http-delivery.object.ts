@@ -31,7 +31,7 @@ export const HttpDelivery = ObjectSchema.create({
     pluralLabel: 'HTTP Deliveries',
     icon: 'globe',
     isSystem: true,
-    managedBy: 'system',
+    managedBy: 'engine-owned',
     // ADR-0057: webhook delivery attempts are debugging telemetry — 30d is
     // ample for retry forensics.
     lifecycle: {

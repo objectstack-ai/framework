@@ -24,7 +24,7 @@ import { ObjectSchema, Field } from '@objectstack/spec/data';
  *     (Phase 4) without polluting `sys_setting_audit` with plaintext
  *     reads of e.g. feature flags.
  *
- * managedBy: 'system' — never edited from a generic Object grid. All
+ * managedBy: 'engine-owned' — never edited from a generic Object grid. All
  * writes flow through `SettingsService` and an `ICryptoProvider`.
  *
  * @namespace sys
@@ -35,7 +35,7 @@ export const SysSecret = ObjectSchema.create({
   pluralLabel: 'Secrets',
   icon: 'key',
   isSystem: true,
-  managedBy: 'system',
+  managedBy: 'engine-owned',
   // [ADR-0066 D2/④] Secure-by-default: the environment's encrypted-secrets
   // store (settings/datasource credentials). Not covered by the wildcard `'*'`
   // grant — ordinary members get 403 from the generic data layer. Platform

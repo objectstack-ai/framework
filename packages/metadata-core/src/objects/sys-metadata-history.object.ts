@@ -46,7 +46,7 @@ export const SysMetadataHistoryObject = ObjectSchema.create({
   pluralLabel: 'Metadata History',
   icon: 'history',
   isSystem: true,
-  managedBy: 'system',
+  managedBy: 'engine-owned',
   description: 'Durable event log of metadata overlay changes (per-org, append-only)',
 
   fields: {
