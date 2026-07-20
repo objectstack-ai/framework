@@ -9,10 +9,10 @@ description: >
   predicate". Do not use for SQL fragments (driver-native), cron schedules
   (cron dialect), or L2 hook bodies (those belong in objectstack-data).
 license: Apache-2.0
-compatibility: Requires @objectstack/spec v4+ and @objectstack/formula
+compatibility: Requires @objectstack/spec 16.x and @objectstack/formula 16.x (CEL)
 metadata:
   author: objectstack-ai
-  version: "1.0"
+  version: "1.1"
   domain: expression
   tags: cel, formula, predicate, condition, validation, visibility, seed-dynamic
 ---
@@ -63,21 +63,24 @@ Every expression in metadata is the same envelope:
 
 ```ts
 type Expression = {
-  dialect: 'cel' | 'js' | 'cron' | 'template';
+  dialect: 'cel' | 'cron' | 'template';
   source?: string;
   ast?: unknown;
   meta?: { rationale?: string; generatedBy?: string };
 };
 ```
 
-**Four registered dialects** (M9.9):
+**Three registered dialects**:
 
 | Dialect    | Engine                 | Purpose                                           | Helper        | Example                                |
 |:-----------|:-----------------------|:--------------------------------------------------|:--------------|:---------------------------------------|
 | `cel`      | `@marcbachmann/cel-js` | Computed values + boolean predicates              | `` cel`...` `` / `` F`...` `` / `` P`...` `` | `` cel`record.amount * 1.1` ``         |
 | `cron`     | built-in validator     | Recurring schedules                               | `` cron`...` `` | `` cron`0 6 * * MON` ``               |
 | `template` | built-in interpolator  | `{{path}}` text interpolation (notif/prompt/title) | `` tmpl`...` `` | `` tmpl`Hello {{record.first_name}}` ``|
-| `js`       | (sandboxed, future)    | Edge cases needing arbitrary JS — avoid           | n/a           | reserved                               |
+
+There is **no `js` dialect** — it was retired (#3278). Procedural JavaScript is
+the L2 `ScriptBody { language: 'js' }` authoring surface (hook bodies, mapping
+transforms — see objectstack-data), not an expression dialect.
 
 **Authors emit the right dialect for the surface.** Bare strings on cron and
 template fields are auto-wrapped at validate time, but emitting the full
@@ -98,7 +101,7 @@ scope as CEL — you do **not** learn three languages.
 | Current record field | `record.first_name` |
 | Previous record (update hooks) | `previous.status` |
 | Hook input payload | `input.amount` |
-| Identity context | `os.user.id`, `os.org.slug`, `os.env` |
+| Identity context | `os.user.id`, `os.org.id`, `os.org.tier`, `os.env` |
 | Equality | `==` / `!=` |
 | Logical | `&&` / `\|\|` / `!` |
 | Ternary | `cond ? a : b` |
@@ -106,6 +109,10 @@ scope as CEL — you do **not** learn three languages.
 | Membership | `record.region in ['us', 'eu']` |
 | Key existence (NOT null-safety) | `has(record.foo)` |
 | Null check | `record.foo == null` or `isBlank(record.foo)` |
+
+The org context is `{ id, tier }` — there is no `os.org.slug` or `os.org.name`.
+The evaluator also binds the current user as `current_user` (alias `user`) per
+ADR-0068 — spec field docs write predicates like `current_user.positions`.
 
 ### `has()` is NOT a null check
 
@@ -124,10 +131,10 @@ in `coalesce(..., '')`.
 ## ObjectStack CEL standard library
 
 Registered automatically. Source:
-[`packages/formula/src/stdlib.ts`](../../packages/formula/src/stdlib.ts).
+`node_modules/@objectstack/formula/src/stdlib.ts`.
 
 The canonical list is `CEL_STDLIB_FUNCTIONS` in
-[`packages/formula/src/validate.ts`](../../packages/formula/src/validate.ts) — a
+`node_modules/@objectstack/formula/src/validate.ts` — a
 test asserts every entry resolves at runtime, so this table stays in sync with it.
 
 **Dates**
@@ -135,15 +142,15 @@ test asserts every entry resolves at runtime, so this table stays in sync with i
 | Function | Returns | Notes |
 |:---|:---|:---|
 | `now()` | timestamp | Current instant. Pinned per evaluation run; deterministic in build |
-| `today()` | timestamp | UTC **start-of-day** (midnight) |
-| `daysFromNow(n)` | timestamp | `now()` + `n` days — **keeps the current time-of-day** (NOT midnight) |
-| `daysAgo(n)` | timestamp | `now()` − `n` days — keeps the current time-of-day |
+| `today()` | timestamp | Reference-timezone **calendar day**, expressed as **UTC midnight** (not plain UTC start-of-day) |
+| `daysFromNow(n)` | timestamp | Calendar-day: `today()` + `n` days, at **UTC midnight** (never carries time-of-day) |
+| `daysAgo(n)` | timestamp | Calendar-day: `today()` − `n` days, at **UTC midnight** |
 | `daysBetween(a, b)` | int | Whole days from `a` to `b` (negative if `b` precedes `a`). `daysBetween(today(), record.due)` = days remaining |
 | `addDays(d, n)` | timestamp | Shift **any** date by `n` days (negative ok). `addDays(record.last_service, record.cycle_days)` = next due date |
 | `addMonths(d, n)` | timestamp | Shift **any** date by `n` months; clamps to month-end (`addMonths(date('2026-01-31'), 1)` → Feb 28) |
 | `date(s)` / `datetime(s)` | timestamp | Parse an ISO date / date-time string to a timestamp |
 
-> **No date arithmetic.** Do NOT write `end - start`, `date + n`, or `today() + 30` — CEL has no numeric arithmetic on dates, so these fault and the field silently nulls (the build now rejects them). Use `daysBetween(start, end)` for a span in days, and `daysFromNow(n)` / `addDays(d, n)` / `addMonths(d, n)` to shift a date. Inclusive day span: `daysBetween(record.start_date, record.end_date) + 1`. Tenure in years: `daysBetween(record.hire_date, today()) / 365`.
+> **No date arithmetic.** Do NOT write `end - start`, `date + n`, or `today() + 30` — CEL has no numeric arithmetic on dates, so these fault and the field silently nulls (the build now rejects them). Use `daysBetween(start, end)` for a span in days, and `daysFromNow(n)` / `addDays(d, n)` / `addMonths(d, n)` to shift a date. Inclusive day span: `daysBetween(record.start_date, record.end_date) + 1`. Tenure in years: `daysBetween(record.hire_date, today()) / 365`. For a genuine sub-day offset use `now() + duration("3h")` — the calendar-day helpers always land on UTC midnight.
 
 **Numbers**
 
@@ -229,7 +236,9 @@ For field-level conditional rules, emit the canonical field properties:
 `visibleWhen`, `readonlyWhen`, and `requiredWhen`. Treat
 `conditionalRequired` as a read/compatibility alias only.
 
-❌ Salesforce-flavor — will compile but evaluate to `null`:
+❌ Salesforce-flavor — **fails CEL compile**: `objectstack build` errors with a
+located message, and the flow engine throws if it ever reaches runtime (see the
+ADR-0032 note at the top of this skill):
 
 ```ts
 "status = 'qualified'"
@@ -301,23 +310,23 @@ to the envelope.
 
 | Surface | Field | Dialect |
 |:---|:---|:---|
-| `Field` | `formula` (when `type: 'formula'`) | cel |
+| `Field` | `expression` (when `type: 'formula'`) | cel |
 | `Field` | `visibleWhen` / `readonlyWhen` / `requiredWhen` | cel |
 | `Field` | `conditionalRequired` (deprecated alias of `requiredWhen`) | cel |
 | `View` / `Page` | `visibleWhen` (form section/field, page component) | cel |
 | `Field` | `defaultValue` (M9.9b) | cel |
 | `ConditionalValidation` | `when` | cel |
 | `View` / `Page` | `visibleOn` / `visibility` (deprecated aliases of `visibleWhen`, ADR-0089) | cel |
-| `View.criteria` | filter expression | cel |
 | `Action` | `disabled` | cel (or boolean) |
 | `Hook` | `condition` | cel |
 | `SharingRule` | `condition` | cel |
 | `Flow.decision` | `expression` / edge `condition` | cel (use `vars.<step>.<key>`) |
-| `Workflow.Task` | `dueDate` | cel (e.g. `cel\`daysFromNow(3)\``) |
-| `Workflow` | `criteria` | cel |
 | `GraphQL.ComputedField` | `expression` | cel |
 | `Dataset.records[*]` | any value | cel (via `cel\`\``) |
 | `audit` / `metrics` / `tracing` | `condition` / `successCriteria` | structured \| cel |
+
+View list filters are **not** a CEL surface — they are structured JSON filter
+rules (`ViewFilterRuleSchema`), so do not emit CEL there.
 
 ### Cron surfaces (recurring schedules)
 
@@ -332,8 +341,6 @@ All accept bare strings (auto-wrapped to `{dialect:'cron', source}`) or the
 | `system/disaster-recovery.schedule` | backup + drill |
 | `automation/execution.cronExpression` | scheduled state |
 | `api/export.cronExpression` | scheduled exports (×2) |
-| `ai/orchestration.cron` | recurring runs |
-| `ai/devops-agent.iterationFrequency` | iteration cadence |
 
 ### Template surfaces (`{{ path }}` interpolation)
 
@@ -361,17 +368,15 @@ tmpl`Deal {{ record.name }} — {{ record.amount | currency }} closes {{ record.
 
 | Surface | Field |
 |:---|:---|
-| `Object.titleFormat` | record title |
+| `Object.titleFormat` | record title — **deprecated** (→ `nameField`, ADR-0079) |
 | `system/notification` | email subject + body, SMS message, push body + message (5 fields) |
-| `ai/model-registry` | systemPrompt, userPromptTemplate |
-| `ai/agent-action` | subject, message |
-| `ai/nlq.systemPrompt`, `ai/mcp.systemPrompt` | prompt templates |
+| `ai/model-registry` | `promptTemplate.system`, `promptTemplate.user` |
 | `integration/connector/github` | titleTemplate, bodyTemplate (PR + release) |
 | `api/graphql` | cache key |
 
-### JS surface (sandboxed body)
-
-Reserved for L2 hook bodies / mapping transforms. Use TypeScript source.
+There is no JS expression surface: procedural JS is the L2
+`ScriptBody { language: 'js' }` surface (hook bodies), not an expression
+dialect (#3278).
 
 ---
 
@@ -397,11 +402,13 @@ explicit.
 ```ts
 import { tmpl } from '@objectstack/spec';
 
-titleFormat: tmpl`{{record.first_name}} {{record.last_name}}`
-subject:     tmpl`Welcome to {{os.org.name}}, {{os.user.name}}!`
+subject: tmpl`Deal {{record.name}} needs review, {{os.user.name}}`
+body:    tmpl`{{record.name}} closes {{record.close_date | date:long}}`
 ```
 
 Missing paths render as empty string. `Date` instances are ISO-formatted.
+(`Object.titleFormat` also takes a template but is deprecated — use `nameField`,
+ADR-0079.)
 
 ---
 
@@ -413,11 +420,12 @@ Builds are deterministic only if:
 2. CEL stdlib helpers honor the pinned `now` from `EvalContext`.
 3. No expression source contains random / non-pure data.
 
-CI runs `objectstack build` twice and asserts SHA-1 match.
+Two consecutive `objectstack build` runs must produce byte-identical
+`dist/objectstack.json` — spot-check by diffing the artifact.
 
 ---
 
-## Open questions (track in ROADMAP M9.7+)
+## Open questions
 
 - Authors will emit `ast` directly once `CelExprSchema` is published as JSON
   Schema for AI constrained decoding (M9.7).
@@ -440,8 +448,5 @@ validator inline.
 
 ## See also
 
-- [`content/docs/data-modeling/formulas.mdx`](../../content/docs/data-modeling/formulas.mdx) — human-facing guide
-- [`packages/formula/`](../../packages/formula/) — engine + stdlib
-- [`packages/spec/src/shared/expression.zod.ts`](../../packages/spec/src/shared/expression.zod.ts) — `Expression`, `ExpressionInput`, `cel` / `F` / `P`
-- ROADMAP M9 — Expression Unification milestone
-- north-star §8 — "No private expression DSL"
+- `node_modules/@objectstack/formula/` — engine + stdlib
+- `node_modules/@objectstack/spec/src/shared/expression.zod.ts` — `Expression`, `ExpressionInput`, `cel` / `F` / `P`
