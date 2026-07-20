@@ -636,4 +636,78 @@ describe('audit writers — localized activity summaries (framework#3039)', { ti
     await fire('afterInsert', { ...insertCtx(), result: { id: 'q-2', name: 'OC-00002' } });
     expect(localeCalls()).toBe(1);
   });
+
+  // Collaboration notification titles (assignment / @mention) are localized to
+  // the RECIPIENT's locale with the same key shapes, and fall back to the
+  // authored object label (not the API name) in English.
+  function setupWithMessaging(
+    locale: string | undefined,
+    i18n: { t: Function } | undefined,
+    objectDefs: Record<string, any> = {},
+    schemas: Record<string, string[] | Record<string, any>> = SINGLE_TENANT,
+  ) {
+    const { engine, fire } = makeEngine(schemas, objectDefs);
+    const emits: any[] = [];
+    installAuditWriters(engine as any, 'test.audit', {
+      getI18n: () => i18n as any,
+      getLocale: async () => locale,
+      getMessaging: () => ({
+        emit: async (e: any) => {
+          emits.push(e);
+          return {};
+        },
+      }),
+    });
+    return { fire, emits };
+  }
+
+  it('localizes the assignment notification title to the recipient locale', async () => {
+    const { fire, emits } = setupWithMessaging('zh-CN', await makeI18n());
+    await fire('afterInsert', {
+      ...insertCtx(),
+      result: { id: 'q-1', name: 'OC-00001', owner_id: 'user-2' },
+    });
+    const assignment = emits.find((e) => e.topic === 'collab.assignment');
+    expect(assignment).toBeDefined();
+    expect(assignment.audience).toEqual(['user-2']);
+    expect(assignment.payload.title).toBe('人员资质 "OC-00001" 已分配给你');
+  });
+
+  it('localizes the @mention notification title to the recipient locale', async () => {
+    const { fire, emits } = setupWithMessaging('zh-CN', await makeI18n());
+    await fire('afterInsert', {
+      object: 'sys_comment',
+      input: {},
+      result: {
+        id: 'c-1',
+        thread_id: 'crm_lead:l-1',
+        author_id: 'user-1',
+        author_name: 'Alice',
+        body: 'hello',
+        mentions: '["user-2"]',
+      },
+      session: { tenantId: 'org-1', userId: 'user-1' },
+    });
+    const mention = emits.find((e) => e.topic === 'collab.mention');
+    expect(mention).toBeDefined();
+    expect(mention.audience).toEqual(['user-2']);
+    expect(mention.payload.title).toBe('Alice 提到了你');
+  });
+
+  it('falls back to an English title with the authored object label when i18n misses', async () => {
+    const { fire, emits } = setupWithMessaging(
+      undefined,
+      undefined,
+      { crm_lead: { label: 'Lead' } },
+      { ...SINGLE_TENANT, crm_lead: ['id', 'name'] },
+    );
+    await fire('afterInsert', {
+      object: 'crm_lead',
+      input: { id: 'l-1' },
+      result: { id: 'l-1', name: 'Acme', owner_id: 'user-2' },
+      session: { tenantId: 'org-1', userId: 'user-1' },
+    });
+    const assignment = emits.find((e) => e.topic === 'collab.assignment');
+    expect(assignment.payload.title).toBe('Lead "Acme" assigned to you');
+  });
 });
