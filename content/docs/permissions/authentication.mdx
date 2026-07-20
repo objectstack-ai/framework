@@ -170,6 +170,8 @@ The plugin creates the following auth objects (using ObjectStack `sys_` protocol
 > automatically maps these to `sys_`-prefixed protocol names via `AUTH_MODEL_TO_PROTOCOL`.
 > Client-side API routes (`/api/v1/auth/*`) are **not affected** — they do not expose object names.
 
+These objects are `managedBy: 'better-auth'` (an identity-owned [lifecycle bucket](/docs/data-modeling/objects#lifecycle-bucket-managedby)): generic user-context CRUD through the `/data` API is suppressed — a fail-closed identity write guard (ADR-0092/0103) rejects direct writes so password hashing, session validation, and verification flows can't be bypassed. better-auth's own writes run under a **system context** and pass through. Mutate these records through the sign-in, invitation, and security flows above, never by writing the objects directly.
+
 ---
 
 ## Authentication Methods

@@ -217,9 +217,60 @@ indexes: [
 | Property | Type | Description |
 | :--- | :--- | :--- |
 | `isSystem` | `boolean` | System object, protected from deletion (default: `false`) |
+| `managedBy` | `enum` | Lifecycle bucket that sets the default CRUD affordances and write policy — `'platform'` (default), `'config'`, `'system'`, `'append-only'`, `'better-auth'`. See [Lifecycle bucket](#lifecycle-bucket-managedby) below. |
+| `userActions` | `object` | Per-object override of the CRUD affordances the `managedBy` default implies — `{ create?, edit?, delete?, import?, exportCsv? }`. This is what makes a `system`/`append-only` object admin/user-writable. See [Lifecycle bucket](#lifecycle-bucket-managedby). |
 | `sharingModel` | `enum` | Org-Wide Default record visibility (ADR-0055/0056/0090). Canonical four only: `'private'`, `'public_read'`, `'public_read_write'`, `'controlled_by_parent'` (detail visibility derived from its master). The legacy aliases (`'read'`, `'read_write'`, `'full'`) were removed from the enum (ADR-0090 D4) — authoring rejects them. Unset on a custom object resolves to `'private'` (ADR-0090 D1) |
 | `ownership` | `enum` | Record-ownership model: `'user'` (default — injects the reassignable `owner_id` lookup, engaging owner-scoped RLS, "My" views and owner reports), `'org'`, or `'none'` (no per-record owner — Dataverse-style catalog / junction tables, skips `owner_id`). Distinct from the package `own`/`extend` contribution kind. |
 | `validations` | `ValidationRule[]` | Object-level validation rules (see [Validation](/docs/data-modeling/validation)) |
+
+### Lifecycle bucket (`managedBy`)
+
+`managedBy` declares which lifecycle bucket an object belongs to. It sets the
+**default** CRUD affordances the UI renders and the write policy the platform
+enforces. The enforced policy is the *resolved affordance* — the bucket default
+with any `userActions` override applied (`resolveCrudAffordances`) — **not** the
+bare bucket string.
+
+| Bucket | Default write policy |
+| :--- | :--- |
+| `platform` | **Default.** User-owned business data — full New / Import / Edit / Delete. |
+| `config` | Admin-authored configuration — New / Edit / Delete, no CSV import. |
+| `system` | Platform-defined schema. **Engine-owned by default**: a platform service owns the row lifecycle, generic CRUD is hidden, and the object is exposed `['get', 'list']` only. |
+| `append-only` | Immutable audit trail — View + Export only. |
+| `better-auth` | Identity tables owned by the better-auth driver — generic user-context CRUD is suppressed; mutations flow through the auth API (sign-in, invite, reset). |
+
+**Engine-owned vs. admin-writable `system` objects (ADR-0103).** The `system`
+bucket covers two kinds of object. Most are *engine-owned* — jobs,
+notifications, approval rows, `sys_record_share`, `sys_automation_run`, audit
+trails, `sys_secret` — written only by their owning service under a system
+context, never through the generic `/data` API; a fail-closed guard
+(`assertEngineOwnedWriteAllowed`) rejects user-context generic writes to them.
+A minority are *platform-defined schema with admin/user-writable data* — the
+RBAC link tables, `sys_user_preference`, `sys_approval_delegation`, the
+messaging config grids. These keep `managedBy: 'system'` but declare
+`userActions` to open the writes they legitimately take:
+
+```typescript
+export const SysUserPreference = ObjectSchema.create({
+  name: 'sys_user_preference',
+  managedBy: 'system',
+  // Affordance only — RLS / delegated administration is the actual authz.
+  userActions: { create: true, edit: true, delete: true },
+  // …
+});
+```
+
+The same override works on `append-only`. `userActions` is an *affordance*
+declaration; the real authorization for these rows is still enforced by RLS,
+delegated administration, and permission sets.
+
+<Callout type="warn">
+A managed object may not advertise `enable.apiMethods` verbs its resolved
+affordances forbid — the registry strips the contradiction at registration
+(`reconcileManagedApiMethods`, ADR-0049). To expose a generic write verb on a
+`system`/`append-only` object, declare the matching `userActions` rather than
+listing the verb in `apiMethods`.
+</Callout>
 
 ## Naming Conventions
 
