@@ -37,7 +37,7 @@ export const viewForm = defineForm({
       description: 'What rows show and how users filter them.',
       fields: [
         { field: 'columns', type: 'repeater', required: true, helpText: 'Columns to display (field names from selected object)' },
-        { field: 'filter', type: 'repeater', helpText: 'Filter conditions' },
+        { field: 'filter', widget: 'filter-builder', dependsOn: 'data.object', helpText: 'Filter conditions — same visual builder as the list toolbar, with field-type-aware operators and value inputs' },
         { field: 'sort', type: 'repeater', helpText: 'Default sort order' },
         { field: 'searchableFields', widget: 'string-tags', helpText: 'Field names available for quick search' },
         { field: 'filterableFields', widget: 'string-tags', helpText: 'Field names available for filtering' },

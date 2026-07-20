@@ -56,6 +56,78 @@ export const ViewDataSchema = lazySchema(() => z.discriminatedUnion('provider', 
 ]));
 
 /**
+ * Canonical filter operators for view filter rules.
+ *
+ * This is the SINGLE authoring vocabulary for `ViewFilterRule.operator`.
+ * Exposing it as an enum (rather than a free `z.string()`) lets JSON-Schema
+ * consumers — notably ObjectUI's SchemaForm — auto-render an operator
+ * dropdown, and rejects genuinely unknown operators at parse time.
+ *
+ * Unary operators (`is_empty`, `is_not_empty`, `is_null`, `is_not_null`) take
+ * no `value`. `before` / `after` are the date-friendly spellings of
+ * `less_than` / `greater_than`; `between` expects a two-element `value` array.
+ *
+ * Note: relative-date operators (`this_quarter`, `last_7_days`, …) are NOT
+ * filter-rule operators — they are date-range presets and live on dashboard
+ * date-range config (`DashboardFilterSchema.defaultRange`), not here.
+ */
+export const VIEW_FILTER_OPERATORS = [
+  'equals', 'not_equals',
+  'contains', 'not_contains',
+  'starts_with', 'ends_with',
+  'greater_than', 'less_than',
+  'greater_than_or_equal', 'less_than_or_equal',
+  'in', 'not_in',
+  'is_empty', 'is_not_empty',
+  'is_null', 'is_not_null',
+  'before', 'after', 'between',
+] as const;
+
+export type ViewFilterOperator = (typeof VIEW_FILTER_OPERATORS)[number];
+
+/**
+ * Legacy operator spellings normalized to the canonical vocabulary above.
+ *
+ * These are historical shorthand (`eq`, `gt`) and camelCase (`notEquals`,
+ * `greaterThan`) forms that older authoring tools and already-stored view
+ * metadata may still carry. They are folded to canonical on parse so every
+ * downstream consumer sees exactly one vocabulary — one strict contract, not
+ * N dialects. Deprecated: new producers MUST emit the canonical forms; these
+ * aliases are a migration bridge and may be dropped in a future major.
+ */
+export const VIEW_FILTER_OPERATOR_ALIASES: Record<string, ViewFilterOperator> = {
+  eq: 'equals',
+  ne: 'not_equals', neq: 'not_equals', notequals: 'not_equals', notEquals: 'not_equals',
+  notcontains: 'not_contains', notContains: 'not_contains',
+  startswith: 'starts_with', startsWith: 'starts_with',
+  endswith: 'ends_with', endsWith: 'ends_with',
+  gt: 'greater_than', greaterthan: 'greater_than', greaterThan: 'greater_than',
+  lt: 'less_than', lessthan: 'less_than', lessThan: 'less_than',
+  gte: 'greater_than_or_equal', greaterorequal: 'greater_than_or_equal',
+  greaterOrEqual: 'greater_than_or_equal', greaterThanOrEqual: 'greater_than_or_equal',
+  lte: 'less_than_or_equal', lessorequal: 'less_than_or_equal',
+  lessOrEqual: 'less_than_or_equal', lessThanOrEqual: 'less_than_or_equal',
+  nin: 'not_in', notin: 'not_in', notIn: 'not_in',
+  isempty: 'is_empty', isEmpty: 'is_empty',
+  isnotempty: 'is_not_empty', isNotEmpty: 'is_not_empty',
+  isnull: 'is_null', isNull: 'is_null',
+  isnotnull: 'is_not_null', isNotNull: 'is_not_null',
+};
+
+/**
+ * Fold a legacy operator spelling to its canonical form. Returns canonical
+ * operators unchanged, maps known aliases, and returns unknown input verbatim
+ * (so the enum's own validation reports it as invalid). Exported so producers
+ * and renderers can normalize stored metadata against the SAME canonical map
+ * the schema uses, instead of inventing a second dialect.
+ */
+export function normalizeFilterOperator(op: unknown): string {
+  if (typeof op !== 'string') return op as string;
+  if ((VIEW_FILTER_OPERATORS as readonly string[]).includes(op)) return op;
+  return VIEW_FILTER_OPERATOR_ALIASES[op] ?? VIEW_FILTER_OPERATOR_ALIASES[op.toLowerCase()] ?? op;
+}
+
+/**
  * View Filter Rule Schema
  * Standardized filter condition used in list views, tabs, and page-level filters.
  * Uses a declarative array-of-objects format: [{ field, operator, value }].
@@ -64,16 +136,22 @@ export const ViewDataSchema = lazySchema(() => z.discriminatedUnion('provider', 
  * ```ts
  * filter: [
  *   { field: 'status', operator: 'equals', value: 'active' },
- *   { field: 'close_date', operator: 'this_quarter' },
+ *   { field: 'close_date', operator: 'after', value: '2024-01-01' },
+ *   { field: 'archived_at', operator: 'is_empty' },
  * ]
  * ```
  */
 export const ViewFilterRuleSchema = lazySchema(() => z.object({
   /** Field name to filter on */
   field: z.string().describe('Field name to filter on'),
-  /** Filter operator */
-  operator: z.string().describe('Filter operator (e.g. equals, not_equals, contains, this_quarter)'),
-  /** Filter value (optional for unary operators like is_null, this_quarter) */
+  /**
+   * Filter operator (canonical vocabulary). Legacy shorthand/camelCase
+   * spellings (`eq`, `gt`, `isNull`, …) are accepted and normalized to
+   * canonical on parse.
+   */
+  operator: z.preprocess(normalizeFilterOperator, z.enum(VIEW_FILTER_OPERATORS))
+    .describe('Filter operator'),
+  /** Filter value (optional for unary operators like is_empty, is_null) */
   value: z.union([z.string(), z.number(), z.boolean(), z.null(), z.array(z.union([z.string(), z.number()]))])
     .optional().describe('Filter value'),
 }).describe('View filter rule'));
@@ -551,6 +629,14 @@ export const ListViewSchema = lazySchema(() => z.object({
     z.array(ListColumnSchema), // Enhanced: detailed column config
   ]).describe('Fields to display as columns'),
   filter: z.array(ViewFilterRuleSchema).optional().describe('Filter criteria (JSON Rules)'),
+  /**
+   * Sort order. Prefer the structured `{ field, order }[]` form.
+   *
+   * @deprecated The bare string form (`"field desc"`) is legacy and retained
+   * only for backward compatibility (it was the exact shape that crashed the
+   * renderer in objectui#2601 — kept covered by a live fixture). Removal will
+   * go through its own deprecation cycle; do not drop it here.
+   */
   sort: z.union([
     z.string(), //Legacy "field desc"
     z.array(z.object({

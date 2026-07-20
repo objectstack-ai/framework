@@ -734,7 +734,7 @@ describe('ViewSchema', () => {
             type: 'grid',
             columns: ['name', 'account_name', 'amount', 'stage', 'close_date'],
             filter: [
-              { field: 'close_date', operator: 'this_quarter' },
+              { field: 'close_date', operator: 'after', value: '2024-01-01' },
             ],
             sort: [{ field: 'amount', order: 'desc' }],
           },
@@ -2477,15 +2477,29 @@ describe('ViewFilterRuleSchema', () => {
 
   it('should accept a unary filter rule without value', () => {
     const rule = ViewFilterRuleSchema.parse({
-      field: 'close_date',
-      operator: 'this_quarter',
+      field: 'archived_at',
+      operator: 'is_empty',
     });
     expect(rule.value).toBeUndefined();
   });
 
   it('should accept boolean and number filter values', () => {
     expect(() => ViewFilterRuleSchema.parse({ field: 'archived', operator: 'equals', value: false })).not.toThrow();
-    expect(() => ViewFilterRuleSchema.parse({ field: 'amount', operator: 'gte', value: 1000 })).not.toThrow();
+    expect(() => ViewFilterRuleSchema.parse({ field: 'amount', operator: 'greater_than_or_equal', value: 1000 })).not.toThrow();
+  });
+
+  it('should normalize legacy operator aliases to canonical', () => {
+    expect(ViewFilterRuleSchema.parse({ field: 'amount', operator: 'gte', value: 1 }).operator).toBe('greater_than_or_equal');
+    expect(ViewFilterRuleSchema.parse({ field: 'amount', operator: 'gt', value: 1 }).operator).toBe('greater_than');
+    expect(ViewFilterRuleSchema.parse({ field: 'name', operator: 'eq', value: 'x' }).operator).toBe('equals');
+    expect(ViewFilterRuleSchema.parse({ field: 'name', operator: 'notEquals', value: 'x' }).operator).toBe('not_equals');
+    expect(ViewFilterRuleSchema.parse({ field: 'revoked_at', operator: 'isNull' }).operator).toBe('is_null');
+    expect(ViewFilterRuleSchema.parse({ field: 'tags', operator: 'nin', value: ['a'] }).operator).toBe('not_in');
+  });
+
+  it('should reject a genuinely unknown operator', () => {
+    expect(() => ViewFilterRuleSchema.parse({ field: 'close_date', operator: 'this_quarter' })).toThrow();
+    expect(() => ViewFilterRuleSchema.parse({ field: 'x', operator: 'totally_bogus' })).toThrow();
   });
 
   it('should accept array filter values (for IN operator)', () => {
