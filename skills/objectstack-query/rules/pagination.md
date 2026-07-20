@@ -7,7 +7,13 @@ Guide for implementing pagination in ObjectStack queries.
 | Strategy | Best For | Pros | Cons |
 |:---------|:---------|:-----|:-----|
 | Offset | UI page navigation, small datasets | Simple, random page access | Slow on large offsets, drift on inserts |
-| Cursor | Infinite scroll, real-time feeds | Consistent results, O(1) performance | No random page access |
+| Keyset (manual `where`) | Infinite scroll, real-time feeds | Consistent results, O(1) performance | No random page access |
+
+> ⚠️ **The `cursor` query property is schema-reserved — NOT executed by the
+> engine yet.** It validates against `QuerySchema`, but no engine or driver
+> code reads it: a query carrying `cursor` silently returns **page 1
+> forever**. Implement keyset pagination manually with a `where` filter on
+> the sort key (pattern below).
 
 ## Offset Pagination
 
@@ -41,9 +47,11 @@ Guide for implementing pagination in ObjectStack queries.
 { top: 20 }
 ```
 
-## Cursor Pagination
+## Keyset Pagination (Manual)
 
-Cursor pagination uses the last record's sort key values to fetch the next page.
+Keyset pagination uses the last record's sort key value to fetch the next
+page. Because the `cursor` property is not executed (see above), express the
+keyset as a `where` filter on the sort field:
 
 ```typescript
 // First page
@@ -53,33 +61,37 @@ Cursor pagination uses the last record's sort key values to fetch the next page.
   limit: 20
 }
 
-// Next page — pass the last record's values as cursor
+// Next page — filter past the last record's sort key value
 {
   object: 'post',
+  where: { created_at: { $lt: '2025-01-15T10:30:00Z' } },  // last seen value
   orderBy: [{ field: 'created_at', order: 'desc' }],
-  limit: 20,
-  cursor: {
-    created_at: '2025-01-15T10:30:00Z',
-    id: 'post_abc123'
-  }
+  limit: 20
 }
 ```
 
-**⚠️ CRITICAL:** Cursor keys MUST match the `orderBy` fields for correct pagination.
+**⚠️ CRITICAL:** The keyset `where` field MUST match the `orderBy` field, and
+the comparison direction must match the sort order (`$lt` for `desc`, `$gt`
+for `asc`).
 
 ```typescript
-// ❌ Wrong: cursor fields don't match orderBy
+// ❌ Wrong: keyset filter doesn't match orderBy
 {
+  where: { name: { $gt: 'John' } },  // name is not the sort key!
   orderBy: [{ field: 'created_at', order: 'desc' }],
-  cursor: { name: 'John' }  // name is not in orderBy!
+  limit: 20
 }
 
-// ✅ Correct: cursor fields match orderBy
+// ✅ Correct: keyset filter matches the orderBy field and direction
 {
+  where: { created_at: { $lt: '2025-01-15T10:30:00Z' } },
   orderBy: [{ field: 'created_at', order: 'desc' }],
-  cursor: { created_at: '2025-01-15T10:30:00Z' }
+  limit: 20
 }
 ```
+
+Prefer a unique (or near-unique) sort key such as `created_at` or `id`;
+duplicate key values can skip or repeat rows at page boundaries.
 
 ## Sorting with Pagination
 
@@ -144,22 +156,22 @@ When building paginated REST endpoints:
 
 ## Common Mistakes
 
-### ❌ Wrong: Mixing cursor and offset
+### ❌ Wrong: Using the schema-reserved `cursor` property
 
 ```typescript
-// ❌ Don't use both cursor and offset
+// ❌ cursor is never read — this returns page 1 forever
 {
   object: 'post',
   limit: 20,
-  offset: 40,
   cursor: { created_at: '2025-01-15T10:30:00Z' }
 }
 
-// ✅ Use one or the other
+// ✅ Express the keyset as a where filter on the sort key
 {
   object: 'post',
-  limit: 20,
-  cursor: { created_at: '2025-01-15T10:30:00Z' }
+  where: { created_at: { $lt: '2025-01-15T10:30:00Z' } },
+  orderBy: [{ field: 'created_at', order: 'desc' }],
+  limit: 20
 }
 ```
 
@@ -173,11 +185,12 @@ When building paginated REST endpoints:
   offset: 100000  // Very slow on large tables
 }
 
-// ✅ Use cursor pagination for deep pagination
+// ✅ Use manual keyset pagination for deep pagination
 {
   object: 'post',
-  limit: 20,
-  cursor: { created_at: '2024-06-01T00:00:00Z', id: 'post_xyz' }
+  where: { created_at: { $lt: '2024-06-01T00:00:00Z' } },
+  orderBy: [{ field: 'created_at', order: 'desc' }],
+  limit: 20
 }
 ```
 
@@ -201,13 +214,19 @@ When building paginated REST endpoints:
 
 ## DISTINCT Queries
 
-Remove duplicate rows from results:
+> ⚠️ **The top-level `distinct: true` flag is schema-reserved — NOT executed
+> by the engine yet.** Neither the engine nor the SQL driver reads it from a
+> `QueryAST`; the query returns duplicate rows as if the flag were absent.
+> **Working alternative:** group by the fields — each unique combination
+> becomes one result row:
 
 ```typescript
-{
-  object: 'order',
-  fields: ['customer_id', 'product_category'],
-  distinct: true,
-  orderBy: [{ field: 'customer_id', order: 'asc' }]
-}
+// ❌ distinct is silently ignored
+// { object: 'order', fields: ['customer_id', 'product_category'], distinct: true }
+
+// ✅ groupBy collapses duplicates
+const rows = await engine.aggregate('order', {
+  groupBy: ['customer_id', 'product_category'],
+  aggregations: [{ function: 'count', alias: 'n' }],
+});
 ```

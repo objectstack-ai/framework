@@ -2,16 +2,16 @@
 name: objectstack-query
 description: >
   Construct ObjectQL queries — filters, sorting, pagination, aggregation,
-  joins/expansion, window functions, and full-text search. Use when the
-  user is writing a query DSL expression, picking pagination strategy, or
-  designing a list view's filter spec. Do not use for defining objects /
-  fields / relationships (see objectstack-data) or for designing the API
-  endpoint that exposes a query (see objectstack-api).
+  relation expansion, and full-text search. Use when the user is writing a
+  query DSL expression, picking pagination strategy, or designing a list
+  view's filter spec. Do not use for defining objects / fields /
+  relationships (see objectstack-data) or for designing the API endpoint
+  that exposes a query (see objectstack-api).
 license: Apache-2.0
-compatibility: Requires @objectstack/spec Zod schemas (v4+)
+compatibility: Requires @objectstack/spec 16.x (Zod v4 schemas)
 metadata:
   author: objectstack-ai
-  version: "1.1"
+  version: "1.2"
   domain: query
   tags: query, filter, sort, paginate, aggregate, ObjectQL, full-text
 ---
@@ -20,8 +20,16 @@ metadata:
 
 Expert instructions for constructing data queries using the ObjectStack
 Query DSL. This skill covers filter expressions, sorting, pagination,
-aggregation, joins, window functions, full-text search, and the expand
-system for related records.
+aggregation, full-text search, and the expand system for related records.
+
+**Schema vs. runtime:** the `QueryAST` schema declares more than the engine
+currently executes. Sections below marked
+
+> ⚠️ **Schema-reserved — NOT executed by the engine yet.**
+
+describe properties that validate against the schema but are silently
+ignored (or rejected) at runtime. Never emit them in production queries —
+each caveat shows the working alternative.
 
 ---
 
@@ -43,8 +51,7 @@ system for related records.
 - You are writing **aggregation queries** (count, sum, avg, group by)
 - You need to **expand related records** through lookups
 - You are implementing **full-text search** across fields
-- You need **window functions** for analytical queries
-- You are choosing between **offset vs cursor pagination**
+- You are choosing between **offset vs keyset pagination**
 
 ---
 
@@ -73,9 +80,9 @@ Every ObjectStack query follows the `QuerySchema` structure:
 
 For comprehensive documentation with incorrect/correct examples:
 
-- **[Filters](./rules/filters.md)** — All operators, logical combinations, nested relations
-- **[Aggregation](./rules/aggregation.md)** — GroupBy, aggregation functions, HAVING, window functions
-- **[Pagination](./rules/pagination.md)** — Offset vs cursor, best practices, performance
+- **[Filters](./rules/filters.md)** — All operators, logical combinations, nested relations, date macros
+- **[Aggregation](./rules/aggregation.md)** — GroupBy, date bucketing, aggregation functions, driver support
+- **[Pagination](./rules/pagination.md)** — Offset vs keyset, best practices, performance
 
 ---
 
@@ -210,16 +217,25 @@ Filter through relationships without an explicit join:
 
 ### Field References (Cross-Field Comparisons)
 
-Compare two fields using `$field`:
+> ⚠️ **Schema-reserved — NOT executed by the engine yet.** `$field` exists
+> only in the filter schema. No engine or driver code interprets it — the
+> `{ $field: '...' }` object binds as a **literal value**, so the query
+> silently returns zero rows. Do not use it.
 
 ```typescript
-// Where actual_revenue > estimated_revenue
+// ❌ Schema-valid but NOT executed — matches nothing
 {
   where: {
     actual_revenue: { $gt: { $field: 'estimated_revenue' } }
   }
 }
 ```
+
+**Working alternatives:**
+- Define a **formula field** on the object that computes the comparison
+  (e.g. `exceeds_estimate` as a boolean), then filter on it:
+  `{ where: { exceeds_estimate: true } }` (see **objectstack-data**).
+- Fetch both fields and compare in **application code**.
 
 ---
 
@@ -260,21 +276,35 @@ Sort with `orderBy` — an array of sort nodes:
 
 **Pitfall:** Offset pagination degrades on large offsets — the database still scans skipped rows.
 
-### Cursor Pagination (Performant)
+### Keyset Pagination (Performant)
+
+> ⚠️ **`cursor` is schema-reserved — NOT executed by the engine yet.** The
+> `cursor` property validates against `QuerySchema`, but no engine or driver
+> code reads it — a query carrying `cursor` silently returns **page 1
+> forever**. Do keyset pagination manually with `where` + `orderBy` + `limit`:
 
 ```typescript
+// First page
 {
   object: 'account',
+  orderBy: [{ field: 'created_at', order: 'desc' }],
   limit: 20,
-  cursor: { id: 'last-seen-id' },
-  orderBy: [{ field: 'id', order: 'asc' }],
+}
+
+// Next page — filter past the last record you've seen
+{
+  object: 'account',
+  where: { created_at: { $lt: lastSeenCreatedAt } },
+  orderBy: [{ field: 'created_at', order: 'desc' }],
+  limit: 20,
 }
 ```
 
 **When to use:** Infinite scroll, APIs, large datasets, real-time feeds.
 
-**Rule:** The cursor fields must match `orderBy` fields. The engine uses them
-to generate `WHERE id > ?` instead of `OFFSET`.
+**Rule:** The keyset `where` field must match the `orderBy` field (use a
+unique or near-unique column such as `created_at` or `id`) so
+`WHERE created_at < ?` picks up exactly where the previous page ended.
 
 ### OData Compatibility
 
@@ -302,6 +332,13 @@ to generate `WHERE id > ?` instead of `OFFSET`.
 | `array_agg` | Collect into array | `ARRAY_AGG(field)` |
 | `string_agg` | Concatenate strings | `STRING_AGG(field, ',')` |
 
+> ⚠️ **Driver support varies.** On SQL datasources the driver executes only
+> `count` / `sum` / `avg` / `min` / `max` and **throws** on `count_distinct`,
+> `array_agg`, and `string_agg`; the per-aggregation `distinct: true` flag is
+> also ignored there. The in-memory fallback path (driver-rest, driver-memory,
+> timezone/date-bucket fallbacks) supports all 8 functions plus `distinct`.
+> For portable queries, stick to the first five.
+
 ### GroupBy + Aggregation
 
 ```typescript
@@ -320,38 +357,53 @@ to generate `WHERE id > ?` instead of `OFFSET`.
 //      FROM deal GROUP BY region ORDER BY total_revenue DESC
 ```
 
+`groupBy` entries can also be structured objects for **date bucketing** —
+`{ field: 'closed_at', dateGranularity: 'quarter' }` — see
+[Aggregation rules](./rules/aggregation.md) for the full pattern.
+
 ### HAVING Clause
 
-Filter groups after aggregation:
+> ⚠️ **Schema-reserved — NOT executed by the engine yet.** `having`
+> validates against `QuerySchema`, but `EngineAggregateOptions` has no
+> `having` property and nothing implements it — the clause is silently
+> dropped. **Working alternative:** post-filter the aggregated rows in
+> application code:
 
 ```typescript
-{
-  object: 'deal',
-  fields: ['region'],
+// ❌ having is silently ignored — do NOT rely on it
+// { ..., having: { total_revenue: { $gt: 100000 } } }
+
+// ✅ Aggregate, then filter the result rows in app code
+const rows = await engine.aggregate('deal', {
+  groupBy: ['region'],
   aggregations: [
     { function: 'sum', field: 'amount', alias: 'total_revenue' },
   ],
-  groupBy: ['region'],
-  having: { total_revenue: { $gt: 100000 } },
-}
-// SQL: ... HAVING SUM(amount) > 100000
+});
+const bigRegions = rows.filter((r) => r.total_revenue > 100000);
 ```
 
 ### Filtered Aggregation
 
-Apply a filter to a specific aggregation only:
+> ⚠️ **Per-aggregation `filter` is schema-reserved — NOT executed by the
+> engine yet.** The SQL driver ignores it and the in-memory path ignores it
+> too, so a `filter`-carrying aggregation returns the **unfiltered** number —
+> silently wrong results. **Working alternative:** issue one aggregate call
+> per condition, moving the condition into the query-level `where`:
 
 ```typescript
-{
-  object: 'order',
-  aggregations: [
-    { function: 'count', alias: 'total_orders' },
-    { function: 'count', alias: 'high_value_orders',
-      filter: { amount: { $gt: 1000 } } },
-  ],
-}
-// SQL: COUNT(*) AS total_orders,
-//      COUNT(*) FILTER (WHERE amount > 1000) AS high_value_orders
+// ❌ filter on the aggregation is silently ignored
+// { function: 'count', alias: 'high_value_orders',
+//   filter: { amount: { $gt: 1000 } } }
+
+// ✅ Separate aggregate calls, condition in `where`
+const [totals] = await engine.aggregate('order', {
+  aggregations: [{ function: 'count', alias: 'total_orders' }],
+});
+const [highValue] = await engine.aggregate('order', {
+  where: { amount: { $gt: 1000 } },
+  aggregations: [{ function: 'count', alias: 'high_value_orders' }],
+});
 ```
 
 ---
@@ -384,41 +436,45 @@ Load related records through lookup/master_detail fields:
 - Max expand depth is **3** by default
 - The engine resolves expands via batch `$in` queries (not N+1)
 - Keys in `expand` must be lookup or master_detail field names
-- Each expand value is a full `QueryAST` — you can filter, sort, and paginate within it
+- Each expand value is a nested `QueryAST`, but the engine applies **select
+  (`fields`) and filter (`where`) only** — per-parent `limit` / `offset` /
+  `orderBy` are NOT applied on this path. To paginate or sort related
+  records, query the related object directly.
 
 ---
 
-## Joins (Advanced)
+## Joins
 
-For cross-object queries beyond what `expand` provides:
+> ⚠️ **Schema-reserved — NOT executed by the engine yet.** `joins` (and the
+> `JoinStrategy` hints) exist only in the `QueryAST` schema — no engine or
+> driver code consumes them, regardless of a driver advertising
+> `supports.joins`. A query carrying `joins` behaves as if they were absent.
+
+**Working alternatives** (both implemented):
+- **`expand`** — load related records through lookup / master_detail fields
+  (see previous section).
+- **Nested relation filters** — filter a parent by conditions on a related
+  object without an explicit join:
 
 ```typescript
+// Orders whose customer is in the US — no join needed
 {
   object: 'order',
   fields: ['id', 'amount'],
-  joins: [
-    {
-      type: 'inner',       // 'inner' | 'left' | 'right' | 'full'
-      object: 'customer',
-      alias: 'c',
-      on: { 'order.customer_id': { $eq: { $field: 'c.id' } } },
-    }
-  ],
+  where: { customer: { country: 'US' } },
 }
 ```
-
-### Join Strategy Hints
-
-| Strategy | When to use |
-|:---------|:------------|
-| `auto` | Default — engine decides |
-| `database` | Both objects on same datasource |
-| `hash` | Cross-datasource, moderate data |
-| `loop` | Small right-side lookup table |
 
 ---
 
 ## Full-Text Search
+
+Only the **`query` + `fields`** subset of the search schema executes. The
+engine expands the search string into a driver-agnostic filter: each term
+becomes an `$or` of `$contains` predicates across the resolved searchable
+fields, and multiple whitespace-separated terms are **AND-ed** (every term
+must hit some field). Matching is case-insensitive; `select`/`status`
+fields match by option *label*, mapped to stored values.
 
 ```typescript
 {
@@ -426,69 +482,61 @@ For cross-object queries beyond what `expand` provides:
   search: {
     query: 'machine learning',
     fields: ['title', 'content'],
-    fuzzy: true,
-    boost: { title: 2.0 },
-    highlight: true,
   },
   limit: 10,
 }
+// Executes as:
+// { $and: [
+//   { $or: [{ title: { $contains: 'machine' } }, { content: { $contains: 'machine' } }] },
+//   { $or: [{ title: { $contains: 'learning' } }, { content: { $contains: 'learning' } }] },
+// ]}
 ```
 
-**Options:**
-- `fuzzy: true` — tolerates typos
-- `boost` — field-specific relevance weighting
-- `operator: 'and' | 'or'` — match all terms or any term
-- `minScore` — minimum relevance threshold
-- `language` — text analysis language
+Omit `fields` to search the object's declared `searchableFields` (or an
+auto-default of name/title + short-text fields), resolved server-side.
+
+> ⚠️ **Schema-reserved — NOT executed by the engine yet:** `fuzzy`, `boost`,
+> `operator`, `minScore`, `language`, and `highlight` validate against the
+> schema but are never read. Terms are always AND-ed; there is no relevance
+> scoring or highlighting.
 
 ---
 
 ## Window Functions (Analytics)
 
-Window functions compute values across row sets without collapsing results:
+> ⚠️ **Schema-reserved — NOT executed by the engine yet.** `windowFunctions`
+> exists in the `QueryAST` schema, but the engine never routes it to any
+> driver — the property is silently dropped from ordinary queries. (Even the
+> SQL driver's internal builder drops the `field` argument, so `lag(revenue)`
+> would render as `LAG()`.) Do not emit `windowFunctions`.
 
-```typescript
-// Rank products by sales within each category
-{
-  object: 'product',
-  fields: ['name', 'category', 'sales'],
-  windowFunctions: [
-    {
-      function: 'row_number',
-      alias: 'category_rank',
-      over: {
-        partitionBy: ['category'],
-        orderBy: [{ field: 'sales', order: 'desc' }],
-      }
-    }
-  ],
-}
-```
+**Working alternatives:**
+- **Ranking / top-N per group and running totals:** model them in
+  report/dashboard metadata (groupings, measures, `dateGranularity`
+  bucketing, `compareTo` for period-over-period) — see **objectstack-ui**.
+- **Ad-hoc analysis:** fetch the ordered rows (`orderBy` + `limit`) and
+  compute ranks or running sums in application code.
 
-### Available Window Functions
+### Window Function Enum (schema-reserved)
 
-| Function | Purpose |
-|:---------|:--------|
-| `row_number` | Sequential number within partition |
-| `rank` | Rank with gaps for ties |
-| `dense_rank` | Rank without gaps |
-| `lag` / `lead` | Access previous/next row value |
-| `first_value` / `last_value` | First/last value in window |
-| `sum` / `avg` / `count` / `min` / `max` | Running aggregates |
+For completeness, the full `WindowFunction` enum declared by the schema:
+`row_number`, `rank`, `dense_rank`, `percent_rank`, `lag`, `lead`,
+`first_value`, `last_value`, `sum`, `avg`, `count`, `min`, `max`.
+None of these execute today.
 
 ---
 
 ## Common Patterns
 
-### Expand vs Join: Which to Use?
+### Cross-Object Queries: Which Tool to Use?
 
 | Scenario | Use |
 |:---------|:----|
 | Load lookup fields for display | `expand` |
 | Filter parent by child conditions | Nested relation filter |
-| Cross-datasource joins | `joins` with `strategy: 'hash'` |
-| Analytical queries across tables | `joins` |
 | Simple parent→child navigation | `expand` |
+| Paginate/sort a parent's related records | Query the related object directly |
+| Analytical queries across objects | Report/dashboard metadata, or separate queries combined in app code (`joins` is schema-reserved — see above) |
 
 ### Pagination Pattern for APIs
 
@@ -506,33 +554,41 @@ Window functions compute values across row sets without collapsing results:
 
 ### Dashboard Aggregation Pattern
 
+Unconditional KPIs can share one aggregate call; a KPI with its own
+condition needs a **separate call** with the condition in `where`
+(per-aggregation `filter` is schema-reserved — see Filtered Aggregation):
+
 ```typescript
-// KPI dashboard: multiple aggregations on same object
-{
-  object: 'deal',
+// KPI dashboard: unconditional aggregations share one call
+const [kpis] = await engine.aggregate('deal', {
   aggregations: [
     { function: 'count', alias: 'total_deals' },
     { function: 'sum', field: 'amount', alias: 'pipeline_value' },
     { function: 'avg', field: 'amount', alias: 'avg_deal_size' },
-    { function: 'count', alias: 'won_deals',
-      filter: { stage: 'closed_won' } },
   ],
-}
+});
+
+// Conditional KPI: separate call, condition in `where`
+const [won] = await engine.aggregate('deal', {
+  where: { stage: 'closed_won' },
+  aggregations: [{ function: 'count', alias: 'won_deals' }],
+});
 ```
 
 ---
 
 ## CRM Analytics Query Blueprint
 
-Use dashboards/reports metadata as the practical query pattern source:
+Model analytics in dashboard/report metadata rather than hand-written query
+code — the renderer issues the queries for you:
 
-| Query Need | CRM Reference | Pattern |
-|:--|:--|:--|
-| KPI widgets | `dashboards/sales.dashboard.ts` | Filtered aggregates (`sum`, `count`, `avg`) over `opportunity`. Add `compareTo: 'previousPeriod' \| 'previousYear'` on the widget for a one-line period-over-period delta. |
-| Time-series chart | `dashboards/sales.dashboard.ts` | Date filters + `categoryGranularity: 'day' \| 'week' \| 'month' \| 'quarter' \| 'year'` for server-side bucketing — never bucket by hand on the client. Pair with `compareTo` for an aligned YoY overlay. |
-| Matrix report | `reports/opportunity.report.ts` | `groupingsDown` + `groupingsAcross` + `dateGranularity: 'quarter'` |
-| Funnel summary | `reports/opportunity.report.ts` | Multi-level grouping (`owner -> stage`) + aggregated measures |
-| Operational filter | dashboard/report filters | Prefer declarative operators (`$ne`, `$nin`, `$gte`) over hardcoded SQL |
+| Query Need | Pattern |
+|:--|:--|
+| KPI widgets | Aggregates (`sum`, `count`, `avg`) over the object, each conditional KPI scoped by the widget/dataset filter. Add `compareTo: 'previousPeriod' \| 'previousYear'` on the widget for a one-line period-over-period delta. |
+| Time-series chart | Date filters + `categoryGranularity: 'day' \| 'week' \| 'month' \| 'quarter' \| 'year'` for server-side bucketing — never bucket by hand on the client. Pair with `compareTo` for an aligned YoY overlay. |
+| Matrix report | `groupingsDown` + `groupingsAcross` + `dateGranularity: 'quarter'` |
+| Funnel summary | Multi-level grouping (`owner -> stage`) + aggregated measures |
+| Operational filter | Prefer declarative operators (`$ne`, `$nin`, `$gte`) over hardcoded SQL |
 
 For metadata app development, model analytics in report/dashboard metadata first;
 only fall back to custom query code when schema limits require it.

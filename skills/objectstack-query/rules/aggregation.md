@@ -15,6 +15,14 @@ Guide for building ObjectStack aggregation queries.
 | `array_agg` | `ARRAY_AGG(field)` | Collect values into array | Yes |
 | `string_agg` | `STRING_AGG(field, ',')` | Concatenate string values | Yes |
 
+> ⚠️ **Driver support varies.** On SQL datasources the driver executes only
+> `count` / `sum` / `avg` / `min` / `max` and **throws** (`Unsupported
+> aggregate function`) on `count_distinct`, `array_agg`, and `string_agg`;
+> the per-aggregation `distinct: true` flag is also ignored there. The
+> in-memory aggregation path (driver-rest, driver-memory, timezone/
+> date-bucket fallbacks) supports all 8 functions plus `distinct`. For
+> portable queries, stick to the first five.
+
 ## Basic Aggregation
 
 ```typescript
@@ -43,72 +51,96 @@ Guide for building ObjectStack aggregation queries.
 }
 ```
 
-**⚠️ CRITICAL:** When using `groupBy`, you MUST include the grouped fields in `fields` array.
+Note: you do NOT need to repeat `groupBy` fields in `fields` — drivers
+auto-select every grouped field into the result rows. Listing them in
+`fields` (as above) is a readability convention, not a requirement.
+
+## Date-Bucketed Grouping (dateGranularity)
+
+`groupBy` entries can be structured objects that bucket a date/timestamp
+field into uniform periods — this is the supported way to build time-series
+aggregations (never bucket by hand in app code):
 
 ```typescript
-// ❌ Wrong: groupBy field not in fields
+// Revenue per quarter per region
 {
-  object: 'sale',
-  aggregations: [{ function: 'sum', field: 'amount', alias: 'total' }],
-  groupBy: ['region']  // region not in fields!
+  object: 'deal',
+  groupBy: [
+    'region',
+    { field: 'closed_at', dateGranularity: 'quarter' }
+  ],
+  aggregations: [
+    { function: 'sum', field: 'amount', alias: 'revenue' }
+  ]
 }
-
-// ✅ Correct: groupBy field included in fields
-{
-  object: 'sale',
-  fields: ['region'],
-  aggregations: [{ function: 'sum', field: 'amount', alias: 'total' }],
-  groupBy: ['region']
-}
+// Result rows: { region: 'us', closed_at: '2025-Q1', revenue: 42000 }, ...
 ```
+
+- Granularities: `day`, `week`, `month`, `quarter`, `year` (weeks are
+  ISO-8601, starting Monday).
+- Optional `alias` renames the projected group value:
+  `{ field: 'closed_at', dateGranularity: 'quarter', alias: 'quarter' }`.
+- The engine pushes bucketing down to the driver (`DATE_TRUNC` etc.) when
+  the dialect supports that granularity, and transparently falls back to
+  in-memory bucketing otherwise — results are correct either way.
 
 ## HAVING Clause
 
-Filter aggregated results (post-aggregation filtering):
+> ⚠️ **Schema-reserved — NOT executed by the engine yet.** `having`
+> validates against `QuerySchema`, but `EngineAggregateOptions` has no
+> `having` property and nothing implements it — the clause is silently
+> dropped and every group is returned. **Working alternative:** post-filter
+> the aggregated rows in application code:
 
 ```typescript
-// SQL: SELECT customer_id, COUNT(*) AS order_count
-//      FROM order GROUP BY customer_id HAVING COUNT(*) > 5
-{
-  object: 'order',
-  fields: ['customer_id'],
-  aggregations: [
-    { function: 'count', alias: 'order_count' }
-  ],
+// ❌ having is silently ignored
+// { ..., having: { order_count: { $gt: 5 } } }
+
+// ✅ Aggregate, then filter the result rows in app code
+const rows = await engine.aggregate('order', {
   groupBy: ['customer_id'],
-  having: {
-    order_count: { $gt: 5 }
-  }
-}
+  aggregations: [{ function: 'count', alias: 'order_count' }],
+});
+const frequentCustomers = rows.filter((r) => r.order_count > 5);
 ```
 
-**Key difference:** `where` filters rows BEFORE aggregation; `having` filters groups AFTER aggregation.
+Aggregated result sets are one row per group — usually small enough that an
+app-side filter is cheap. Use `where` to shrink the input rows first.
 
 ## Filtered Aggregation (FILTER WHERE)
 
-Apply a condition to a single aggregation without affecting others:
+> ⚠️ **Per-aggregation `filter` is schema-reserved — NOT executed by the
+> engine yet.** The SQL driver never reads it and the in-memory path ignores
+> it, so the aggregation returns the **unfiltered** number — silently wrong
+> results. **Working alternative:** one aggregate call per condition, with
+> the condition in the query-level `where`:
 
 ```typescript
-// SQL: SELECT
-//   COUNT(*) AS total,
-//   COUNT(*) FILTER (WHERE status = 'active') AS active_count
-// FROM user
-{
-  object: 'user',
-  aggregations: [
-    { function: 'count', alias: 'total' },
-    {
-      function: 'count',
-      alias: 'active_count',
-      filter: { status: 'active' }
-    }
-  ]
-}
+// ❌ filter on the aggregation is silently ignored — active_count
+//    would equal total!
+// { function: 'count', alias: 'active_count', filter: { status: 'active' } }
+
+// ✅ Separate aggregate calls, condition in `where`
+const [totals] = await engine.aggregate('user', {
+  aggregations: [{ function: 'count', alias: 'total' }],
+});
+const [active] = await engine.aggregate('user', {
+  where: { status: 'active' },
+  aggregations: [{ function: 'count', alias: 'active_count' }],
+});
 ```
 
 ## DISTINCT Aggregation
 
+> ⚠️ **Not available on SQL datasources.** `count_distinct` **throws** on the
+> SQL driver, and the `distinct: true` flag is silently ignored there (see
+> the driver-support caveat above). Both forms work only on the in-memory
+> aggregation path. On SQL, get a distinct count by grouping on the field
+> and counting the result rows in app code:
+> `(await engine.aggregate('employee', { groupBy: ['department'], aggregations: [{ function: 'count', alias: 'n' }] })).length`.
+
 ```typescript
+// In-memory drivers only:
 // SQL: SELECT COUNT(DISTINCT department) FROM employee
 {
   object: 'employee',
@@ -117,7 +149,7 @@ Apply a condition to a single aggregation without affecting others:
   ]
 }
 
-// Alternative: use distinct flag
+// Alternative (also in-memory only): use distinct flag
 {
   object: 'employee',
   aggregations: [
@@ -128,80 +160,55 @@ Apply a condition to a single aggregation without affecting others:
 
 ## Window Functions
 
-Window functions compute values across row sets WITHOUT collapsing results.
+> ⚠️ **Schema-reserved — NOT executed by the engine yet.** The `QueryAST`
+> schema declares `windowFunctions` (enum: `row_number`, `rank`,
+> `dense_rank`, `percent_rank`, `lag`, `lead`, `first_value`, `last_value`,
+> `sum`, `avg`, `count`, `min`, `max`), but the engine never routes the
+> property to any driver — it is silently dropped. Even the SQL driver's
+> internal builder drops the `field` argument (`lag(revenue)` would render
+> as `LAG()`). Do not emit `windowFunctions` in queries.
 
-### ROW_NUMBER
+**Working alternatives:**
+
+### Ranking / Top-N per Group
+
+Model rankings in report/dashboard metadata (groupings + measures + sort),
+or fetch the ordered rows and rank in app code:
 
 ```typescript
-// Rank products within each category by sales
-{
-  object: 'product',
+// Top products per category — order the rows, rank in app code
+const rows = await engine.find('product', {
   fields: ['name', 'category', 'sales'],
-  windowFunctions: [
-    {
-      function: 'row_number',
-      alias: 'category_rank',
-      over: {
-        partitionBy: ['category'],
-        orderBy: [{ field: 'sales', order: 'desc' }]
-      }
-    }
-  ]
-}
+  orderBy: [
+    { field: 'category', order: 'asc' },
+    { field: 'sales', order: 'desc' },
+  ],
+});
+// Assign category_rank while iterating: reset the counter when category changes.
 ```
 
 ### Running Total
 
+Fetch the ordered rows and accumulate in app code:
+
 ```typescript
-// Cumulative sum of transactions
-{
-  object: 'transaction',
+const txns = await engine.find('transaction', {
   fields: ['date', 'amount'],
-  windowFunctions: [
-    {
-      function: 'sum',
-      field: 'amount',
-      alias: 'running_total',
-      over: {
-        orderBy: [{ field: 'date', order: 'asc' }],
-        frame: {
-          type: 'rows',
-          start: 'UNBOUNDED PRECEDING',
-          end: 'CURRENT ROW'
-        }
-      }
-    }
-  ]
-}
+  orderBy: [{ field: 'date', order: 'asc' }],
+});
+let runningTotal = 0;
+const withTotals = txns.map((t) => ({ ...t, running_total: (runningTotal += t.amount) }));
 ```
 
-### LAG / LEAD (Period-over-Period)
+### Period-over-Period
 
-> **For dashboard widgets**, prefer the higher-level `compareTo:
-> 'previousPeriod' | 'previousYear' | { offset }` field on the widget
-> schema (see *objectstack-ui* → *Period-over-period — `compareTo`*).
-> The renderer issues the shifted query for you and aligns the result
-> bucket-for-bucket with `categoryGranularity`. Reach for the raw
-> `lag` / `lead` window functions below when you need the comparison
-> in a custom query result (reports, ad-hoc SQL, cube measures).
-
-```typescript
-// Month-over-month comparison
-{
-  object: 'monthly_revenue',
-  fields: ['month', 'revenue'],
-  windowFunctions: [
-    {
-      function: 'lag',
-      field: 'revenue',
-      alias: 'prev_month_revenue',
-      over: {
-        orderBy: [{ field: 'month', order: 'asc' }]
-      }
-    }
-  ]
-}
-```
+For dashboard widgets, use the higher-level `compareTo:
+'previousPeriod' | 'previousYear' | { offset }` field on the widget
+schema (see *objectstack-ui* → *Period-over-period — `compareTo`*).
+The renderer issues the shifted query for you and aligns the result
+bucket-for-bucket with `categoryGranularity`. For ad-hoc comparisons,
+run two date-bucketed aggregations (see *Date-Bucketed Grouping* above)
+over the two periods and join the buckets in app code.
 
 ## Common Mistakes
 
@@ -234,14 +241,15 @@ Window functions compute values across row sets WITHOUT collapsing results.
   groupBy: ['customer_id']
 }
 
-// ✅ Use having to filter AFTER aggregation
-{
-  object: 'order',
-  fields: ['customer_id'],
-  aggregations: [{ function: 'count', alias: 'order_count' }],
+// ❌ Also wrong: having is schema-reserved and silently ignored (see above)
+// { ..., having: { order_count: { $gt: 5 } } }
+
+// ✅ Aggregate, then filter the group rows in app code
+const rows = await engine.aggregate('order', {
   groupBy: ['customer_id'],
-  having: { order_count: { $gt: 5 } }
-}
+  aggregations: [{ function: 'count', alias: 'order_count' }],
+});
+const result = rows.filter((r) => r.order_count > 5);
 ```
 
 ### ❌ Wrong: sum/avg on non-numeric fields

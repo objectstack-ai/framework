@@ -99,19 +99,23 @@ where: {
 
 ## Field References
 
-Compare a field against another field (not a literal value):
+> ⚠️ **`$field` is schema-reserved — NOT executed by the engine yet.** It
+> exists only in the filter schema; no engine or driver code interprets it,
+> so the `{ $field: '...' }` object binds as a **literal value** and the
+> query silently returns zero rows.
 
 ```typescript
-// ✅ Find records where actual exceeds budget
+// ❌ Schema-valid but NOT executed — matches nothing
 where: {
   actual_cost: { $gt: { $field: 'budget' } }
 }
-
-// ✅ Find overdue tasks (due_date before today is handled by runtime)
-where: {
-  end_date: { $lt: { $field: 'start_date' } }
-}
 ```
+
+**Working alternatives:**
+- Define a **formula field** that computes the cross-field comparison
+  (e.g. a boolean `over_budget`), then filter on it:
+  `where: { over_budget: true }` (see **objectstack-data**).
+- Fetch both fields and compare in **application code**.
 
 ## Nested Relation Filters
 
@@ -200,6 +204,8 @@ where: {
 
 ## Date Filtering Patterns
 
+For **ad-hoc queries in application code**, compute the date yourself:
+
 ```typescript
 // Records created in the last 7 days (compute date in application code)
 where: {
@@ -213,3 +219,30 @@ where: {
   }
 }
 ```
+
+### Date Macros (declarative filter metadata)
+
+Filters that travel as JSON metadata — list views, dashboards, reports,
+pages — cannot run code, so they use **date macro tokens** instead
+(defined in `@objectstack/spec` `data/date-macros.zod.ts`):
+
+```typescript
+// List-view / dashboard filter values
+where: {
+  signal_at:    { $gte: '{30_days_ago}' },
+  published_at: { $gte: '{last_quarter_start}' }
+}
+```
+
+- **Fixed tokens:** `{today}`, `{yesterday}`, `{tomorrow}`, `{now}`, plus
+  period boundaries like `{current_month_start}`, `{last_quarter_end}`,
+  `{next_year_start}` (and bare aliases like `{month_start}`).
+- **Parameterised tokens:** `{N_<unit>_ago}` / `{N_<unit>_from_now}` with
+  units `minute|hour|day|week|month|year` — e.g. `{30_days_ago}`,
+  `{2_weeks_from_now}`.
+
+**Scope:** the tokens are expanded **client-side** (by `resolveDateMacros()`
+in `@object-ui/core`) immediately before the filter reaches the data
+engine — the engine only ever sees ISO date/timestamp strings. Use macros in
+UI-rendered filter metadata; for queries you issue directly against the
+engine, keep computing dates in application code as above.
