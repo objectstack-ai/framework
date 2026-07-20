@@ -374,12 +374,16 @@ interface ConditionalFieldDef {
   readonly?: boolean;
   /** Field type — scopes per-option `visibleWhen` enforcement to choice fields. */
   type?: string;
-  /** Select/multiselect/radio options; an option may gate itself with `visibleWhen`. */
+  /** select/multiselect/radio/checkboxes options; an option may gate itself with `visibleWhen`. */
   options?: Array<ConditionalFieldOption | null | undefined>;
 }
 
-/** Choice fields whose picked value(s) are drawn from `options`. */
-const CHOICE_FIELD_TYPES = new Set(['select', 'multiselect', 'radio']);
+/**
+ * Choice fields whose picked value(s) are drawn from `options`. Includes the
+ * multi-value `checkboxes` (its client widget cascades identically to
+ * `multiselect`, objectui#2715) so its gated options are enforced server-side too.
+ */
+const CHOICE_FIELD_TYPES = new Set(['select', 'multiselect', 'radio', 'checkboxes']);
 
 /** True when a choice field carries at least one option gated by `visibleWhen`. */
 function fieldHasOptionVisibility(def: ConditionalFieldDef | undefined | null): boolean {
@@ -410,8 +414,8 @@ function toExpression(cond: string | Expression): Expression {
 /**
  * Per-option authorization / cascade enforcement (objectui#2284).
  *
- * A `select` / `multiselect` / `radio` option may gate itself with a
- * `visibleWhen` CEL predicate, evaluated against the live record + `current_user`
+ * A `select` / `multiselect` / `radio` / `checkboxes` option may gate itself with
+ * a `visibleWhen` CEL predicate, evaluated against the live record + `current_user`
  * (the same predicate the client uses to hide the option). Client-side hiding is
  * UX, not a security boundary — a caller can still submit a hidden value — so on
  * write we re-evaluate the predicate for the *picked* value(s) and reject any
@@ -443,7 +447,10 @@ function evaluateOptionVisibility(
     if (raw === undefined || raw === null || raw === '') continue;
     const picked = Array.isArray(raw) ? raw : [raw];
     for (const value of picked) {
-      const opt = def.options!.find((o) => o != null && o.value === value);
+      // Match by string form, mirroring the enum validator (record-validator
+      // compares `String(...)`). A numeric option value sent/stored as a string
+      // (or vice-versa) must still hit its gate, not silently fail-open.
+      const opt = def.options!.find((o) => o != null && String(o.value) === String(value));
       // Unknown value (not in options) or an ungated option → nothing to enforce
       // here; an out-of-set value is the enum validator's concern, not ours.
       if (!opt || opt.visibleWhen == null) continue;

@@ -128,6 +128,62 @@ describe('per-option visibleWhen — multi-select element-wise', () => {
   });
 });
 
+describe('per-option visibleWhen — checkboxes element-wise (objectui#2715)', () => {
+  // `checkboxes` is the multi-value sibling of `multiselect`; its gated options
+  // must be enforced server-side too (client cascading shipped in objectui#2735).
+  const checks = {
+    fields: {
+      country: { type: 'select', options: [{ value: 'cn' }, { value: 'us' }] },
+      provinces: {
+        type: 'checkboxes',
+        options: [
+          { value: 'zj', visibleWhen: "record.country == 'cn'" },
+          { value: 'gd', visibleWhen: "record.country == 'cn'" },
+          { value: 'ca', visibleWhen: "record.country == 'us'" },
+        ],
+      },
+    },
+  };
+  it('rejects when any checked element is invalid for the parent', () => {
+    expect(() => evaluateValidationRules(checks, { country: 'cn', provinces: ['zj', 'ca'] }, 'insert')).toThrow(
+      ValidationError,
+    );
+  });
+  it('accepts when every checked element is valid', () => {
+    expect(() =>
+      evaluateValidationRules(checks, { country: 'cn', provinces: ['zj', 'gd'] }, 'insert'),
+    ).not.toThrow();
+  });
+  it('accounts for a gated checkboxes option in needsPriorRecord', () => {
+    expect(needsPriorRecord(checks)).toBe(true);
+  });
+});
+
+describe('per-option visibleWhen — value/option type coercion', () => {
+  // A numeric option value submitted as a string (a common REST/JSON round-trip)
+  // must still hit its gate — matching the enum validator's String(...) compare.
+  const numeric = {
+    fields: {
+      country: { type: 'select', options: [{ value: 'cn' }, { value: 'us' }] },
+      zone: {
+        type: 'select',
+        options: [
+          { value: 1, visibleWhen: "record.country == 'cn'" },
+          { value: 2, visibleWhen: "record.country == 'us'" },
+        ],
+      },
+    },
+  };
+  it('gates a numeric option value sent as a string', () => {
+    expect(() => evaluateValidationRules(numeric, { country: 'us', zone: '1' }, 'insert')).toThrow(
+      ValidationError,
+    );
+  });
+  it('accepts the string form when the gate passes', () => {
+    expect(() => evaluateValidationRules(numeric, { country: 'cn', zone: '1' }, 'insert')).not.toThrow();
+  });
+});
+
 describe('needsPriorRecord accounts for option visibleWhen', () => {
   it('is true when a choice field has a gated option (cascade may reference a prior sibling)', () => {
     expect(needsPriorRecord(schema)).toBe(true);
