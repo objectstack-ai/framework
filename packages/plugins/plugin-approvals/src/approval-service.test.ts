@@ -414,6 +414,33 @@ describe('ApprovalService (node era)', () => {
     expect(await svc.getRequest('nope', SYS)).toBeNull();
   });
 
+  // ── viewer capability (#3310) ───────────────────────────────────
+  it('getRequest: viewer.can_act is true for a pending approver, false for the submitter', async () => {
+    const req = await svc.openNodeRequest(openInput(['u9']), CTX); // submitter u1, approver u9
+    const asApprover = await svc.getRequest(req.id, { userId: 'u9', tenantId: 't1' } as any);
+    expect(asApprover!.viewer).toEqual({ can_act: true, is_submitter: false });
+    const asSubmitter = await svc.getRequest(req.id, { userId: 'u1', tenantId: 't1' } as any);
+    expect(asSubmitter!.viewer).toEqual({ can_act: false, is_submitter: true });
+    const asOther = await svc.getRequest(req.id, { userId: 'u_stranger', tenantId: 't1' } as any);
+    expect(asOther!.viewer).toEqual({ can_act: false, is_submitter: false });
+  });
+
+  it('getRequest: viewer.can_act drops to false once the request is finalized', async () => {
+    const req = await svc.openNodeRequest(openInput(['u9']), CTX);
+    await svc.decideNode(req.id, { decision: 'approve', actorId: 'u9' }, SYS); // → approved
+    const after = await svc.getRequest(req.id, { userId: 'u9', tenantId: 't1' } as any);
+    expect(after!.status).toBe('approved');
+    expect(after!.viewer!.can_act).toBe(false);
+  });
+
+  it('listRequests: attaches viewer to every row from the caller context', async () => {
+    await svc.openNodeRequest(openInput(['u9']), CTX);
+    const rows = await svc.listRequests({ status: 'pending' }, { userId: 'u9', tenantId: 't1' } as any);
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every(r => r.viewer != null)).toBe(true);
+    expect(rows[0].viewer!.can_act).toBe(true);
+  });
+
   // ── recall ──────────────────────────────────────────────────────
 
   it('recall: submitter withdraws a pending request', async () => {
