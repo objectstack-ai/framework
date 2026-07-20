@@ -341,7 +341,7 @@ List chart view configuration
 | **type** | `Enum<'grid' \| 'kanban' \| 'gallery' \| 'calendar' \| 'timeline' \| 'gantt' \| 'map' \| 'chart' \| 'tree'>` | optional |  |
 | **data** | `{ provider: 'object'; object: string } \| { provider: 'api'; read?: object; write?: object } \| { provider: 'value'; items: any[] } \| { provider: 'schema'; schemaId: string; schema?: Record<string, any> }` | optional | Data source configuration (defaults to "object" provider) |
 | **columns** | `string[] \| { field: string; label?: string; width?: number; align?: Enum<'left' \| 'center' \| 'right'>; … }[]` | ✅ | Fields to display as columns |
-| **filter** | `{ field: string; operator: string; value?: string \| number \| boolean \| null \| string \| number[] }[]` | optional | Filter criteria (JSON Rules) |
+| **filter** | `{ field: string; operator?: Enum<'equals' \| 'not_equals' \| 'contains' \| 'not_contains' \| 'starts_with' \| 'ends_with' \| 'greater_than' \| 'less_than' \| 'greater_than_or_equal' \| 'less_than_or_equal' \| 'in' \| 'not_in' \| 'is_empty' \| 'is_not_empty' \| 'is_null' \| 'is_not_null' \| 'before' \| 'after' \| 'between'>; value?: string \| number \| boolean \| null \| string \| number[] }[]` | optional | Filter criteria (JSON Rules) |
 | **sort** | `string \| { field: string; order: Enum<'asc' \| 'desc'> }[]` | optional |  |
 | **searchableFields** | `string[]` | optional | Fields enabled for search |
 | **filterableFields** | `string[]` | optional | Legacy shorthand for userFilters.fields — bare field names enabled for end-user filtering. Prefer userFilters |
@@ -430,7 +430,7 @@ List chart view configuration
 | **type** | `Enum<'grid' \| 'kanban' \| 'gallery' \| 'calendar' \| 'timeline' \| 'gantt' \| 'map' \| 'chart' \| 'tree'>` | optional |  |
 | **data** | `{ provider: 'object'; object: string } \| { provider: 'api'; read?: object; write?: object } \| { provider: 'value'; items: any[] } \| { provider: 'schema'; schemaId: string; schema?: Record<string, any> }` | optional | Data source configuration (defaults to "object" provider) |
 | **columns** | `string[] \| { field: string; label?: string; width?: number; align?: Enum<'left' \| 'center' \| 'right'>; … }[]` | ✅ | Fields to display as columns |
-| **filter** | `{ field: string; operator: string; value?: string \| number \| boolean \| null \| string \| number[] }[]` | optional | Filter criteria (JSON Rules) |
+| **filter** | `{ field: string; operator?: Enum<'equals' \| 'not_equals' \| 'contains' \| 'not_contains' \| 'starts_with' \| 'ends_with' \| 'greater_than' \| 'less_than' \| 'greater_than_or_equal' \| 'less_than_or_equal' \| 'in' \| 'not_in' \| 'is_empty' \| 'is_not_empty' \| 'is_null' \| 'is_not_null' \| 'before' \| 'after' \| 'between'>; value?: string \| number \| boolean \| null \| string \| number[] }[]` | optional | Filter criteria (JSON Rules) |
 | **sort** | `string \| { field: string; order: Enum<'asc' \| 'desc'> }[]` | optional |  |
 | **searchableFields** | `string[]` | optional | Fields enabled for search |
 | **filterableFields** | `string[]` | optional | Legacy shorthand for userFilters.fields — bare field names enabled for end-user filtering. Prefer userFilters |
@@ -713,7 +713,7 @@ View filter rule
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
 | **field** | `string` | ✅ | Field name to filter on |
-| **operator** | `string` | ✅ | Filter operator (e.g. equals, not_equals, contains, this_quarter) |
+| **operator** | `Enum<'equals' \| 'not_equals' \| 'contains' \| 'not_contains' \| 'starts_with' \| 'ends_with' \| 'greater_than' \| 'less_than' \| 'greater_than_or_equal' \| 'less_than_or_equal' \| 'in' \| 'not_in' \| 'is_empty' \| 'is_not_empty' \| 'is_null' \| 'is_not_null' \| 'before' \| 'after' \| 'between'>` | ✅ | Filter operator |
 | **value** | `string \| number \| boolean \| null \| string \| number[]` | optional | Filter value |
 
 
@@ -836,7 +836,7 @@ Tab configuration for multi-tab view interface
 | **label** | `string` | optional | Display label |
 | **icon** | `string` | optional | Tab icon name |
 | **view** | `string` | optional | Referenced list view name from listViews |
-| **filter** | `{ field: string; operator: string; value?: string \| number \| boolean \| null \| string \| number[] }[]` | optional | Tab-specific filter criteria |
+| **filter** | `{ field: string; operator: Enum<'equals' \| 'not_equals' \| 'contains' \| 'not_contains' \| 'starts_with' \| 'ends_with' \| 'greater_than' \| 'less_than' \| 'greater_than_or_equal' \| 'less_than_or_equal' \| 'in' \| 'not_in' \| 'is_empty' \| 'is_not_empty' \| 'is_null' \| 'is_not_null' \| 'before' \| 'after' \| 'between'>; value?: string \| number \| boolean \| null \| string \| number[] }[]` | optional | Tab-specific filter criteria |
 | **order** | `integer` | optional | Tab display order |
 | **pinned** | `boolean` | ✅ | Pin tab (cannot be removed by users) |
 | **isDefault** | `boolean` | ✅ | Set as the default active tab |
