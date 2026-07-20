@@ -19,7 +19,7 @@ export const SysApprovalToken = ObjectSchema.create({
   pluralLabel: 'Approval Action Tokens',
   icon: 'key',
   isSystem: true,
-  managedBy: 'system',
+  managedBy: 'engine-owned',
   description: 'Single-use tokens behind actionable approval links',
   displayNameField: 'id',
   nameField: 'id', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)

@@ -28,7 +28,7 @@ export const SysAudienceBindingSuggestion = ObjectSchema.create({
   pluralLabel: 'Audience Binding Suggestions',
   icon: 'shield-question',
   isSystem: true,
-  managedBy: 'system',
+  managedBy: 'engine-owned',
   description: 'Package-suggested audience-anchor binding awaiting admin confirmation (ADR-0090 D5/D9).',
   titleFormat: '{package_id}: {permission_set_name} → {anchor}',
   highlightFields: ['package_id', 'permission_set_name', 'anchor', 'status'],

@@ -217,7 +217,7 @@ indexes: [
 | Property | Type | Description |
 | :--- | :--- | :--- |
 | `isSystem` | `boolean` | System object, protected from deletion (default: `false`) |
-| `managedBy` | `enum` | Lifecycle bucket that sets the default CRUD affordances and write policy — `'platform'` (default), `'config'`, `'system'`, `'append-only'`, `'better-auth'`. See [Lifecycle bucket](#lifecycle-bucket-managedby) below. |
+| `managedBy` | `enum` | Lifecycle bucket that sets the default CRUD affordances and write policy — `'platform'` (default), `'config'`, `'system'`, `'engine-owned'`, `'append-only'`, `'better-auth'`. See [Lifecycle bucket](#lifecycle-bucket-managedby) below. |
 | `userActions` | `object` | Per-object override of the CRUD affordances the `managedBy` default implies — `{ create?, edit?, delete?, import?, exportCsv? }`. This is what makes a `system`/`append-only` object admin/user-writable. See [Lifecycle bucket](#lifecycle-bucket-managedby). |
 | `sharingModel` | `enum` | Org-Wide Default record visibility (ADR-0055/0056/0090). Canonical four only: `'private'`, `'public_read'`, `'public_read_write'`, `'controlled_by_parent'` (detail visibility derived from its master). The legacy aliases (`'read'`, `'read_write'`, `'full'`) were removed from the enum (ADR-0090 D4) — authoring rejects them. Unset on a custom object resolves to `'private'` (ADR-0090 D1) |
 | `ownership` | `enum` | Record-ownership model: `'user'` (default — injects the reassignable `owner_id` lookup, engaging owner-scoped RLS, "My" views and owner reports), `'org'`, or `'none'` (no per-record owner — Dataverse-style catalog / junction tables, skips `owner_id`). Distinct from the package `own`/`extend` contribution kind. |
@@ -235,20 +235,23 @@ bare bucket string.
 | :--- | :--- |
 | `platform` | **Default.** User-owned business data — full New / Import / Edit / Delete. |
 | `config` | Admin-authored configuration — New / Edit / Delete, no CSV import. |
-| `system` | Platform-defined schema. **Engine-owned by default**: a platform service owns the row lifecycle, generic CRUD is hidden, and the object is exposed `['get', 'list']` only. |
+| `system` | Platform-defined schema holding **admin/user-writable data** (RBAC link tables, preferences, messaging config). Locked by default; each object opens its writes via `userActions`. |
+| `engine-owned` | Runtime rows a platform service owns end to end — generic CRUD hidden, exposed `['get', 'list']` only, **no user writes ever**. |
 | `append-only` | Immutable audit trail — View + Export only. |
 | `better-auth` | Identity tables owned by the better-auth driver — generic user-context CRUD is suppressed; mutations flow through the auth API (sign-in, invite, reset). |
 
-**Engine-owned vs. admin-writable `system` objects (ADR-0103).** The `system`
-bucket covers two kinds of object. Most are *engine-owned* — jobs,
-notifications, approval rows, `sys_record_share`, `sys_automation_run`, audit
-trails, `sys_secret` — written only by their owning service under a system
-context, never through the generic `/data` API; a fail-closed guard
-(`assertEngineOwnedWriteAllowed`) rejects user-context generic writes to them.
-A minority are *platform-defined schema with admin/user-writable data* — the
-RBAC link tables, `sys_user_preference`, `sys_approval_delegation`, the
-messaging config grids. These keep `managedBy: 'system'` but declare
-`userActions` to open the writes they legitimately take:
+**`engine-owned` vs. writable `system` objects (ADR-0103).** Two buckets share
+the same locked default matrix but say different things:
+
+- **`engine-owned`** — jobs, notifications, approval runtime rows,
+  `sys_record_share`, `sys_automation_run`, the metadata store, `sys_secret`,
+  audit trails — written only by their owning service under a system context,
+  never through the generic `/data` API. A fail-closed guard
+  (`assertEngineOwnedWriteAllowed`) rejects user-context generic writes to them.
+- **`system`** — platform-defined schema holding admin/user-writable *data*: the
+  RBAC link tables, `sys_user_preference`, `sys_approval_delegation`, the
+  messaging config grids. These declare `userActions` to open the writes they
+  legitimately take:
 
 ```typescript
 export const SysUserPreference = ObjectSchema.create({

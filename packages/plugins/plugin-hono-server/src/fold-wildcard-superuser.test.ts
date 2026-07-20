@@ -62,8 +62,10 @@ describe('clampManagedObjectWrites', () => {
     sys_user: { managedBy: 'better-auth', userActions: { edit: true } },
     sys_member: { managedBy: 'better-auth' },
     sys_session: { managedBy: 'better-auth' },
-    // ADR-0103: system with no userActions → engine-owned → guarded (clamped).
-    sys_automation_run: { managedBy: 'system' },
+    // ADR-0103: explicit engine-owned bucket → guarded (clamped).
+    sys_automation_run: { managedBy: 'engine-owned' },
+    // ADR-0103: a `system` object with no userActions still resolves locked → guarded.
+    sys_notification_receipt: { managedBy: 'system' },
     // ADR-0103: system that opened its writes → writable set → NOT clamped.
     sys_user_position: { managedBy: 'system', userActions: { create: true, edit: true, delete: true } },
     crm_lead: { managedBy: 'platform' },
@@ -88,14 +90,17 @@ describe('clampManagedObjectWrites', () => {
     expect(objects.sys_session.allowRead).toBe(true); // read never clamped
   });
 
-  it('clamps engine-owned system objects (ADR-0103) but leaves config/platform untouched', () => {
+  it('clamps engine-owned + locked-system objects (ADR-0103) but leaves config/platform untouched', () => {
     const objects: Record<string, any> = {
       sys_automation_run: { allowRead: true, allowEdit: true, allowCreate: true, allowDelete: true },
+      sys_notification_receipt: { allowRead: true, allowEdit: true, allowCreate: true, allowDelete: true },
       crm_lead: { allowEdit: true },
     };
     clampManagedObjectWrites(objects, schemaOf);
-    // system + no userActions → engine-owned → writes clamped off; read kept.
+    // explicit engine-owned bucket → writes clamped off; read kept.
     expect(objects.sys_automation_run).toMatchObject({ allowRead: true, allowEdit: false, allowCreate: false, allowDelete: false });
+    // locked `system` (no userActions) → also clamped.
+    expect(objects.sys_notification_receipt).toMatchObject({ allowEdit: false, allowCreate: false, allowDelete: false });
     // platform bucket → not guarded → untouched.
     expect(objects.crm_lead.allowEdit).toBe(true);
   });

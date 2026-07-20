@@ -34,7 +34,7 @@ import { ObjectSchema, Field } from '@objectstack/spec/data';
  *  - `redact_fields` overlays on top of the schema-default redaction
  *    set declared on `object.publicSharing.redactFields`
  *
- * managedBy: 'system' — admins inspect via the audit grid but all
+ * managedBy: 'engine-owned' — admins inspect via the audit grid but all
  * writes flow through `IShareLinkService` so the per-object opt-in,
  * expiry caps, and audit hooks fire.
  *
@@ -46,7 +46,7 @@ export const SysShareLink = ObjectSchema.create({
   pluralLabel: 'Share Links',
   icon: 'link-2',
   isSystem: true,
-  managedBy: 'system',
+  managedBy: 'engine-owned',
   description: 'Opaque capability token granting access to a single record. Notion/Figma-style public link sharing.',
   titleFormat: '{object_name}/{record_id} ({permission})',
   highlightFields: ['object_name', 'record_id', 'permission', 'audience', 'expires_at', 'revoked_at'],

@@ -39,7 +39,7 @@ const SCHEMAS = {
   sys_member: { name: 'sys_member', managedBy: 'better-auth' },
   sys_session: { name: 'sys_session', managedBy: 'better-auth' },
   crm_lead: { name: 'crm_lead' },
-  sys_automation_run: { name: 'sys_automation_run', managedBy: 'system' },
+  sys_automation_run: { name: 'sys_automation_run', managedBy: 'engine-owned' },
 };
 
 /** Session shapes as ObjectQLEngine.buildSession produces them. */

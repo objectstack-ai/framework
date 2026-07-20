@@ -30,7 +30,7 @@ export const SysJobQueue = ObjectSchema.create({
   pluralLabel: 'Job Queue Messages',
   icon: 'inbox',
   isSystem: true,
-  managedBy: 'system',
+  managedBy: 'engine-owned',
   description: 'Durable job/message queue including dead letters',
   displayNameField: 'queue',
   nameField: 'queue', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)

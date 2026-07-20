@@ -590,24 +590,27 @@ const ObjectSchemaBase = z.object({
    *   purpose-built "Import definition (JSON)" action instead). Example:
    *   `sys_sharing_rule`, `sys_position`, `sys_permission_set`, `sys_view`,
    *   `sys_app`.
-   * - `system`       — Platform-defined schema. The bucket DEFAULT is
-   *   *engine-owned*: runtime rows whose lifecycle a platform service owns
-   *   end to end (the approval engine, the sharing engine, the job runner,
-   *   …), written only via `isSystem` / a service `SYSTEM_CTX` / a
-   *   context-less engine call. Generic CRUD is hidden — users interact
-   *   with these via *domain actions* on the source record (e.g. "Submit
-   *   for Approval" creates an `sys_approval_request`). Example:
-   *   `sys_approval_request`, `sys_record_share`, `sys_notification`,
-   *   `sys_automation_run`, `sys_job`.
-   *   Some `system` objects are platform schema but hold **admin/user-writable
-   *   DATA** — the RBAC link tables (`sys_user_position`,
+   * - `system`       — Platform-defined schema that holds **admin/user-writable
+   *   DATA**: the RBAC link tables (`sys_user_position`,
    *   `sys_user_permission_set`, `sys_position_permission_set`, governed by
    *   the `DelegatedAdminGate`), `sys_user_preference`, the messaging config
-   *   grids. They declare {@link userActions} to open the writes they take;
-   *   the affordance is a declaration only — the real authz stays the
-   *   delegated-admin gate / RLS. An `engine-owned` object is precisely a
-   *   `system`/`append-only` object whose resolved affordances grant no write
-   *   (ADR-0103).
+   *   grids (`sys_notification_subscription`, `_template`, `_preference`). The
+   *   bucket DEFAULT is locked; each object declares {@link userActions} to
+   *   open the writes it takes. The affordance is a declaration only — the real
+   *   authz stays the delegated-admin gate / RLS. (For rows the engine owns end
+   *   to end with no user writes, use `engine-owned`.)
+   * - `engine-owned` — Runtime rows whose lifecycle a platform service owns
+   *   end to end (the approval engine, the sharing engine, the job runner, the
+   *   metadata store, …), written only via `isSystem` / a service `SYSTEM_CTX` /
+   *   a context-less engine call. No user writes, ever. Generic CRUD is hidden —
+   *   users interact via *domain actions* on the source record (e.g. "Submit
+   *   for Approval" creates a `sys_approval_request`). Example:
+   *   `sys_approval_request`, `sys_record_share`, `sys_notification`,
+   *   `sys_automation_run`, `sys_job`, `sys_metadata`, `sys_secret`. (ADR-0103;
+   *   the explicit successor to the old engine-owned-DEFAULT overload of
+   *   `system`. `system` / `append-only` objects granting no resolved write are
+   *   also treated as engine-owned by the write guard, so the split is a
+   *   self-documenting relabel, not an enforcement change.)
    * - `append-only`  — Immutable audit log. No New / Import / Edit /
    *   Delete; only View and Export. Example: `sys_approval_action`,
    *   `sys_audit_log`, `sys_activity`, `sys_email`, `sys_presence`.
@@ -624,20 +627,20 @@ const ObjectSchemaBase = z.object({
    * is {@link resolveCrudAffordances} (bucket default + `userActions`).
    * Enforcement happens in three places:
    *   1. Default permission sets ({@link packages/platform-objects/src/security/default-permission-sets.ts})
-   *      deny direct CRUD for `system` / `append-only` / `better-auth`.
+   *      deny direct CRUD for `system` / `engine-owned` / `append-only` / `better-auth`.
    *   2. UI clients honour {@link resolveCrudAffordances} to gate the
    *      New / Import / Edit / Delete / Export buttons accordingly.
    *   3. Engine write guards fail-closed on user-context generic writes to a
    *      managed object whose resolved affordances forbid the verb —
    *      `better-auth` via plugin-auth's identity write guard (ADR-0092),
-   *      `system` / `append-only` via plugin-security's system write guard
-   *      (ADR-0103). `isSystem` / context-less engine writes bypass.
+   *      `system` / `engine-owned` / `append-only` via plugin-security's system
+   *      write guard (ADR-0103). `isSystem` / context-less engine writes bypass.
    *
    * Use {@link userActions} to override the default matrix for a single
    * field (e.g. an "append-only" table that should still allow Export).
    */
-  managedBy: z.enum(['platform', 'config', 'system', 'append-only', 'better-auth']).optional().describe(
-    'Lifecycle bucket — platform (user CRUD) | config (admin authored) | system (engine-managed) | append-only (audit) | better-auth (identity). UI clients honour the resolved affordance matrix.',
+  managedBy: z.enum(['platform', 'config', 'system', 'engine-owned', 'append-only', 'better-auth']).optional().describe(
+    'Lifecycle bucket — platform (user CRUD) | config (admin authored) | system (engine-managed schema, writable via userActions) | engine-owned (engine owns the lifecycle, no user writes) | append-only (audit) | better-auth (identity). UI clients honour the resolved affordance matrix.',
   ),
 
   /**
@@ -1437,23 +1440,26 @@ export interface RowCrudPredicates {
  *   config       — admin authored: New/Edit/Delete OK, no CSV import
  *                  (definitions have nested envelopes; admins should use
  *                  a purpose-built "Import definition" action instead)
- *   system       — platform-defined schema. DEFAULT is engine-owned: no
- *                  generic CRUD; users interact via domain actions on the
- *                  source record. `userActions` opens the admin/user-writable
- *                  ones (RBAC link tables, prefs, messaging config) — the
+ *   system       — platform-defined schema holding admin/user-writable data
+ *                  (RBAC link tables, prefs, messaging config). DEFAULT is
+ *                  locked; each object opens its writes via `userActions` — the
  *                  affordance declaration only; authz stays the delegated-admin
  *                  gate / RLS (ADR-0103)
+ *   engine-owned — runtime rows the engine owns end to end; no user writes.
+ *                  Same locked matrix as `system`; the explicit, self-
+ *                  documenting successor to system's old engine-owned default
  *   append-only  — audit log: View + Export only
  *   better-auth  — identity tables owned by better-auth driver; CRUD
  *                  routed through purpose-built actions (Invite, Reset
  *                  PW, Revoke, …)
  */
 const CRUD_AFFORDANCE_DEFAULTS: Record<NonNullable<ServiceObject['managedBy']> | 'platform', CrudAffordances> = {
-  platform:      { create: true,  import: true,  edit: true,  delete: true,  exportCsv: true },
-  config:        { create: true,  import: false, edit: true,  delete: true,  exportCsv: true },
-  system:        { create: false, import: false, edit: false, delete: false, exportCsv: true },
-  'append-only': { create: false, import: false, edit: false, delete: false, exportCsv: true },
-  'better-auth': { create: false, import: false, edit: false, delete: false, exportCsv: true },
+  platform:       { create: true,  import: true,  edit: true,  delete: true,  exportCsv: true },
+  config:         { create: true,  import: false, edit: true,  delete: true,  exportCsv: true },
+  system:         { create: false, import: false, edit: false, delete: false, exportCsv: true },
+  'engine-owned': { create: false, import: false, edit: false, delete: false, exportCsv: true },
+  'append-only':  { create: false, import: false, edit: false, delete: false, exportCsv: true },
+  'better-auth':  { create: false, import: false, edit: false, delete: false, exportCsv: true },
 };
 
 /**

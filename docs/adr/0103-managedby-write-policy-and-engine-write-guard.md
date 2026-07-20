@@ -144,3 +144,51 @@ a row users never hand-edit.
   the intended ADR-0049 correction, called out in the release note.
 - The taxonomy is now honest: a reader can tell engine-owned from writable by the
   resolved affordances, and the guard enforces it.
+
+## Addendum (2026-07-20, v16) — the anticipated enum split lands: explicit `engine-owned` bucket
+
+D1 deferred the enum split ("Splitting the enum later remains possible as a pure
+rename on top of the now-correct affordances"). Both reasons D1 cited *against* an
+enum value are now retired, so v16 adopts it — additively — as the self-documenting
+successor to the engine-owned-DEFAULT overload of `system`.
+
+**Why it is now safe** (the D1 objections, resolved):
+1. *Silent fully-editable fallthrough on deployed clients* — neutralised by the
+   server-side enforcement this same ADR added: an unknown bucket resolving to the
+   `platform` default on an old client is now **cosmetic**, because the engine write
+   guard (D2), `apiMethods` reconciliation (D3) and the `/me/permissions` clamp (D4)
+   reject the write regardless of what the client renders. (Re-verified end to end
+   in the showcase: a generic `/data` create on an engine-owned object returns 405.)
+2. *Open-ended UI type across three mirrors* — closed by **objectui#2712**: the
+   `ManagedByBucket` union is now a single closed type, so a new value is a compile
+   error to miss, not a silent fallthrough.
+
+**The split (additive — `system` is retained, nothing is removed):**
+- New enum value **`engine-owned`** with the same all-locked default affordance row
+  as `system` (`create/import/edit/delete: false`, `exportCsv: true`). It joins
+  `ENGINE_OWNED_BUCKETS` (guard) and `GUARDED_WRITE_BUCKETS` (clamp); the guard,
+  reconciliation and clamp mechanisms are **unchanged** — engine-owned is simply an
+  explicit member of the set they already covered by resolved affordance.
+- The **20** objects that were `system` with no write-opening `userActions` (the
+  metadata store, jobs, approvals runtime rows, sharing rows, automation runs, the
+  messaging delivery/receipt pipeline, secrets, settings) are relabelled
+  `system → engine-owned` — a one-line, behaviour-identical change per object.
+- The **8** objects that are platform-schema **admin/user-writable DATA** (the RBAC
+  link tables `sys_user_position` / `sys_user_permission_set` /
+  `sys_position_permission_set`, `sys_user_preference`, `sys_approval_delegation`,
+  and the messaging config grids) **keep `managedBy: 'system'`**, which now reads as
+  "engine-managed schema, writable via `userActions`" — the residual meaning of the
+  bucket after the engine-owned rows move out.
+
+**Not a behaviour or enforcement change.** Resolved affordances, the guard verdict,
+the 405 reconciliation and the permissions clamp are byte-identical before and
+after; this is a self-documenting relabel. No data migration (`managedBy` is schema
+metadata, not row data), and no code branches on the `'system'` literal (all
+enforcement keys off `resolveCrudAffordances` / the bucket-set membership).
+
+**Sequencing (v16 RC).** The framework enum and the objectui union land together and
+the vendored console is re-pinned before GA; during any sync window an old console
+renders an unknown `engine-owned` object editable but the server still 405s the
+write (point 1). Removing the overloaded `system` entirely — moving the 8 writable
+objects to a dedicated writable-platform-data bucket (or `config`) and retiring
+`system` — is a genuinely breaking rename deferred to **v17**.

@@ -23,7 +23,7 @@ export const NotificationDelivery = ObjectSchema.create({
     pluralLabel: 'Notification Deliveries',
     icon: 'send',
     isSystem: true,
-    managedBy: 'system',
+    managedBy: 'engine-owned',
     // ADR-0057: pipeline telemetry — same 90d window as sys_notification.
     lifecycle: {
         class: 'telemetry',

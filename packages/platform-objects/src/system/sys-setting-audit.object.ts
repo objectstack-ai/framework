@@ -32,7 +32,7 @@ export const SysSettingAudit = ObjectSchema.create({
   pluralLabel: 'Setting Audit',
   icon: 'history',
   isSystem: true,
-  managedBy: 'system',
+  managedBy: 'engine-owned',
   description: 'Append-only audit trail for SettingsService mutations.',
   highlightFields: ['namespace', 'key', 'scope', 'action', 'actor_id', 'created_at'],
   listViews: {

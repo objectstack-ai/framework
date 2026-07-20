@@ -237,11 +237,11 @@ function isWriteOptedIn(v: boolean | { enabled?: boolean } | undefined | null): 
 /**
  * Buckets whose user-context generic writes are guarded fail-closed at the
  * engine: `better-auth` by plugin-auth's identity write guard (ADR-0092 D2),
- * `system` / `append-only` by plugin-security's engine-owned write guard
- * (ADR-0103). `config` / `platform` have no such guard — their permission-set
- * result stands.
+ * `engine-owned` / `system` / `append-only` by plugin-security's engine-owned
+ * write guard (ADR-0103). `config` / `platform` have no such guard — their
+ * permission-set result stands.
  */
-const GUARDED_WRITE_BUCKETS: ReadonlySet<string> = new Set(['better-auth', 'system', 'append-only']);
+const GUARDED_WRITE_BUCKETS: ReadonlySet<string> = new Set(['better-auth', 'system', 'engine-owned', 'append-only']);
 
 /**
  * Re-clamp a `/me/permissions` `objects` map by the SECOND server-side

@@ -23,7 +23,7 @@ import { ObjectSchema, Field } from '@objectstack/spec/data';
  * and leave `value` null. The plain value is never written to audit log
  * or history snapshots — only an `'<encrypted>'` placeholder + a digest.
  *
- * managedBy: 'system' — the admin grid in Setup is a diagnostic surface
+ * managedBy: 'engine-owned' — the admin grid in Setup is a diagnostic surface
  * only; all writes flow through `SettingsService.set()` so the resolver
  * stays the single source of truth.
  *
@@ -37,7 +37,7 @@ export const SysSetting = ObjectSchema.create({
   pluralLabel: 'Settings',
   icon: 'sliders',
   isSystem: true,
-  managedBy: 'system',
+  managedBy: 'engine-owned',
   description: 'Generic K/V store backing the SettingsManifest contract.',
   displayNameField: 'key',
   nameField: 'key', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)

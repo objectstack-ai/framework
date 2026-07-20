@@ -30,7 +30,7 @@ export const SysApprovalApprover = ObjectSchema.create({
   pluralLabel: 'Approval Approvers',
   icon: 'users',
   isSystem: true,
-  managedBy: 'system',
+  managedBy: 'engine-owned',
   description: 'Normalized pending-approver rows for indexed inbox queries',
   displayNameField: 'id',
   nameField: 'id', // [ADR-0079] canonical primary-title pointer (mirrors deprecated displayNameField)

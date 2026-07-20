@@ -39,7 +39,7 @@ export const SysAutomationRun = ObjectSchema.create({
   pluralLabel: 'Automation Runs',
   icon: 'pause-circle',
   isSystem: true,
-  managedBy: 'system',
+  managedBy: 'engine-owned',
   // ADR-0057 (#2834): MIXED table — live suspended runs (resumable workflow
   // state, record semantics: an approval may legitimately stay paused for
   // months) interleaved with terminal run history (telemetry semantics).
