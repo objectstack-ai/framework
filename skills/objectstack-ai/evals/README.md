@@ -12,16 +12,14 @@ When implemented, evals will follow this structure:
 
 ```
 evals/
-├── naming/
-│   ├── test-object-names.md
-│   ├── test-field-keys.md
-│   └── test-option-values.md
-├── relationships/
-│   ├── test-lookup-vs-master-detail.md
-│   └── test-junction-patterns.md
-├── validation/
-│   ├── test-script-inversion.md
-│   └── test-state-machine.md
+├── skills/
+│   ├── test-trigger-phrases.md
+│   └── test-surface-affinity.md
+├── tools/
+│   ├── test-json-schema-parameters.md
+│   └── test-requires-confirmation.md
+├── knowledge/
+│   └── test-knowledge-source-filters.md
 └── ...
 ```
 
@@ -42,5 +40,5 @@ Each eval file will contain:
 When adding evals:
 1. Each eval should test a single, specific rule or pattern
 2. Include both positive (correct) and negative (incorrect) examples
-3. Reference the corresponding rule file in `rules/`
+3. Reference the corresponding section of `SKILL.md`
 4. Use realistic scenarios from actual ObjectStack projects

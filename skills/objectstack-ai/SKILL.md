@@ -1,35 +1,37 @@
 ---
 name: objectstack-ai
 description: >
-  Design ObjectStack AI agents, tools, skills, conversations, model registry
-  entries, and MCP integrations. Use when the user is adding `*.agent.ts` /
-  `*.tool.ts` / `*.skill.ts`, configuring an LLM provider, wiring agent
-  tools, or designing an embedding/RAG flow on top of ObjectStack data. Do
-  not use for general LLM prompting questions unrelated to ObjectStack
-  metadata.
+  Design ObjectStack AI skills, tools, knowledge sources, conversations,
+  model registry entries, and MCP integrations. Use when the user is adding
+  `*.skill.ts` / `*.tool.ts`, configuring an LLM provider, wiring agent
+  tools, or indexing ObjectStack data as a knowledge source for RAG. Agents
+  themselves are platform-internal (`ask` / `build`) — third parties extend
+  them via skills and tools, not by authoring `*.agent.ts`. Do not use for
+  general LLM prompting questions unrelated to ObjectStack metadata.
 license: Apache-2.0
-compatibility: Requires @objectstack/spec Zod schemas (v4+)
+compatibility: Requires @objectstack/spec 16.x (Zod v4 schemas)
 metadata:
   author: objectstack-ai
-  version: "1.1"
+  version: "1.2"
   domain: ai
   tags: agent, tool, skill, conversation, llm, embedding, mcp
 ---
 
 # AI Agent Design — ObjectStack AI Protocol
 
-Expert instructions for designing AI-powered agents, skills, tools, and RAG
-pipelines using the ObjectStack specification. This skill covers the
-Agent → Skill → Tool three-tier architecture aligned with Salesforce
-Agentforce, Microsoft Copilot Studio, and ServiceNow Now Assist patterns.
+Expert instructions for designing AI skills, tools, and knowledge sources —
+and the platform agents they plug into — using the ObjectStack specification.
+This skill covers the Agent → Skill → Tool three-tier architecture aligned with
+Salesforce Agentforce, Microsoft Copilot Studio, and ServiceNow Now Assist
+patterns.
 
-> **Edition boundary (cloud ADR-0025 — `service-ai → cloud; open = MCP-only`).**
+> **Edition boundary (`service-ai` → cloud; open = MCP-only).**
 > The in-UI AI **runtime** — the `ask` / `build` agents, in-product chat, and the
 > `/api/v1/ai/*` routes (`@objectstack/service-ai`) — ships in the **cloud /
 > Enterprise** distribution, not the open framework. The agent / skill / tool
-> **schemas** in `@objectstack/spec/ai` stay open, so you author `*.agent.ts` /
-> `*.skill.ts` / `*.tool.ts` as source either way — but they only execute in a
-> cloud / EE host. On the **open edition** there is no in-product agent: expose the
+> **schemas** in `@objectstack/spec/ai` stay open, so you author `*.skill.ts` /
+> `*.tool.ts` as source either way (`*.agent.ts` is platform-internal) — but
+> they only execute in a cloud / EE host. On the **open edition** there is no in-product agent: expose the
 > app to your own AI via `@objectstack/mcp` (BYO-AI) for data query, and author
 > metadata in **source mode** with an AI coding agent (Claude Code, Cursor).
 
@@ -37,11 +39,14 @@ Agentforce, Microsoft Copilot Studio, and ServiceNow Now Assist patterns.
 
 ## When to Use This Skill
 
-- You are creating an **AI agent** with a specific role and capabilities.
-- You need to define **skills** — bundles of related tools an agent can use.
+- You need to define **skills** — bundles of related tools bound to the
+  `ask` / `build` surfaces.
 - You are configuring **tools** for data queries, actions, or integrations.
-- You want to set up a **RAG pipeline** for knowledge retrieval.
-- You are choosing and configuring **LLM models** for your agent.
+- You want to index ObjectStack data as a **knowledge source** for RAG
+  retrieval.
+- You are choosing and configuring **LLM models** (model registry).
+- You need to read or review **agent** configuration — platform-internal;
+  third parties extend agents via skills, not by authoring them.
 
 ---
 
@@ -75,10 +80,10 @@ never picks from a roster; the surface they are in selects the agent:
 - **`ask`** — the **data product** (≈ Claude Chat). Conversational read / query /
   explore over records, plus running the business **actions** the app already
   exposes. End-user audience, RLS-bounded. Canonical id `ask` (`ASK_AGENT_NAME`).
-  **Cloud / Enterprise** — the `ask` runtime moved from the open framework into the
-  cloud AI runtime (`@objectstack/service-ai` → `cloud/packages/service-ai`, closed)
-  per cloud ADR-0025; it is the implicit copilot for any cloud / EE app that does
-  not pin `app.defaultAgent`. (Open editions have no in-product `ask`; use MCP.)
+  **Cloud / Enterprise** — the `ask` runtime ships in the closed cloud AI runtime
+  (`@objectstack/service-ai`); it is the implicit copilot for any cloud / EE app
+  that does not pin `app.defaultAgent`. (Open editions have no in-product `ask`;
+  use MCP.)
 - **`build`** — the **authoring product** (≈ Claude Code). Agentic authoring of
   *metadata* (objects, fields, views, flows) through plan → draft → verify →
   publish. Builder audience, governance-gated. Canonical id `build`. Cloud-only ·
@@ -126,19 +131,26 @@ To grant data exploration to your own (platform-internal) agent, add
 > instead of dead-ending — this is intentional tiering. Do not assume authoring
 > tools resolve in the open framework.
 
-> **`visualize_data` (#1820/#1821):** the only built-in tool that draws a chart —
+> **`visualize_data`:** the only built-in tool that draws a chart —
 > it aggregates an object and emits an inline `data-chart` part. Auto-registered
 > **only** when an analytics service (`IAnalyticsService`) is wired; `query_data` /
 > `aggregate_data` return numbers, not charts.
 
 > **Ops:** set `AI_DAILY_USER_MESSAGES=<N>` to cap user turns per user per day
-> (ADR-0040 §5; backed by the `ai_usage_daily` object, no-op if unset). Adapter
-> health is observable at `GET /api/v1/ai/status`; invalid `ai` settings are
-> rejected at save time (#1788).
+> (backed by the `ai_usage_daily` object; no-op if unset). Adapter health is
+> observable at `GET /api/v1/ai/status`; invalid `ai` settings are rejected at
+> save time.
 
 ---
 
 ## Agent Configuration
+
+> **Reference only — third parties do not author agents.** The `agent` type is
+> closed (`allowRuntimeCreate:false`; ADR-0063 §2): the platform ships exactly
+> `ask` and `build`, maintained by platform / cloud plugin authors. You extend
+> the platform with **skills + tools** (and knowledge sources) — never by
+> adding an agent. This section documents `AgentSchema` for reading existing
+> agents and for platform-internal work.
 
 ### Required Properties
 
@@ -155,13 +167,18 @@ To grant data exploration to your own (platform-internal) agent, add
 |:---------|:--------|
 | `skills` | Array of skill names — **primary capability model** |
 | `tools` | Direct tool references — legacy fallback |
-| `model` | LLM model configuration |
-| `knowledge` | RAG knowledge sources |
-| `guardrails` | Safety constraints and topic restrictions |
+| `surface` | `'ask' \| 'build'` — the product surface this agent is (default `'ask'`) |
+| `model` | LLM model configuration — `provider`, `model`, `temperature`, `maxTokens`, `topP` |
+| `knowledge` | RAG access — `sources` (canonical; `topics` is a deprecated alias) + `indexes` |
+| `guardrails` | `maxTokensPerInvocation`, `maxExecutionTimeSec`, `blockedTopics` |
 | `structuredOutput` | Output format (JSON schema, regex, etc.) |
-| `temperature` | LLM creativity level (0.0–2.0) |
-| `maxTokens` | Response token limit |
+| `planning` | Autonomous reasoning — `maxIterations` (default 10) |
+| `memory` | `longTerm` persistence + `reflectionInterval` |
+| `permissions` | Permission-set capabilities required to use the agent |
 | `active` | Enable/disable the agent |
+
+There is **no top-level `temperature` / `maxTokens`** on an agent — sampling
+parameters live under `model` (`AIModelConfigSchema`).
 
 ### Agent Example
 
@@ -210,18 +227,19 @@ trigger conditions.
 |:---------|:-----|:------------|
 | `name` | `snake_case` | Unique skill identifier (`/^[a-z_][a-z0-9_]*$/`) |
 | `label` | string | Human-readable name |
-| `tools` | `string[]` | Tool names this skill grants access to |
-| `active` | boolean | Is the skill enabled (default: `true`) |
+| `tools` | `string[]` | Tool names this skill grants access to (trailing wildcard allowed, e.g. `action_*`) |
 
 ### Important Optional Properties
 
 | Property | Purpose |
 |:---------|:--------|
+| `surface` | `'ask' \| 'build' \| 'both'` — agent surface affinity (default `'ask'`; see above) |
 | `description` | What the skill does — helps the agent decide when to use it |
 | `instructions` | LLM prompt guidance specific to this skill's context |
 | `triggerPhrases` | Natural language phrases that activate the skill |
 | `triggerConditions` | Programmatic activation rules |
 | `permissions` | Required permission profiles/roles |
+| `active` | Is the skill enabled (default: `true`) |
 
 ### Skill Example
 
@@ -252,7 +270,7 @@ export default defineSkill({
     'Escalate this issue',
   ],
   triggerConditions: [
-    { field: 'object', operator: 'eq', value: 'support_case' },
+    { field: 'objectName', operator: 'eq', value: 'support_case' },
   ],
   permissions: ['support_agent', 'support_admin'],
   active: true,
@@ -275,32 +293,67 @@ export default defineSkill({
 
 Tools are the atomic operations that skills expose to agents.
 
-### Tool Types
+### First-Class Tool Metadata (`defineTool`)
 
-| Type | Purpose | Example |
-|:-----|:--------|:--------|
-| `action` | Trigger a server-side action | "Close case", "Send email" |
-| `flow` | Launch a flow | "Reset password flow" |
-| `query` | Query ObjectStack records | "Get open cases for account" |
-| `vector_search` | Semantic search over embeddings | "Find similar articles" |
+A tool authored as metadata (`type: 'tool'`, `*.tool.ts`) is validated by
+`ToolSchema`: required `name` / `label` / `description`, a **JSON Schema**
+`parameters` object, plus optional `category`, `objectName`, `outputSchema`,
+`requiresConfirmation` (default `false`), `permissions`, `active`.
 
-### Tool Definition
-
+<!-- os:check -->
 ```typescript
-{
-  name: 'query_support_case',
-  type: 'query',
-  object: 'support_case',
-  description: 'Search support cases by any combination of filters.',
+import { defineTool } from '@objectstack/spec';
+
+export default defineTool({
+  name: 'create_case',
+  label: 'Create Support Case',
+  description: 'Creates a new support case record',
+  category: 'action',
   parameters: {
-    status: { type: 'string', description: 'Filter by case status' },
-    account_id: { type: 'string', description: 'Filter by account ID' },
-    priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'] },
+    type: 'object',
+    properties: {
+      subject: { type: 'string', description: 'Case subject' },
+      priority: { type: 'string', enum: ['low', 'medium', 'high'] },
+    },
+    required: ['subject'],
   },
-}
+  objectName: 'support_case',
+  requiresConfirmation: true,
+});
 ```
 
+The optional `category` classifies the tool's operational domain:
+
+| Category | Purpose |
+|:---------|:--------|
+| `data` | CRUD / query operations |
+| `action` | Side-effect actions (send email, create record) |
+| `flow` | Trigger a visual flow |
+| `integration` | External API / webhook calls |
+| `vector_search` | RAG / vector search |
+| `analytics` | Aggregation & reporting |
+| `utility` | Formatters, parsers, helpers |
+
+> **Tool metadata is a read-only projection — not an execution entry point.**
+> `ToolSchema` has no `handler` / `implementation` field, and no framework
+> executor loads a metadata-authored tool. The runtime executes a
+> separately-registered `AIToolDefinition` (cloud `@objectstack/service-ai`);
+> tool metadata is a one-way projection for Studio / discovery. Do not expect a
+> hand-authored tool to run in the open edition (liveness audit #1878/#1892).
+
+### Inline Agent `tools[]` (legacy)
+
+Entries in an agent's inline `tools[]` array are a **different, legacy shape**
+(`AIToolSchema`): `{ type: 'action' | 'flow' | 'query' | 'vector_search',
+name, description? }` — references to existing actions / flows / queries, not
+tool definitions. Prefer skills + first-class tool names.
+
 ### Auto-Exposed Actions
+
+> **Cloud / EE runtime.** `registerActionsAsTools()`, `AIServicePlugin`, and
+> the HITL approval queue below ship in `@objectstack/service-ai` — the closed
+> cloud / Enterprise runtime, not an open package. On the open edition, expose
+> actions to your own AI via `@objectstack/mcp` instead.
 
 You usually **don't author tool definitions by hand** for action invocation. Every `Action` you attach to an object via `defineObject({ actions: [...] })` is auto-exposed as a tool named `action_<actionName>` by `registerActionsAsTools()` (invoked from `AIServicePlugin`).
 
@@ -319,9 +372,12 @@ Three action types dispatch headlessly:
 
 **`type:'api'` body assembly** (last wins): user params → `recordIdParam` (using `recordIdField`, default `'id'`) → `bodyExtra`. `bodyShape: { wrap: 'data' }` nests user params under `data` while keeping `recordIdParam` flat.
 
-Use `actionSkipReason(action, ctx)` (exported from `@objectstack/service-ai`) when authoring an action and you want to know *why* it isn't surfacing in chat. Studio's "AI exposure" diagnostics use the same predicate. Pair with `actionRequiresApproval(action)` to know whether a registered action will be routed through HITL.
+Use `actionSkipReason(action, ctx)` (exported from `@objectstack/service-ai` — cloud-only, not importable on the open edition) when authoring an action and you want to know *why* it isn't surfacing in chat. Studio's "AI exposure" diagnostics use the same predicate. Pair with `actionRequiresApproval(action)` to know whether a registered action will be routed through HITL.
 
 ### Human-In-The-Loop approval
+
+> **Cloud / EE runtime.** The HITL approval queue is part of
+> `@objectstack/service-ai` and is not available in the open framework.
 
 ```ts
 kernel.use(new AIServicePlugin({
@@ -340,55 +396,78 @@ Programmatic API on `IAIService`: `proposePendingAction`, `approvePendingAction`
 
 ---
 
-## RAG Pipeline Configuration
+## Knowledge Sources (RAG)
 
-Retrieval-Augmented Generation gives agents access to domain knowledge.
+The platform's RAG primitive is the **KnowledgeSource**
+(`KnowledgeSourceSchema` in `@objectstack/spec/ai`): declarative metadata
+pairing *what to index* with the id of an `IKnowledgeAdapter` that does the
+work. Sources are registered at runtime via
+`IKnowledgeService.registerSource()` (there is no `defineStack` collection for
+them), and the `search_knowledge` tool exposes registered sources to agents.
 
-### RAG Pipeline Structure
+### KnowledgeSource Structure
 
+| Property | Purpose |
+|:---------|:--------|
+| `id` | Snake_case source id |
+| `label` / `description` | Display metadata |
+| `adapter` | Adapter id (e.g. `'ragflow'`, `'memory'`), resolved via `IKnowledgeService.registerAdapter` |
+| `adapterConfig` | Adapter-specific configuration (opaque to the service) |
+| `source` | What gets indexed — discriminated on `kind`: `'object'` \| `'file'` \| `'http'` |
+| `embedding` | Optional `EmbeddingModelSchema` ref (`provider`, `model`, `dimensions`) — adapters that manage embeddings internally (RAGFlow, Dify, Vectara) may ignore it |
+| `vectorStore` | Optional `VectorStoreSchema` ref (`provider`, `collection`) — same caveat |
+| `refresh` | `onRecordChange` (default `true` for object sources) + optional `cron` (surfaced for an external scheduler, not self-scheduled) |
+| `aiExposed` | Whether `search_knowledge` may expose this source to agents (default `true`) |
+
+Source kinds:
+
+| `source.kind` | Fields |
+|:--------------|:-------|
+| `object` | `object`, `contentFields[]` (min 1; `*` = every readable text field), `metadataFields?`, `where?` (ObjectQL `where` syntax) |
+| `file` | `prefix` (storage prefix, e.g. `kb/handbooks/`), `mimeTypes?` |
+| `http` | `urls[]`, `userAgent?` |
+
+### Knowledge Source Example
+
+<!-- os:check -->
 ```typescript
-{
-  name: 'support_knowledge',
+import { KnowledgeSourceSchema, type KnowledgeSource } from '@objectstack/spec/ai';
+
+export const supportKb: KnowledgeSource = KnowledgeSourceSchema.parse({
+  id: 'support_kb',
   label: 'Support Knowledge Base',
-  sources: [
-    {
-      type: 'object',
-      object: 'knowledge_article',
-      fields: ['title', 'content', 'category'],
-      filter: [{ field: 'published', operator: 'equals', value: true }],
-    },
-    {
-      type: 'document',
-      path: 'docs/support-handbook.md',
-    },
-  ],
-  indexes: [
-    {
-      name: 'article_embeddings',
-      model: 'text-embedding-3-small',
-      dimensions: 1536,
-      distanceMetric: 'cosine',
-    },
-  ],
-  retrieval: {
-    topK: 5,
-    scoreThreshold: 0.75,
-    reranker: 'cohere-rerank-v3',
+  adapter: 'ragflow',                       // or 'memory' for dev/test
+  source: {
+    kind: 'object',
+    object: 'kb_article',
+    contentFields: ['title', 'body'],       // concatenated into document content
+    metadataFields: ['category', 'owner_id'], // projected for search-time filtering
+    where: { published: true },             // index published articles only
   },
-}
+  refresh: { onRecordChange: true },        // re-index on record.* events
+});
 ```
 
-### RAG Best Practices
+> **Chunking, top-K, score thresholds, and rerankers are NOT platform
+> metadata.** The spec deliberately scopes them out (`embedding.zod.ts`):
+> chunking strategies, retrieval pipelines, and RAG orchestration belong to
+> the adapter (`adapterConfig`) or application code. The platform only carries
+> the embed + vector primitives so any RAG strategy can be built on top.
 
-1. **Chunk documents appropriately.** 500–1000 tokens per chunk with 100-token
-   overlap works well for most use cases.
-2. **Set a `scoreThreshold`** to filter low-relevance results. Start with `0.7`
-   and tune.
-3. **Use a reranker** for better precision when the initial retrieval returns
-   many candidates.
-4. **Filter by published/active status** to avoid surfacing draft or archived
-   content.
-5. **Index only searchable fields** — do not index system fields or IDs.
+### Knowledge Source Best Practices
+
+1. **Filter with `where`.** Index only published/active records
+   (`where: { published: true }`) so draft or archived content never enters
+   the index.
+2. **Index only meaningful text via `contentFields`.** Do not include system
+   fields or IDs; use `*` (all readable text fields) sparingly.
+3. **Project filter fields into `metadataFields`** (e.g. `status`, `owner_id`,
+   `tags`) so searches can be narrowed at query time.
+4. **Hide with `aiExposed: false`** when a source should be indexed but not
+   agent-searchable.
+5. **Tune relevance in the adapter, not the metadata.** Top-K, thresholds, and
+   reranking are configured in your RAG backend (via `adapterConfig`), not in
+   ObjectStack metadata.
 
 ---
 
@@ -444,9 +523,16 @@ structuredOutput: {
     },
     required: ['summary', 'priority'],
   },
-  retry: { maxAttempts: 3 },
+  strict: true,     // enforce exact schema compliance (default: false)
+  maxRetries: 3,    // max retries on validation failure (default: 3)
 }
 ```
+
+On validation failure the runtime retries by default
+(`retryOnValidationFailure: true`). Optional extras: `fallbackFormat` and a
+`transformPipeline` of post-processing steps (`trim`, `parse_json`,
+`validate`, `coerce_types`). There is no `retry` object — the knobs are
+`retryOnValidationFailure` + `maxRetries`.
 
 ---
 
@@ -456,37 +542,44 @@ structuredOutput: {
    more. Be specific about what the agent should and should not do.
 2. **Too many tools per skill.** Keep skills focused (3–8 tools). If a skill
    has 15+ tools, split it.
-3. **Missing guardrails.** Always define `blockedTopics` and
-   `requireApprovalFor` destructive operations.
+3. **Missing guardrails and approval gates.** Define `blockedTopics` (plus the
+   token / time budgets) in agent `guardrails`; for destructive operations put
+   a human in the loop — `requiresConfirmation: true` on the tool,
+   `approval: 'always'` on an MCP tool binding, `enableActionApproval: true`
+   (HITL queue, cloud) for auto-exposed actions. There is no
+   `requireApprovalFor` field.
 4. **Ignoring tool descriptions.** The LLM uses tool `description` to decide
    when to call it. Poor descriptions = wrong tool selection.
 5. **Not testing trigger phrases.** Ambiguous trigger phrases cause skill
    conflicts. Test with edge-case inputs.
-6. **RAG without score threshold.** Without a threshold, low-relevance
-   passages pollute the context window and degrade responses.
+6. **Indexing everything.** A knowledge source without a `where` filter and
+   curated `contentFields` fills the index with drafts and boilerplate that
+   pollute retrieval. Source hygiene is the metadata's job; relevance tuning
+   (top-K, thresholds, reranking) belongs to the adapter.
 
 ---
 
-## CRM AI Blueprint (Agent + Skill + RAG)
+## App AI Blueprint (Skills + Tools + Knowledge)
 
-Reference implementation shape: `src/{agents,skills,rag}/`
+Reference layout for a scaffolded app:
 
-| Layer | CRM File | Pattern |
+| Layer | File | Pattern |
 |:--|:--|:--|
-| Persona agent | `agents/sales-copilot.agent.ts` | Keep agent role-focused; compose capabilities via `skills[]` |
-| Reusable skill | `skills/lead-qualification.skill.ts` | Encode trigger phrases + trigger conditions + bounded toolset |
-| Knowledge pipeline | `rag/sales-knowledge.rag.ts` | Define embedding, vector store, chunking, retrieval, reranking as metadata |
-| Central registration | `agents/index.ts`, `skills/index.ts`, `rag/index.ts` | Export typed aggregates and register in `defineStack()` |
+| Reusable skill | `src/skills/lead-qualification.skill.ts` | `defineSkill` — trigger phrases + trigger conditions + bounded toolset; pick a `surface` |
+| Tool metadata | `src/tools/query-leads.tool.ts` | `defineTool` — JSON-Schema `parameters`; a discovery projection, not an executor (see caveat above) |
+| Knowledge source | `src/knowledge/sales-kb.ts` | `KnowledgeSourceSchema` metadata, registered at runtime via `IKnowledgeService.registerSource()` |
+| Central registration | `defineStack({ skills: [...], tools: [...] })` | `agents` / `tools` / `skills` are the only AI stack collections — knowledge sources have none; agents are platform-supplied |
 
-Default for metadata apps: keep **few persona agents**, push business capability
-logic into **skills**, and wire domain knowledge through **RAG pipelines**.
+Default for metadata apps: push business capability logic into **skills**, keep
+tools atomic, and wire domain knowledge through **knowledge sources**.
 
 ---
 
 ## Verify your work
 
-After authoring a `*.agent.ts` / `*.tool.ts` / `*.skill.ts` or a model-registry
-entry, run the author-time gate before reporting done:
+After authoring a `*.skill.ts` / `*.tool.ts` (or platform-internal
+`*.agent.ts`) or a model-registry entry, run the author-time gate before
+reporting done:
 
 ```bash
 os validate     # Zod schema + CEL predicate validation + bindings (no artifact)
