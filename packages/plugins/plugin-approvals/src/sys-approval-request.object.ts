@@ -248,6 +248,10 @@ export const SysApprovalRequest = ObjectSchema.create({
       target: '/api/v1/approvals/requests/{id}/approve',
       params: [
         { name: 'comment', label: 'Comment', type: 'textarea', required: false },
+        // Decision attachments (#3266). The console renders `type:'file'` params
+        // through the shared upload widget and POSTs the resolved `attachments:
+        // string[]`; the decision route persists them on `sys_approval_action`.
+        { name: 'attachments', label: 'Attachments', type: 'file', multiple: true, required: false },
       ],
       visible: 'record.status == "pending"',
       locations: ['record_section', 'list_item'],
@@ -263,6 +267,7 @@ export const SysApprovalRequest = ObjectSchema.create({
       target: '/api/v1/approvals/requests/{id}/reject',
       params: [
         { name: 'comment', label: 'Comment', type: 'textarea', required: false },
+        { name: 'attachments', label: 'Attachments', type: 'file', multiple: true, required: false },
       ],
       visible: 'record.status == "pending"',
       confirmText: 'Reject this request? A rejection is final for every approver.',

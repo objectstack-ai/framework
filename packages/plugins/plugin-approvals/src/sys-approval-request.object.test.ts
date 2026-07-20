@@ -91,4 +91,12 @@ describe('sys_approval_request declared actions', () => {
       expect(c.required ?? false).toBe(false);
     }
   });
+
+  it('approve/reject collect optional multi-file decision attachments', () => {
+    for (const name of ['approval_approve', 'approval_reject']) {
+      const att = byName(name).params.find((p: any) => p.name === 'attachments');
+      expect(att, `${name}.attachments`).toMatchObject({ type: 'file', multiple: true });
+      expect(att.required ?? false).toBe(false);
+    }
+  });
 });
