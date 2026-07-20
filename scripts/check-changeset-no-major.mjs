@@ -22,8 +22,17 @@
  * Exits with code 1 (and a clear list of offenders) if any changeset frontmatter
  * bumps a package `major`.
  *
- * ESCAPE HATCH: when a major release is genuinely intended, gate this check off
- * in CI with the `allow-major` PR label (see `.github/workflows/pr-automation.yml`).
+ * RC EXEMPTION: when Changesets is in pre-release mode (`.changeset/pre.json`
+ * with `"mode": "pre"`, entered via `changeset pre enter <tag>`), a `major`
+ * bump only ever produces a `X.0.0-<tag>.N` PRE-RELEASE version — nothing final
+ * publishes until `changeset pre exit`. Accumulating the next major's breaking
+ * changes is precisely what an RC window is FOR, so this guard stands aside for
+ * the duration and re-arms automatically once pre-mode is exited. The pending
+ * majors are still printed (informationally) so the RC curator can eyeball them.
+ *
+ * ESCAPE HATCH: outside pre-mode, when a major release is genuinely intended,
+ * gate this check off in CI with the `allow-major` PR label (see
+ * `.github/workflows/pr-automation.yml`).
  *
  * The script intentionally has zero third-party dependencies so it can run in
  * minimal CI environments before `pnpm install`.
@@ -80,6 +89,26 @@ for (const name of entries) {
 if (offenders.length === 0) {
   console.log('✓ No `major` bumps in pending changesets.');
   process.exit(0);
+}
+
+// RC exemption: in Changesets pre-release mode a `major` only yields a
+// `X.0.0-<tag>.N` pre-release — the intended product of an RC window — and
+// nothing final ships until `changeset pre exit`. Surface the pending majors
+// for the RC curator, but do not fail. The guard re-arms once pre-mode exits.
+try {
+  const pre = JSON.parse(readFileSync(join(changesetDir, 'pre.json'), 'utf8'));
+  if (pre?.mode === 'pre') {
+    console.log(
+      `✓ Changesets is in pre-release mode (tag: ${pre.tag ?? 'unknown'}) — ` +
+        '`major` bumps are the expected product of an RC window; skipping the no-major guard.',
+    );
+    for (const { file, majors } of offenders) {
+      console.log(`::notice file=${file}::pending major in ${file}: ${majors.join(', ')}`);
+    }
+    process.exit(0);
+  }
+} catch {
+  // No readable `.changeset/pre.json` → not in pre-mode → fall through to the guard.
 }
 
 console.error('⛔ Changeset(s) declare a `major` bump.\n');
