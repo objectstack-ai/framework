@@ -238,6 +238,31 @@ describe('ObjectStackProtocolImplementation - Dynamic Service Discovery', () => 
     expect(discovery.capabilities!.comments).toEqual({ enabled: false });
   });
 
+  // ── Atomic cross-object batch capability (#3298 / #1604 / ADR-0034) ─────────
+  // The bit tracks whether the runtime engine can honour a transaction (the
+  // REST /batch endpoint runs inside `engine.transaction()`), NOT a registered
+  // service — so it is independent of the services map.
+  it('advertises transactionalBatch when the engine exposes transaction() — the real ObjectQL engine (#3298)', async () => {
+    protocol = new ObjectStackProtocolImplementation(engine);
+    const discovery = await protocol.getDiscovery();
+
+    // ObjectQL always implements transaction() (ADR-0034), so a real engine
+    // reports the capability regardless of which services are registered.
+    expect(typeof (engine as unknown as { transaction?: unknown }).transaction).toBe('function');
+    expect(discovery.capabilities!.transactionalBatch).toEqual({ enabled: true });
+  });
+
+  it('does NOT advertise transactionalBatch when the engine has no transaction() (declared === enforced, #3298)', async () => {
+    // A minimal engine without transaction(): the /batch endpoint would 501, so
+    // discovery must report false — never let a client drop its non-atomic
+    // fallback against a runtime that cannot honour an atomic batch.
+    const noTxEngine = { registry: { getObject: () => undefined } } as any;
+    protocol = new ObjectStackProtocolImplementation(noTxEngine);
+    const discovery = await protocol.getDiscovery();
+
+    expect(discovery.capabilities!.transactionalBatch).toEqual({ enabled: false });
+  });
+
   it('should enable comments capability when the sys_comment object is registered (#3180)', async () => {
     // comments/chatter are served by the sys_comment object via the data API
     // (ADR-0052 §5), not a dedicated service — so the capability tracks that

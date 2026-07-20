@@ -1860,6 +1860,27 @@ export class RestServer {
                         }
                     }
 
+                    // Cross-object atomic batch capability (#3298). `declared ===
+                    // enforced`: advertise it only when THIS server actually mounts
+                    // the `/batch` route (`api.enableBatch`, gated in
+                    // registerBatchEndpoints) AND the runtime engine can honour a
+                    // transaction (the protocol derived that from `engine.transaction`).
+                    // AND-ing the two keeps us from advertising an endpoint that would
+                    // 404 (batch disabled) or 501 (engine without `transaction()`), so
+                    // a client can safely drop its non-atomic fallback on `true`.
+                    const caps = ((discovery as any).capabilities ??= {}) as Record<
+                        string,
+                        { enabled: boolean; description?: string }
+                    >;
+                    const runtimeSupportsTx = !!caps.transactionalBatch?.enabled;
+                    caps.transactionalBatch = {
+                        enabled: runtimeSupportsTx && this.config.api.enableBatch !== false,
+                        description:
+                            'Atomic cross-object batch endpoint (POST {basePath}/batch): all-or-nothing '
+                            + 'create/update/delete across objects in one transaction, with intra-batch '
+                            + '{ $ref: <opIndex> } parent references (#1604 / ADR-0034).',
+                    };
+
                     // Attach scoping metadata so clients can detect dual-mode routing.
                     (discovery as any).scoping = {
                         enabled: this.config.api.enableProjectScoping,

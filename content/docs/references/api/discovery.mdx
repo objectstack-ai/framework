@@ -160,6 +160,7 @@ Well-known capability flags for frontend intelligent adaptation
 | **search** | `boolean` | ✅ | Whether the backend supports full-text search |
 | **export** | `boolean` | ✅ | Whether the backend supports async export |
 | **chunkedUpload** | `boolean` | ✅ | Whether the backend supports chunked (multipart) uploads |
+| **transactionalBatch** | `boolean` | ✅ | Whether the backend exposes the atomic cross-object batch endpoint (POST `{basePath}`/batch, #1604/ADR-0034): all ops commit or roll back together in one transaction. Lets clients skip non-atomic client-side simulation instead of runtime-probing 404/405/501. True ⟺ the /batch route is mounted AND the runtime can honour a transaction. |
 
 
 ---

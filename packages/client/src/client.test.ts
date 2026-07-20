@@ -890,6 +890,32 @@ describe('ObjectStackClient.automation', () => {
         expect(client.capabilities!.automation).toBe(false);
         expect(client.capabilities!.search).toBe(true);
     });
+
+    it('should expose the transactionalBatch capability (hierarchical → flat) for declarative negotiation (#3298)', async () => {
+        // A real backend serves the hierarchical shape `{ key: { enabled } }`.
+        // The client normalizes it to a flat boolean so callers can decide at
+        // connect time whether to send an atomic batch or fall back to
+        // non-atomic simulation — instead of runtime-probing POST /batch.
+        const fetchMock = vi.fn().mockResolvedValue({
+            ok: true,
+            json: async () => ({
+                version: 'v1',
+                apiName: 'ObjectStack API',
+                capabilities: {
+                    comments: { enabled: false },
+                    transactionalBatch: { enabled: true },
+                },
+            }),
+        });
+
+        const client = new ObjectStackClient({
+            baseUrl: 'http://localhost:3000',
+            fetch: fetchMock,
+        });
+
+        await client.connect();
+        expect(client.capabilities!.transactionalBatch).toBe(true);
+    });
 });
 
 // ==========================================
