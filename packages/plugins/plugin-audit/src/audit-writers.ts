@@ -312,6 +312,24 @@ export function installAuditWriters(
     return value;
   };
 
+  // Translate function bound to a locale. Returns undefined on any miss
+  // (no locale / no i18n / key miss) so callers keep their English fallback
+  // (framework#3039).
+  const translateWith =
+    (locale: string | undefined) =>
+    (key: string, params?: Record<string, unknown>): string | undefined => {
+      if (!locale) return undefined;
+      const i18n = getI18n();
+      if (!i18n || typeof i18n.t !== 'function') return undefined;
+      try {
+        const value = i18n.t(key, locale, params);
+        // A miss returns the key verbatim (II18nService contract).
+        return typeof value === 'string' && value !== key ? value : undefined;
+      } catch {
+        return undefined;
+      }
+    };
+
   // Remove any prior installation so we can safely re-install on hot reload.
   if (typeof engine.unregisterHooksByPackage === 'function') {
     engine.unregisterHooksByPackage(packageId);
@@ -379,6 +397,20 @@ export function installAuditWriters(
     }
     objectDefCache.set(objectName, def);
     return def;
+  };
+
+  // Display label for an object under a given translate fn: translated label
+  // → authored def label → API name. Shared by activity summaries and the
+  // collaboration notification titles below.
+  const displayLabelFor = (
+    objectName: string,
+    translate: (key: string, params?: Record<string, unknown>) => string | undefined,
+  ): string => {
+    const def = getObjectDef(objectName);
+    return (
+      translate(`objects.${objectName}.label`) ??
+      (typeof def?.label === 'string' && def.label.length > 0 ? def.label : objectName)
+    );
   };
 
   /**
@@ -521,24 +553,8 @@ export function installAuditWriters(
     // default locale (ADR-0053, framework#3039). Every step is best-effort:
     // no locale / no i18n / key miss all degrade to the English literal.
     const locale = await resolveWriteLocale(tenantId, userId);
-    const translate = (key: string, params?: Record<string, unknown>): string | undefined => {
-      if (!locale) return undefined;
-      const i18n = getI18n();
-      if (!i18n || typeof i18n.t !== 'function') return undefined;
-      try {
-        const value = i18n.t(key, locale, params);
-        // A miss returns the key verbatim (II18nService contract).
-        return typeof value === 'string' && value !== key ? value : undefined;
-      } catch {
-        return undefined;
-      }
-    };
-    const objectDef = getObjectDef(ctx.object);
-    const objectDisplay =
-      translate(`objects.${ctx.object}.label`) ??
-      (typeof objectDef?.label === 'string' && objectDef.label.length > 0
-        ? objectDef.label
-        : ctx.object);
+    const translate = translateWith(locale);
+    const objectDisplay = displayLabelFor(ctx.object, translate);
     let summary: string;
     let activityType: string = activityTypeFor(action);
     if (action === 'create') {
@@ -614,6 +630,16 @@ export function installAuditWriters(
         after,
         actorId: userId ?? null,
         tenantId: tenantId ?? null,
+        // Localize the bell title to the RECIPIENT's locale (they read it),
+        // not the acting user's — same key shapes as the activity summaries.
+        makeTitle: async (recipientId) => {
+          const rTranslate = translateWith(await resolveWriteLocale(tenantId, recipientId));
+          const objectLabel = displayLabelFor(ctx.object, rTranslate);
+          return (
+            rTranslate('messages.assignedToYou', { object: objectLabel, label }) ??
+            `${objectLabel} "${label}" assigned to you`
+          );
+        },
       });
     } catch (err) {
       // Log via engine logger if available, but never throw.
@@ -729,6 +755,12 @@ export function installAuditWriters(
     for (const uid of userIds) {
       if (uid === actorId) continue; // don't notify the mention author
       try {
+        // Localized to the mentioned user's locale (same rationale as the
+        // assignment titles); miss → English literal.
+        const tr = translateWith(await resolveWriteLocale(tenantId ?? undefined, uid));
+        const title = actorName
+          ? (tr('messages.mentionedYou', { actor: actorName }) ?? `${actorName} mentioned you`)
+          : (tr('messages.mentionedYouAnonymous') ?? 'You were mentioned');
         // ADR-0030 single ingress — emit() writes the L2 event and the inbox
         // channel materializes the bell row + a delivered receipt.
         await messaging.emit({
@@ -740,7 +772,7 @@ export function installAuditWriters(
           organizationId: tenantId ?? undefined,
           dedupKey: commentId ? `collab.mention:${commentId}:${uid}` : undefined,
           payload: {
-            title: actorName ? `${actorName} mentioned you` : 'You were mentioned',
+            title,
             body: bodyPreview,
             actorName,
           },
@@ -780,6 +812,12 @@ async function writeAssignmentNotifications(
     after: any;
     actorId: string | null;
     tenantId: string | null;
+    /**
+     * Build the (recipient-locale-localized) notification title. Optional —
+     * absent or throwing, the English literal below is used, with the raw
+     * object API name (pre-#3039 behavior).
+     */
+    makeTitle?: (recipientId: string) => Promise<string>;
   },
 ): Promise<void> {
   if (!messaging) return; // no pipeline installed → no assignment notifications
@@ -791,6 +829,15 @@ async function writeAssignmentNotifications(
   if (!newOwner) return;
   if (params.action === 'update' && newOwner === oldOwner) return;
   if (newOwner === params.actorId) return; // self-assignment is silent
+
+  let title = `${params.object} "${params.label}" assigned to you`;
+  if (params.makeTitle) {
+    try {
+      title = await params.makeTitle(newOwner);
+    } catch {
+      /* keep the English fallback */
+    }
+  }
 
   try {
     // ADR-0030 single ingress — emit() writes the L2 event and the inbox
@@ -817,7 +864,7 @@ async function writeAssignmentNotifications(
         ? `collab.assignment:${params.object}:${params.recordId}:${newOwner}:${writeVersion}`
         : undefined,
       payload: {
-        title: `${params.object} "${params.label}" assigned to you`,
+        title,
       },
     });
   } catch {
