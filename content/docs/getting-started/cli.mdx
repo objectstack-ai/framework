@@ -42,7 +42,7 @@ os generate flow onboarding    # Add an automation flow
 os dev --ui
 ```
 
-Open [http://localhost:3000/_console/](http://localhost:3000/_console/) — you'll see the Console UI with a data browser, metadata explorer, and API documentation.
+Open [http://localhost:3000/_console/](http://localhost:3000/_console/) — you'll see the Console UI with a data browser, metadata explorer, and API documentation. Sign in with the seeded dev admin (`admin@objectos.ai` / `admin123`) — `os dev` provisions it automatically on an empty database. The boot banner also prints the app's MCP endpoint (`/api/v1/mcp`) so a coding agent can connect to the running app.
 
 ### Validate & Build
 
@@ -138,7 +138,13 @@ os dev --database file:./data/test.db --auth-secret $(openssl rand -hex 32)
 | `-p, --port <n>` | `OS_PORT` / `PORT` | Listen port (default `3000`). In dev a busy port auto-hops to the next free one; the banner shows the actual port. |
 | `--ui` | — | Force Console UI on (already on by default in dev) |
 | `--compile` | — | Force compiling `objectstack.config.ts` → `dist/objectstack.json` before starting (auto when the artifact is missing; ignored with `--artifact`) |
+| `--fresh` | — | Ephemeral `OS_HOME` in the OS tempdir (clean DB, uploads, storage), auto-deleted on exit; implies `--seed-admin` |
+| `--seed-admin` / `--no-seed-admin` | — | Seed a dev admin (`admin@objectos.ai` / `admin123`) on an empty DB — default on; override with `--admin-email` / `--admin-password` |
 | `-v, --verbose` | — | Verbose output |
+
+By default `os dev` keeps your data between restarts in a project-local SQLite
+file at `.objectstack/data/dev.db` (created on first run). Pass `--database`,
+set `OS_DATABASE_URL`, or use `--fresh` for a throwaway run.
 
 With a file-backed SQLite database, dev also provisions a sibling
 `<db>.telemetry.<ext>` file registered as the `telemetry` datasource —
@@ -194,7 +200,8 @@ only gate the **automatic** registration of optional plugins.
 
 The `auth` tier requires `OS_AUTH_SECRET` to be set; otherwise `AuthPlugin`
 is skipped with a yellow warning and the `/api/v1/auth/*` endpoints will
-return 404. To take full control, set `tiers` on the stack config:
+return 404. (In `--dev` mode the CLI falls back to an insecure local secret so
+login works out of the box.) To take full control, set `tiers` on the stack config:
 
 ```typescript
 import { defineStack } from '@objectstack/spec';
@@ -250,9 +257,8 @@ exploration, package management, and runtime metadata diagnostics.
 └─────────────────────────────────────────┘
 ```
 
-In this framework repo the prebuilt console bundle is served at `/_console/`.
-For source-level Console UI work, run the sibling `../objectui` Vite server and
-point it at a backend on port 3000.
+The prebuilt Console bundle ships with the framework packages and is served at
+`/_console/` — no separate frontend install or build step is needed.
 
 ### Production
 
@@ -260,7 +266,10 @@ point it at a backend on port 3000.
 
 Boots a production server **directly from a compiled `objectstack.json` artifact** — no
 `objectstack.config.ts` required. This is the canonical "deploy a built ObjectStack app"
-command: hand a server one JSON file (or a URL pointing at one) and it runs.
+command: hand a server one JSON file (or a URL pointing at one) and it runs. When the cwd
+*does* contain an `objectstack.config.ts` and no artifact exists yet, `os start`
+auto-compiles it first; with no config and no artifact at all it boots an **empty kernel**
+with the Console + marketplace, so you can install apps interactively.
 
 ```bash
 # Quick start — load ./dist/objectstack.json with sqlite at file:<home>/data/objectstack.db
@@ -297,7 +306,8 @@ os start
 | `-d, --database <url>` | `OS_DATABASE_URL` | `file:…` / `libsql://` / `postgres://` / `mongodb://` / `memory://` |
 | `--database-driver <kind>` | `OS_DATABASE_DRIVER` | Force `sqlite` \| `turso` \| `postgres` \| `mongodb` \| `memory` when the URL is ambiguous |
 | `--database-auth-token <token>` | `OS_DATABASE_AUTH_TOKEN` | Auth token for libsql/Turso |
-| `--auth-secret <secret>` | `OS_AUTH_SECRET` | Secret for `@objectstack/plugin-auth`; without it `/api/v1/auth/*` is skipped (server still runs) |
+| `--auth-secret <secret>` | `OS_AUTH_SECRET` / `AUTH_SECRET` | Secret for `@objectstack/plugin-auth`. If neither the flag nor the env var is set, `os start` **auto-generates one** and persists it at `<home>/auth-secret` |
+| `--home <dir>` | `OS_HOME` | Home directory for persistent state (default `<cwd>/.objectstack` when an `objectstack.config.ts` is present, otherwise `~/.objectstack`) |
 | `--environment-id <id>` | `OS_ENVIRONMENT_ID` | Environment identifier (default `env_local`) |
 | `-p, --port <port>` | `OS_PORT` / `PORT` | Listen port (default `3000`). **Production fails loudly if the port is busy** — see note below. |
 | `--ui` / `--no-ui` | — | Mount the Console portal at `/_console/`. Enabled by default (so you can install marketplace apps); pass `--no-ui` to disable it. |
@@ -310,7 +320,7 @@ os start
 > (CORS). **Pin the port explicitly** (`OS_PORT=8080 os start`) and keep
 > `OS_AUTH_URL` / `OS_TRUSTED_ORIGINS` in sync when you change it.
 
-**Resolution priority (artifact):** `--artifact` > `OS_ARTIFACT_PATH` > `<cwd>/dist/objectstack.json`.
+**Resolution priority (artifact):** `--artifact` > `OS_ARTIFACT_PATH` > `<cwd>/dist/objectstack.json` > `<home>/dist/objectstack.json` > auto-compile from `objectstack.config.ts` (when present) > empty kernel.
 **Resolution priority (database):** `--database` > `OS_DATABASE_URL` > `DATABASE_URL` (legacy) > `file:<home>/data/objectstack.db`.
 
 **What it boots:**
@@ -320,7 +330,11 @@ os start
 - Runs standalone boot mode with one active environment.
 
 **Authentication:**
-The `auth` capability is auto-loaded only when both (1) the artifact declares `requires: [..., 'auth']` **and** (2) a secret is provided via `--auth-secret` or `OS_AUTH_SECRET`. Without a secret, `AuthPlugin` is **silently skipped with a warning** — the server still boots and serves data/REST routes, only `/api/v1/auth/*` (login/register) is omitted. This is intentional: `os start` is happy to run an unauthenticated, internal-network deployment.
+`os start` always resolves an auth secret — `--auth-secret` > `OS_AUTH_SECRET` /
+`AUTH_SECRET` env > a secret **auto-generated and persisted** at `<home>/auth-secret`
+on first run — so `/api/v1/auth/*` (login/register) and the Console's login flow work
+out of the box, without any manual secret provisioning. Set the env var (or flag)
+explicitly when you deploy across multiple nodes or want to rotate the secret.
 
 <Callout type="info">
 **`os start` vs `os serve`:** `os serve` boots from `objectstack.config.ts` (TypeScript source).
@@ -335,6 +349,7 @@ shape they accept. See [Source vs Artifact](#source-vs-artifact) below.
 | Command | Description |
 |---------|-------------|
 | `os compile [config]` | Compile configuration to a JSON artifact (`dist/objectstack.json`) |
+| `os build [config]` | Alias for `os compile` (scaffolded projects wire it as `npm run build`) |
 | `os validate [config]` | Validate schema, CEL predicates, and widget bindings — the same gates as `os compile`/`os build`, no artifact emitted |
 | `os info [config]` | Display metadata summary (objects, fields, apps, agents, etc.) |
 
@@ -358,17 +373,24 @@ os compile --json                    # JSON output for CI pipelines
 ────────────────────────────────────────
   → Loading configuration...
   Config: objectstack.config.ts
-  Load time: 104ms
+  Load time: 57ms
+  → Normalizing stack definition...
+  → Lowering inline handlers...
   → Validating protocol compliance...
+  → Validating expressions (ADR-0032)...
+  → Checking dashboard widget bindings (ADR-0021)...
+  → Checking SDUI styling (ADR-0065)...
+  → Checking security posture (ADR-0090 D7)...
+  → Collecting package docs (ADR-0046)...
   → Writing artifact...
 
-  ✓ Build complete (312ms)
+  ✓ Build complete (74ms)
 
-  Data: 10 Objects  217 Fields
-  UI: 1 Apps  3 Dashboards  8 Reports  10 Actions
-  Logic: 5 Flows  5 Agents  2 APIs
+  Data: 2 Objects  6 Fields
+  UI: 1 Views  1 Actions
+  Runtime: 3 plugins
 
-  Artifact: dist/objectstack.json (48.2 KB)
+  Artifact: dist/objectstack.json (7.6 KB)
 ```
 
 The resulting `dist/objectstack.json` is a **portable, self-describing deployment unit** —
@@ -434,21 +456,21 @@ os info --json         # JSON output for tooling
 ◆ Info
 ────────────────────────────────────────
 
-  Enterprise CRM v3.0.0
-  com.example.crm
-  Namespace: crm
-  Type: app
+  My App v0.1.0
+  my-app
+  Minimal ObjectStack environment — a clean slate for building.
+    Namespace: my_app
+    Type: app
 
-  Data: 10 Objects  217 Fields
-  UI: 1 Apps  3 Dashboards  8 Reports  10 Actions
-  Logic: 5 Flows  5 Agents  2 APIs
+  Data: 2 Objects  6 Fields
+  UI: 1 Views  1 Actions
+  Runtime: 3 plugins
 
   Objects:
-    account (16 fields, user) — Account
-    contact (24 fields, user) — Contact
-    ...
+    my_app_note (2 fields, user) — Note
+    my_app_ticket (4 fields, user) — Ticket
 
-  Loaded in 90ms
+  Loaded in 59ms
 ```
 
 ### Schema migrations
@@ -552,8 +574,20 @@ os create example my-app      # Create examples/my-app
 
 | Command | Description |
 |---------|-------------|
+| `os lint [config]` | Check metadata for style and convention issues (beyond `validate`'s hard gates) |
 | `os test [files]` | Run Quality Protocol test scenarios against a running server |
 | `os doctor` | Check development environment health |
+
+#### `os lint`
+
+Style and convention checks on top of `os validate` — naming, labels, translation coverage — with a 0-100 quality score:
+
+```bash
+os lint                # Style / convention checks
+os lint --score        # Append a 0-100 metadata quality score (letter-graded)
+os lint --fix          # Show what would be fixed (dry-run)
+os lint --json         # JSON output for CI
+```
 
 #### `os test`
 

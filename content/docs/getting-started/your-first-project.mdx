@@ -240,6 +240,10 @@ npm run validate
 bindings — the classes of mistakes that otherwise fail *silently* at runtime.
 See [Validating Metadata](/docs/getting-started/validating-metadata).
 
+Beyond pass/fail, `npx os lint --score` grades the data model 0–100 against the
+platform's design conventions (relationship patterns, missing select options,
+roll-ups, name fields) — a quick health check as the model grows.
+
 ## 6. Build the deployable artifact
 
 ```bash
@@ -257,6 +261,26 @@ npx os start --artifact ./dist/objectstack.json --port 8080
 Database URL, auth secret, and environment identity stay *outside* the
 artifact and are injected at boot via flags or `OS_*` environment variables —
 which is exactly what makes it container-friendly.
+
+## 7. Hand the project to your agent
+
+You just did by hand what an agent does in seconds — and the scaffolder already
+prepared the project for that handoff: the **skills bundle** is installed (step
+1.3) and `AGENTS.md` routes each task to the right skill and enforces the
+validate gate. Open the project in Claude Code (or Cursor / Copilot) and
+describe the next feature instead of typing it:
+
+> Add a `status` filter to the note list view, a dashboard with a metric of
+> published notes, and a daily flow that archives notes older than 90 days.
+> Run `npm run validate` when done.
+
+Each of those lands in a different metadata domain (UI, dashboards,
+automation) — the agent loads the matching skill per task. The full loop, and a
+per-domain prompt catalog, is on
+[Build with Claude Code](/docs/getting-started/build-with-claude-code#beyond-the-first-app--one-skill-per-metadata-domain).
+If you upgrade `@objectstack/spec` later, re-run
+`npx skills add objectstack-ai/framework/skills --all` to keep the agent in
+sync with the schemas you run.
 
 ## Next steps
 
