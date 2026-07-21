@@ -73,3 +73,148 @@ export const PLATFORM_CAPABILITY_TOKENS: readonly string[] = Object.freeze([
 export function isKnownPlatformCapability(token: string): boolean {
   return PLATFORM_CAPABILITY_TOKENS.includes(token);
 }
+
+/**
+ * Distribution edition that ships an *installable* provider for a capability.
+ *
+ *   - `open`       — a framework `@objectstack/*` package on the public registry
+ *                    (bundled as a dependency of `@objectstack/cli`, so a
+ *                    `requires` token backed by one resolves out of the box).
+ *   - `enterprise` — a separately-licensed enterprise package the app installs
+ *                    and wires in via `plugins[]` (e.g. `hierarchy-security`).
+ *   - `cloud`      — realized only by a cloud runtime tier; there is **no
+ *                    installable version in the open edition**. This is the
+ *                    boundary framework#3366 makes legible: "add it to your
+ *                    dependencies" is un-followable, so the error must say so.
+ */
+export type CapabilityEdition = 'open' | 'enterprise' | 'cloud';
+
+/** How a platform SERVICE capability's runtime is provided (framework#3366). */
+export interface PlatformCapabilityProvider {
+  /**
+   * npm package whose plugin the runtime loads to satisfy this capability, or
+   * `null` when the capability is a cloud-runtime tier with no standalone
+   * package to install (`ai-seat` / `governance`).
+   */
+  readonly package: string | null;
+  /** Which edition ships an installable version of {@link package}. */
+  readonly edition: CapabilityEdition;
+  /**
+   * Short human note on the edition boundary, surfaced verbatim inside the
+   * preflight / boot error so the message carries its own context.
+   */
+  readonly note?: string;
+}
+
+/**
+ * Every {@link PLATFORM_CAPABILITY_TOKENS} entry → the package + edition that
+ * provides its runtime (framework#3366). This is the single machine-readable
+ * source of truth for the knowledge `serve`'s CAPABILITY_PROVIDERS map + tier
+ * gating already encode informally, lifted so a preflight can read it *before*
+ * boot and report instead of aborting — and so cloud's objectos-runtime and the
+ * framework CLI classify a `requires` token identically.
+ *
+ * A drift test (`serve-capability-vocabulary.test.ts`) asserts this map and the
+ * vocabulary stay in 1:1 sync, and that every `open`-edition entry agrees with
+ * the package the serve resolver actually loads — so the two can't diverge.
+ */
+export const PLATFORM_CAPABILITY_PROVIDERS: Readonly<Record<string, PlatformCapabilityProvider>> =
+  Object.freeze({
+    // ── Tier-gated capabilities (serve.ts CAPABILITY_TO_TIER) ──────────────
+    // `ai` / `ai-studio` were removed from the open edition (ADR-0025): the AI
+    // runtime is cloud-only, so under the open edition there is NO version to
+    // install — the boundary framework#3366 exists to surface.
+    ai: {
+      package: '@objectstack/service-ai',
+      edition: 'cloud',
+      note: 'cloud-only since 11.3.0 / ADR-0025',
+    },
+    'ai-studio': {
+      package: '@objectstack/service-ai-studio',
+      edition: 'cloud',
+      note: 'cloud-only AI authoring; not part of the open framework',
+    },
+    i18n: { package: '@objectstack/service-i18n', edition: 'open' },
+    ui: { package: '@objectstack/console', edition: 'open' },
+    auth: { package: '@objectstack/plugin-auth', edition: 'open' },
+    // ── Service capabilities (serve.ts CAPABILITY_PROVIDERS) ───────────────
+    automation: { package: '@objectstack/service-automation', edition: 'open' },
+    analytics: { package: '@objectstack/service-analytics', edition: 'open' },
+    audit: { package: '@objectstack/plugin-audit', edition: 'open' },
+    cache: { package: '@objectstack/service-cache', edition: 'open' },
+    storage: { package: '@objectstack/service-storage', edition: 'open' },
+    queue: { package: '@objectstack/service-queue', edition: 'open' },
+    job: { package: '@objectstack/service-job', edition: 'open' },
+    messaging: { package: '@objectstack/service-messaging', edition: 'open' },
+    triggers: { package: '@objectstack/trigger-record-change', edition: 'open' },
+    realtime: { package: '@objectstack/service-realtime', edition: 'open' },
+    mcp: { package: '@objectstack/mcp', edition: 'open' },
+    marketplace: { package: '@objectstack/service-package', edition: 'open' },
+    email: { package: '@objectstack/plugin-email', edition: 'open' },
+    sms: { package: '@objectstack/service-sms', edition: 'open' },
+    sharing: { package: '@objectstack/plugin-sharing', edition: 'open' },
+    'pinyin-search': { package: '@objectstack/plugin-pinyin-search', edition: 'open' },
+    reports: { package: '@objectstack/plugin-reports', edition: 'open' },
+    approvals: { package: '@objectstack/plugin-approvals', edition: 'open' },
+    settings: { package: '@objectstack/service-settings', edition: 'open' },
+    webhooks: { package: '@objectstack/plugin-webhooks', edition: 'open' },
+    // ── Enterprise / cloud-runtime capabilities ────────────────────────────
+    'hierarchy-security': {
+      package: '@objectstack/security-enterprise',
+      edition: 'enterprise',
+      note: 'ADR-0057 hierarchy scopes ship in the enterprise edition',
+    },
+    'ai-seat': { package: null, edition: 'cloud', note: 'cloud AI-seat tier' },
+    governance: { package: null, edition: 'cloud', note: 'cloud governance tier' },
+  });
+
+/**
+ * Outcome of classifying one `requires` token against the installed providers:
+ *   - `ok`          — provider resolvable (installed); nothing to do.
+ *   - `installable` — absent, but an installable version exists in this edition
+ *                     (`open`/`enterprise` package) → actionable `pnpm add` hint.
+ *   - `unavailable` — absent AND no installable version in this edition
+ *                     (`cloud`-only, or a tier with no package) → edition error.
+ *   - `unknown`     — not a platform capability token at all (a typo).
+ */
+export type CapabilityProviderStatus = 'ok' | 'installable' | 'unavailable' | 'unknown';
+
+/** Structured classification of a single `requires` token (framework#3366). */
+export interface CapabilityClassification {
+  readonly token: string;
+  readonly status: CapabilityProviderStatus;
+  /** Present for every known token (absent only when `status` is `unknown`). */
+  readonly provider?: PlatformCapabilityProvider;
+}
+
+/**
+ * Classify one `requires` capability token by whether its provider is installed
+ * and, if not, whether it *could* be in the active (open) edition — the pure
+ * derivation behind both the `os build` preflight and the `os serve` boot error
+ * (framework#3366). Package resolution is injected via `isInstalled` so this
+ * stays side-effect-free (spec holds no I/O): callers wire it to
+ * `require.resolve`. Message rendering is the caller's job — this returns only
+ * the status + provider facts, so every runtime can word it in its own voice.
+ */
+export function classifyRequiredCapability(
+  token: string,
+  isInstalled: (pkg: string) => boolean,
+): CapabilityClassification {
+  const provider = PLATFORM_CAPABILITY_PROVIDERS[token];
+  if (!provider) {
+    // The drift test keeps the registry complete, so a token with no provider
+    // entry is outside the vocabulary — i.e. a typo. (The `isKnown` guard is
+    // defensive: a known-but-unmapped token classifies as satisfied, never as a
+    // false failure.)
+    return { token, status: isKnownPlatformCapability(token) ? 'ok' : 'unknown' };
+  }
+  if (provider.package && isInstalled(provider.package)) {
+    return { token, status: 'ok', provider };
+  }
+  // Absent. A `cloud`-only tier (or one with no installable package) has no
+  // version to add in the open edition; `open`/`enterprise` do → actionable add.
+  if (provider.edition === 'cloud' || provider.package === null) {
+    return { token, status: 'unavailable', provider };
+  }
+  return { token, status: 'installable', provider };
+}

@@ -17,6 +17,7 @@ import { lintFlowPatterns } from '../utils/lint-flow-patterns.js';
 import { lintAutonumberFormats } from '../utils/lint-autonumber-formats.js';
 import { lintLivenessProperties } from '../utils/lint-liveness-properties.js';
 import { lintViewRefs } from '../utils/lint-view-refs.js';
+import { preflightRequiredCapabilities, renderCapabilityMessage } from '../utils/capability-preflight.js';
 import { collectAndLintDocs } from '../utils/collect-docs.js';
 import { buildRuntimeBundle, cleanupOldRuntimeBundles } from '../utils/build-runtime.js';
 import {
@@ -167,6 +168,45 @@ export default class Compile extends Command {
         for (const i of exprWarnings.slice(0, 50)) {
           console.log(`  • ${i.where}: ${i.message}`);
           console.log(`      source: \`${i.source}\``);
+        }
+      }
+
+      // 3b-ter. [#3366] Installable-provider preflight. Every capability the app
+      //     DECLARES in `requires: [...]` must have a provider resolvable in the
+      //     active edition. `os validate` only checks the token vocabulary and
+      //     `os build` never resolved providers, so a `requires` entry whose
+      //     provider has NO installable version in this edition (e.g. `ai` →
+      //     @objectstack/service-ai, cloud-only since ADR-0025) slipped through
+      //     to a generic `os start` crash. Fail the build with the edition-aware
+      //     message instead; an absent-but-installable provider is a `pnpm add`
+      //     hint (advisory), and a satisfied list passes silently.
+      if (!flags.json) printStep('Checking capability providers (#3366)...');
+      const capPreflight = preflightRequiredCapabilities({
+        requires: Array.isArray((config as { requires?: unknown[] }).requires)
+          ? ((config as { requires?: unknown[] }).requires as unknown[])
+          : [],
+        projectDir: path.dirname(absolutePath),
+      });
+      if (capPreflight.errors.length > 0) {
+        if (flags.json) {
+          console.log(JSON.stringify({
+            success: false,
+            error: 'capability provider preflight failed',
+            issues: capPreflight.errors.map((c) => ({ token: c.token, message: renderCapabilityMessage(c) })),
+          }));
+          this.exit(1);
+        }
+        console.log('');
+        printError(`Capability provider check failed (${capPreflight.errors.length} issue${capPreflight.errors.length > 1 ? 's' : ''})`);
+        for (const c of capPreflight.errors) {
+          console.log(`  • ${renderCapabilityMessage(c)}`);
+        }
+        this.exit(1);
+      }
+      if (capPreflight.warnings.length > 0 && !flags.json) {
+        console.log('');
+        for (const c of capPreflight.warnings) {
+          printWarning(renderCapabilityMessage(c));
         }
       }
 

@@ -120,10 +120,18 @@ export * from './migrations/index.js';
 
 export { type PluginContext } from './kernel/plugin.zod';
 
-// Platform SERVICE capability vocabulary for `requires: [...]` (framework#3265).
+// Platform SERVICE capability vocabulary for `requires: [...]` (framework#3265),
+// plus the provider/edition registry + classifier behind the installable-provider
+// preflight (framework#3366).
 export {
   PLATFORM_CAPABILITY_TOKENS,
   isKnownPlatformCapability,
+  PLATFORM_CAPABILITY_PROVIDERS,
+  classifyRequiredCapability,
+  type CapabilityEdition,
+  type PlatformCapabilityProvider,
+  type CapabilityProviderStatus,
+  type CapabilityClassification,
 } from './kernel/platform-capabilities';
 
 // Expression Protocol (M9 — canonical wire format for formulas / predicates / conditions)
