@@ -3,7 +3,7 @@
 import { Args, Command, Flags } from '@oclif/core';
 import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import chalk from 'chalk';
 import { ZodError } from 'zod';
 import { ObjectStackDefinitionSchema, normalizeStackInput, type ConversionNotice } from '@objectstack/spec';
@@ -19,6 +19,7 @@ import { validateCapabilityReferences } from '@objectstack/lint';
 import { validateVisibilityPredicates } from '@objectstack/lint';
 import { validateSecurityPosture } from '@objectstack/lint';
 import { validateFlowTriggerReadiness } from '@objectstack/lint';
+import { preflightRequiredCapabilities, renderCapabilityMessage } from '../utils/capability-preflight.js';
 import {
   printHeader,
   printKV,
@@ -460,6 +461,42 @@ export default class Validate extends Command {
         }
       }
 
+      // 3h. [#3366] Installable-provider preflight — the shift-left of the
+      //     `serve`-time capability check. `os validate` previously only checked
+      //     the `requires` tokens against the vocabulary (ADR-0066), never
+      //     whether each token's provider is resolvable in the active edition. A
+      //     token whose provider has NO installable version here (e.g. `ai` →
+      //     @objectstack/service-ai, cloud-only) fails; absent-but-installable is
+      //     an advisory `pnpm add` hint. Mirrors the `os build` gate exactly.
+      if (!flags.json) printStep('Checking capability providers (#3366)...');
+      const capProviderPreflight = preflightRequiredCapabilities({
+        requires: Array.isArray((config as { requires?: unknown[] }).requires)
+          ? ((config as { requires?: unknown[] }).requires as unknown[])
+          : [],
+        projectDir: dirname(absolutePath),
+      });
+      const capProviderErrors = capProviderPreflight.errors;
+      const capProviderWarnings = capProviderPreflight.warnings.map((c) => ({
+        token: c.token,
+        message: renderCapabilityMessage(c),
+      }));
+      if (capProviderErrors.length > 0) {
+        if (flags.json) {
+          console.log(JSON.stringify({
+            valid: false,
+            errors: capProviderErrors.map((c) => ({ token: c.token, message: renderCapabilityMessage(c) })),
+            duration: timer.elapsed(),
+          }, null, 2));
+          this.exit(1);
+        }
+        console.log('');
+        printError(`Capability provider check failed (${capProviderErrors.length} issue${capProviderErrors.length > 1 ? 's' : ''})`);
+        for (const c of capProviderErrors) {
+          console.log(`  • ${renderCapabilityMessage(c)}`);
+        }
+        this.exit(1);
+      }
+
       // 4. Collect and display stats
       const stats = collectMetadataStats(config);
 
@@ -472,7 +509,7 @@ export default class Validate extends Command {
           valid: true,
           manifest: config.manifest,
           stats,
-          warnings: [...exprWarnings, ...widgetWarnings, ...actionRefWarnings, ...styleWarnings, ...jsxWarnings, ...capWarnings, ...flowReadinessWarnings, ...securityAdvisories],
+          warnings: [...exprWarnings, ...widgetWarnings, ...actionRefWarnings, ...styleWarnings, ...jsxWarnings, ...capWarnings, ...flowReadinessWarnings, ...securityAdvisories, ...capProviderWarnings],
           conversions: conversionNotices,
           specVersionGap: specGap,
           duration: timer.elapsed(),
@@ -482,6 +519,12 @@ export default class Validate extends Command {
 
       // 5. Warnings (non-blocking)
       const warnings: string[] = [];
+
+      // [#3366] Installable-provider hints — a declared capability whose provider
+      // is absent but addable (`pnpm add`), or an unknown token (typo).
+      for (const w of capProviderWarnings) {
+        warnings.push(w.message);
+      }
 
       // ADR-0089 D3b — deprecated visibility aliases + mis-layered binding root.
       // Checked on `normalized` (PRE-parse): the schema folds `visibleOn`/
