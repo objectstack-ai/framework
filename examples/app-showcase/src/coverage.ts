@@ -91,7 +91,12 @@ export const KIND_COVERAGE: Record<MetadataType, KindCoverage> = {
       'revenue-pulse also demonstrates dashboard-level filters (framework#2501): dateRange + globalFilters driving two objects via per-widget filterBindings.',
   },
   app: { status: 'demonstrated', files: ['src/ui/apps/index.ts'] },
-  action: { status: 'demonstrated', files: ['src/ui/actions/index.ts'] },
+  action: {
+    status: 'demonstrated',
+    files: ['src/ui/actions/index.ts'],
+    notes:
+      'Every ActionType (script/url/flow/modal/api/form). `ActionParamGalleryAction` additionally exercises the ADR-0059 param-dialog widgets: one inline param per non-trivial type (richtext/color/date/select/number/autonumber) plus image/file uploads with multiple/accept/maxSize and the upload guard.',
+  },
   report: { status: 'demonstrated', files: ['src/ui/reports/index.ts'] },
   dataset: { status: 'demonstrated', files: ['src/ui/datasets/index.ts'] },
 
