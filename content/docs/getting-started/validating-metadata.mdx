@@ -48,6 +48,31 @@ If a name doesn't resolve, the chart renders **empty** — no error (ADR-0021).
 `os validate` resolves every binding against the declared datasets and fails on a
 dangling one.
 
+### 3. Dead action/route references
+
+A dashboard `header.actions[]` button (and a widget's `actionUrl`) names a target:
+a `script`/`modal` action, or a `url` route. Nothing in the schema checks that the
+target exists, so a button can ship pointing at an action defined nowhere — it
+renders and then **silently does nothing** when clicked. This is ADR-0049's
+"declared ≠ enforced" gate applied to *references*.
+
+```ts
+header: {
+  actions: [
+    // ✗ script/modal target resolves to no defined action → error
+    { label: 'Export PDF', actionType: 'script', actionUrl: 'export_dashboard_pdf' },
+    // ✓ modal <verb>_<object> against a real `opportunity` object
+    { label: 'New Deal', actionType: 'modal', actionUrl: 'create_opportunity' },
+    // ⚠ url path matching no in-app route → warning
+    { label: 'Forecast', actionType: 'url', actionUrl: '/reports/forecast' },
+  ],
+}
+```
+
+`script`/`modal` targets that resolve nowhere **fail** validation; a `url` path
+whose `objects/reports/dashboards/pages/views` route is unregistered is **warned**
+(external, interpolated, and opaque routes are skipped).
+
 ## The one gate, two entry points
 
 `os validate` and `os build` (alias of `os compile`) run the **same** validator:
@@ -57,6 +82,7 @@ dangling one.
 | Protocol schema (Zod) | ✓ | ✓ |
 | CEL / predicate validation | ✓ | ✓ |
 | Widget-binding integrity | ✓ | ✓ |
+| Dashboard action/route references (ADR-0049) | ✓ | ✓ |
 | Security posture (ADR-0090 — e.g. every custom object declares `sharingModel`) | ✓ | ✓ |
 | Emits `dist/objectstack.json` | — | ✓ |
 
@@ -81,6 +107,7 @@ A clean run walks each gate and reports timing:
   → Checking list-view navigation modes (ADR-0053)...
   → Checking view container shape...
   → Checking dashboard widget bindings (ADR-0021)...
+  → Checking dashboard action references (ADR-0049)...
   → Checking SDUI styling (ADR-0065)...
   → Checking JSX-source pages (ADR-0080)...
   → Checking React-source pages (ADR-0081)...

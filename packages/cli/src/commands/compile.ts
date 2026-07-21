@@ -11,6 +11,7 @@ import { lowerCallables } from '../utils/lower-callables.js';
 import { validateStackExpressions } from '@objectstack/lint';
 import { validateVisibilityPredicates } from '@objectstack/lint';
 import { validateWidgetBindings } from '@objectstack/lint';
+import { validateDashboardActionRefs } from '@objectstack/lint';
 import { validateResponsiveStyles } from '@objectstack/lint';
 import { validateSecurityPosture, buildAccessMatrix, diffAccessMatrix } from '@objectstack/lint';
 import { lintFlowPatterns } from '../utils/lint-flow-patterns.js';
@@ -212,6 +213,39 @@ export default class Compile extends Command {
       if (widgetWarnings.length > 0 && !flags.json) {
         console.log('');
         for (const w of widgetWarnings) {
+          printWarning(`${w.where}: ${w.message}`);
+          console.log(chalk.dim(`    ${w.hint}`));
+          console.log(chalk.dim(`    rule: ${w.rule}  at ${w.path}`));
+        }
+      }
+
+      // 3c-bis. Dashboard action/route reference integrity (ADR-0049 for
+      //     references, #3367). A header/widget action naming a `script`/`modal`
+      //     target that resolves to no defined action, or a `url` target that
+      //     matches no in-app route, ships a button that renders and silently
+      //     does nothing on click. Dead script/modal targets fail the build
+      //     (they fail open at runtime); unresolved url routes are advisory.
+      if (!flags.json) printStep('Checking dashboard action references (ADR-0049)...');
+      const actionRefFindings = validateDashboardActionRefs(result.data as Record<string, unknown>);
+      const actionRefErrors = actionRefFindings.filter((f) => f.severity === 'error');
+      const actionRefWarnings = actionRefFindings.filter((f) => f.severity === 'warning');
+      if (actionRefErrors.length > 0) {
+        if (flags.json) {
+          console.log(JSON.stringify({ success: false, error: 'dashboard action reference validation failed', issues: actionRefErrors }));
+          this.exit(1);
+        }
+        console.log('');
+        printError(`Dashboard action reference check failed (${actionRefErrors.length} issue${actionRefErrors.length > 1 ? 's' : ''})`);
+        for (const f of actionRefErrors.slice(0, 50)) {
+          console.log(`  • ${f.where}: ${f.message}`);
+          console.log(chalk.dim(`      ${f.hint}`));
+          console.log(chalk.dim(`      rule: ${f.rule}  at ${f.path}`));
+        }
+        this.exit(1);
+      }
+      if (actionRefWarnings.length > 0 && !flags.json) {
+        console.log('');
+        for (const w of actionRefWarnings) {
           printWarning(`${w.where}: ${w.message}`);
           console.log(chalk.dim(`    ${w.hint}`));
           console.log(chalk.dim(`    rule: ${w.rule}  at ${w.path}`));
