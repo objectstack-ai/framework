@@ -157,7 +157,7 @@ jobs:
       # Same class, same reasoning, different surface: skills/*/references/_index.md
       # and the objectstack-ui react-blocks contract are generated from
       # packages/spec/src and committed, and nothing regenerated them either. These
-      # ship to third parties via `npx skills add objectstack-ai/framework`, so the
+      # ship to third parties via `npx skills add objectstack-ai/objectstack`, so the
       # drift is served straight to consumers' agents — 6 of 113 schema pointers named
       # files the spec had already deleted or renamed.
       #

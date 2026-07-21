@@ -3,7 +3,7 @@
 **Status**: Accepted — engine + model implemented; designer pending (objectui) (proposed 2026-06-12 · calibrated 2026-06-12)
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: [ADR-0019](./0019-approval-as-flow-node.md) (approval as a durable-pause flow node), [ADR-0039](./0039-token-scope-tree-execution.md) (single-program-counter suspend model), thread interactions (#1740), [ADR-0042](./0042-approval-sla-escalation.md) (audit-first discipline)
-**Closes**: [#1744](https://github.com/objectstack-ai/framework/issues/1744)
+**Closes**: [#1744](https://github.com/objectstack-ai/objectstack/issues/1744)
 **Consumers**: `@objectstack/spec` (flow edge type, branch labels, contracts), `@objectstack/service-automation` (back-edge traversal), `@objectstack/plugin-approvals` (send-back / resubmit runtime), REST, Console approvals inbox
 
 ---

@@ -8,7 +8,7 @@ description: Define strict business logic constraints prevents AI hallucinations
 The **State Machine** (`state_machine` validation rule) lets you define the "Constitution" of a record's lifecycle: the legal `status` transitions a record may take. It is a **flat, textbook finite-state-machine** transition table that the write path enforces.
 
 <Callout type="info">
-  Per [ADR-0020](https://github.com/objectstack-ai/framework/blob/main/docs/adr/0020-state-machine-converge-and-enforce.md), a state machine is **one of the object's `validations`** — a rule with `type: 'state_machine'`. There is no top-level `stateMachine`/`stateMachines` property on an object, and the older XState-style shape (hierarchical states, `on`/`cond`/`actions`, `meta.aiInstructions`) was retired. A flat `{ from: [to] }` transition table is the only enforced shape.
+  Per [ADR-0020](https://github.com/objectstack-ai/objectstack/blob/main/docs/adr/0020-state-machine-converge-and-enforce.md), a state machine is **one of the object's `validations`** — a rule with `type: 'state_machine'`. There is no top-level `stateMachine`/`stateMachines` property on an object, and the older XState-style shape (hierarchical states, `on`/`cond`/`actions`, `meta.aiInstructions`) was retired. A flat `{ from: [to] }` transition table is the only enforced shape.
 </Callout>
 
 ## Why State Machines?

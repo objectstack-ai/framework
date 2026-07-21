@@ -6,7 +6,7 @@ working in **any ObjectStack app** — this monorepo *and* third-party projects.
 projects add (or update) the bundle with:
 
 ```bash
-npx skills add objectstack-ai/framework/skills --all
+npx skills add objectstack-ai/objectstack/skills --all
 ```
 
 The `/skills` subpath matters: it is the published catalog boundary — pointing

@@ -27,14 +27,14 @@ See [Agents](/docs/ai/agents#you-extend-the-platform-with-skills-not-agents) for
 
 ## Installing skills
 
-Skills are distributed through the [skills.sh](https://skills.sh) registry from the [`objectstack-ai/framework`](https://github.com/objectstack-ai/framework) repository's `skills/` directory.
+Skills are distributed through the [skills.sh](https://skills.sh) registry from the [`objectstack-ai/objectstack`](https://github.com/objectstack-ai/objectstack) repository's `skills/` directory.
 
 ```bash
 # New project — create-objectstack installs skills automatically
 npm create objectstack@latest my-app
 
 # Existing project — add the whole bundle (re-run to update)
-npx skills add objectstack-ai/framework/skills --all
+npx skills add objectstack-ai/objectstack/skills --all
 ```
 
 The bundle is versioned and updated as **one unit** — `--all` is idempotent, so you never track skills individually. For the full per-skill catalog and install options, see the [AI Skills Reference](/docs/ai/skills-reference#installing-skills).

@@ -39,4 +39,4 @@ One walkthrough per protocol domain, mirroring the `src/` layout:
 deliberately absent here: agents are platform-owned (ADR-0063) and the
 open framework exposes AI via MCP only. The coverage manifest records the
 waiver — see
-[framework#2610](https://github.com/objectstack-ai/framework/issues/2610).
+[framework#2610](https://github.com/objectstack-ai/objectstack/issues/2610).

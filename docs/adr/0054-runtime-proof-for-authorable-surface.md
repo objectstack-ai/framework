@@ -3,8 +3,8 @@
 **Status**: Accepted (2026-06-18)
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: [ADR-0049](./0049-no-unenforced-security-properties.md) (enforce-or-remove gate), [ADR-0005](./0005-metadata-customization-overlay.md) (artifact vs runtime), [ADR-0053](./0053-date-and-datetime-semantics.md) (the domain of the motivating regression)
-**Consumers**: `@objectstack/spec` (liveness ledger `packages/spec/liveness/<type>.json`), the Spec Liveness Check CI gate (#1919), `@objectstack/dogfood` (the runtime gate, [#2020](https://github.com/objectstack-ai/framework/pull/2020)), `@objectstack/verify` (the published proof engine + CLI, [#2041](https://github.com/objectstack-ai/framework/pull/2041)), spec authors, platform contributors.
-**Surfaced by**: PR [#2018](https://github.com/objectstack-ai/framework/pull/2018) — "organization timezone drives analytics date bucketing" was **green on every static gate** (build, ~900 unit tests, spec-liveness, CodeQL) yet broken end-to-end across three integration seams; and the field-type capability-matrix dogfood ([#2022](https://github.com/objectstack-ai/framework/pull/2022)), which on its first run found `rating`/`slider`/`toggle` reading back wrong-typed.
+**Consumers**: `@objectstack/spec` (liveness ledger `packages/spec/liveness/<type>.json`), the Spec Liveness Check CI gate (#1919), `@objectstack/dogfood` (the runtime gate, [#2020](https://github.com/objectstack-ai/objectstack/pull/2020)), `@objectstack/verify` (the published proof engine + CLI, [#2041](https://github.com/objectstack-ai/objectstack/pull/2041)), spec authors, platform contributors.
+**Surfaced by**: PR [#2018](https://github.com/objectstack-ai/objectstack/pull/2018) — "organization timezone drives analytics date bucketing" was **green on every static gate** (build, ~900 unit tests, spec-liveness, CodeQL) yet broken end-to-end across three integration seams; and the field-type capability-matrix dogfood ([#2022](https://github.com/objectstack-ai/objectstack/pull/2022)), which on its first run found `rating`/`slider`/`toggle` reading back wrong-typed.
 
 ---
 
@@ -50,7 +50,7 @@ Three gates already guard the authorable surface, each at a different layer:
 |---|---|---|
 | **AI-authoring guardrails** (build-time lint, broken→error / fragile→warning) | *Is the authored metadata valid?* | Valid ≠ correct at runtime. |
 | **Spec liveness ledger** (ADR-0049 + #1919) | *Does any code read this property?* | A consumer existing ≠ the integrated path being correct. |
-| **Dogfood gate** ([#2020](https://github.com/objectstack-ai/framework/pull/2020)) | *Does authoring it produce correct runtime behavior?* | Coverage is currently incidental — whatever the example apps happen to exercise. |
+| **Dogfood gate** ([#2020](https://github.com/objectstack-ai/objectstack/pull/2020)) | *Does authoring it produce correct runtime behavior?* | Coverage is currently incidental — whatever the example apps happen to exercise. |
 
 The liveness ledger's evidence is a static pointer
 (`packages/spec/liveness/<type>.json`, e.g. `field:line`). It is excellent at
@@ -58,7 +58,7 @@ killing *dead* surface (parsed, no consumer). It is **blind to integration
 correctness**: #2018's properties all had valid consumer pointers and were
 classified live, yet the end-to-end result was wrong. The same blindness let
 `rating`/`slider`/`toggle` be live (they persist) while reading back as the
-wrong JS type — found only when [#2022](https://github.com/objectstack-ai/framework/pull/2022)
+wrong JS type — found only when [#2022](https://github.com/objectstack-ai/objectstack/pull/2022)
 wrote one and read it back over the real API.
 
 The cost is asymmetric for *this* platform. When a human authors metadata and it
@@ -106,7 +106,7 @@ grows coverage where silent runtime breakage is plausible, not everywhere.
 ### 3. Phasing
 
 - **Phase 1 (in progress).** Capability-matrix proofs for the two classes with a
-  demonstrated break: field types ([#2022](https://github.com/objectstack-ai/framework/pull/2022), field-zoo) and analytics ([#2018](https://github.com/objectstack-ai/framework/pull/2018), tz bucketing).
+  demonstrated break: field types ([#2022](https://github.com/objectstack-ai/objectstack/pull/2022), field-zoo) and analytics ([#2018](https://github.com/objectstack-ai/objectstack/pull/2018), tz bucketing).
 - **Phase 2.** Extend the matrix to flow nodes, form widgets, and RLS patterns
   (the member-edit-others by-id-write hole, #1994, is the seed RLS proof — it
   also drives a multi-user harness capability reused by every later RLS proof).
@@ -164,7 +164,7 @@ the proof corpus stays CI-cheap as it grows.
 
 The proof *mechanism* this ADR assigns to `@objectstack/dogfood` has since been
 extracted into a published, app-agnostic package: **`@objectstack/verify`**
-([#2041](https://github.com/objectstack-ai/framework/pull/2041)) — `bootStack`
+([#2041](https://github.com/objectstack-ai/objectstack/pull/2041)) — `bootStack`
 (the real in-process stack via Hono request-injection), `deriveCrudCases`
 (a runtime contract auto-derived from any app's metadata), `runCrudVerification`
 (write → read → assert type fidelity), and `runRlsProofs` (the #1994

@@ -25,7 +25,7 @@ framework, which uses `@objectstack/mcp` (BYO-AI) instead. The next two sections
 describe that ObjectOS runtime.
 </Callout>
 
-Per [ADR-0063](https://github.com/objectstack-ai/framework/blob/main/docs/adr/0063-two-kernel-agents-skills-are-the-extension-primitive.md)
+Per [ADR-0063](https://github.com/objectstack-ai/objectstack/blob/main/docs/adr/0063-two-kernel-agents-skills-are-the-extension-primitive.md)
 the ObjectOS runtime ships **exactly two** platform agents, bound by the
 *surface* the user is in — the user never picks from a roster:
 
@@ -117,7 +117,7 @@ your Actions / Flows / queries; it then attaches to `ask`. Every skill declares
 `surface: 'ask' | 'build' | 'both'`, and an agent's tool set is the **union of its
 surface-compatible skills' tools** — there is no global fall-through, so a skill
 reaches an agent only when their surfaces match
-([ADR-0064](https://github.com/objectstack-ai/framework/blob/main/docs/adr/0064-tool-scoping-to-agent.md)).
+([ADR-0064](https://github.com/objectstack-ai/objectstack/blob/main/docs/adr/0064-tool-scoping-to-agent.md)).
 Both `surface:'ask'` and `surface:'build'` skills run only where the in-UI AI
 runtime exists — **ObjectOS**. On the open framework
 there is no in-product agent to attach them to; author capability

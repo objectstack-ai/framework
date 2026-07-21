@@ -16,12 +16,12 @@ defaults, adapter recipes, go-live checklist) follow the deep-dive links.
 
 | Concern | Default | Deep dive |
 | :--- | :--- | :--- |
-| Security response headers (CSP / XCTO / X-Frame-Options / …) | **On** | [HARDENING.md](https://github.com/objectstack-ai/framework/blob/main/docs/HARDENING.md) |
+| Security response headers (CSP / XCTO / X-Frame-Options / …) | **On** | [HARDENING.md](https://github.com/objectstack-ai/objectstack/blob/main/docs/HARDENING.md) |
 | HSTS | Off (opt-in once TLS is confirmed) | HARDENING.md |
 | Rate limiting (token bucket) | Off (opt-in via adapter) | HARDENING.md |
 | CSRF | Adapter-layer (bearer-auth = N/A) | HARDENING.md |
 | Auth / session / JWT lifecycle | On via `@objectstack/plugin-auth` (better-auth) | HARDENING.md |
-| Metrics (counter / histogram / gauge) | Noop (no adapter) | [OBSERVABILITY.md](https://github.com/objectstack-ai/framework/blob/main/docs/OBSERVABILITY.md) |
+| Metrics (counter / histogram / gauge) | Noop (no adapter) | [OBSERVABILITY.md](https://github.com/objectstack-ai/objectstack/blob/main/docs/OBSERVABILITY.md) |
 | Error reporting (5xx only) | Noop (no adapter) | OBSERVABILITY.md |
 | Request id (`X-Request-Id`) | Auto-generated when enabled | OBSERVABILITY.md |
 | W3C Trace Context (`traceparent`) | Parser exported; SDK wiring is host's job | OBSERVABILITY.md |
@@ -63,7 +63,7 @@ That's it — every route the dispatcher mounts now:
 Rate limiting is the one piece you wire at the adapter layer (Fastify
 preHandler, Hono middleware, etc.) because that's where you have
 reliable access to the caller's IP and authenticated identity. See
-the [HARDENING.md recipes](https://github.com/objectstack-ai/framework/blob/main/docs/HARDENING.md#rate-limiting).
+the [HARDENING.md recipes](https://github.com/objectstack-ai/objectstack/blob/main/docs/HARDENING.md#rate-limiting).
 
 ## Go-live checklist
 

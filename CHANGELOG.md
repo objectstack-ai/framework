@@ -643,7 +643,7 @@ required for the new Public Forms endpoints to apply guest defaults.
 
 ### Removed — Cloud control plane moved to private `objectstack-ai/cloud` repo
 
-The framework repository (`objectstack-ai/framework`) is now open-core only.
+The framework repository (`objectstack-ai/objectstack`) is now open-core only.
 The hosted Cloud control plane — `apps/cloud` and
 `@objectstack/service-cloud` — has been extracted to a separate, private
 repository (`objectstack-ai/cloud`). Production traffic on
@@ -1247,7 +1247,7 @@ Followup to M10.30a. Walked every Setup menu in a real tenant; produced verdict 
 - **Client Hono integration test timeout** — Fixed `afterAll` hook timeout in `client.hono.test.ts` by racing `kernel.shutdown()` against a 10s deadline. The shutdown can hang when pino's worker-thread flush callback never fires in CI, so the race ensures the hook completes within the 30s vitest limit.
 - **CI: Replace `pnpm/action-setup@v6` with corepack** — Switched all GitHub Actions workflows (`ci.yml`, `lint.yml`, `release.yml`, `validate-deps.yml`, `pr-automation.yml`) from `pnpm/action-setup@v6` to `corepack enable` to fix persistent `ERR_PNPM_BROKEN_LOCKFILE` errors. Corepack reads the exact `packageManager` field from `package.json` (including SHA verification), ensuring the correct pnpm version is used in CI. Also bumped pnpm store cache keys to v3 and added a pnpm version verification step.
 - **Broken pnpm lockfile** — Regenerated `pnpm-lock.yaml` from scratch to fix `ERR_PNPM_BROKEN_LOCKFILE` ("expected a single document in the stream, but found more") that was causing all CI jobs to fail. The previous merge of PR #1117 only included workflow cache key changes but did not carry over the regenerated lockfile.
-- **service-ai: Fix navigation item labels using deprecated i18n object format** — Replaced `{ key, defaultValue }` i18n objects with plain string labels in `AIServicePlugin`'s Setup App navigation contributions, completing the `I18nLabelSchema` migration from [#1054](https://github.com/objectstack-ai/framework/issues/1054).
+- **service-ai: Fix navigation item labels using deprecated i18n object format** — Replaced `{ key, defaultValue }` i18n objects with plain string labels in `AIServicePlugin`'s Setup App navigation contributions, completing the `I18nLabelSchema` migration from [#1054](https://github.com/objectstack-ai/objectstack/issues/1054).
 
 ### Added
 - **MCP Runtime Server Plugin (`plugin-mcp-server`)** — New kernel plugin that exposes ObjectStack
@@ -1327,7 +1327,7 @@ Followup to M10.30a. Walked every Setup menu in a real tenant; produced verdict 
   - Supports custom model selection via `AI_MODEL` environment variable
   - Consistent behavior across CLI, Vercel, Docker, and custom deployments
   - Dynamic import failures are handled as soft errors with automatic fallback
-  ([#1067](https://github.com/objectstack-ai/framework/issues/1067))
+  ([#1067](https://github.com/objectstack-ai/objectstack/issues/1067))
 
 - **Metadata Versioning & History** — Comprehensive version history tracking and rollback capabilities
   for metadata items. Key features include:
@@ -1359,7 +1359,7 @@ Followup to M10.30a. Walked every Setup menu in a real tenant; produced verdict 
   union type has been replaced with `z.string()`. i18n translation keys will be auto-generated
   by the framework at registration time; developers only need to provide the default-language
   string value. Translations are managed through translation files, not inline i18n objects.
-  ([#1054](https://github.com/objectstack-ai/framework/issues/1054))
+  ([#1054](https://github.com/objectstack-ai/objectstack/issues/1054))
 
   **Migration:** Replace any `label: { key: '...', defaultValue: 'X' }` with `label: 'X'`.
   Existing plain-string labels require no changes.
@@ -1371,7 +1371,7 @@ Followup to M10.30a. Walked every Setup menu in a real tenant; produced verdict 
   - `@objectstack/plugin-audit` — navigation item labels
 
 ### Documentation
-- **README rewrite** — Rewrote `README.md` to accurately reflect the `objectstack-ai/framework`
+- **README rewrite** — Rewrote `README.md` to accurately reflect the `objectstack-ai/objectstack`
   repository. Updates include: corrected title ("ObjectStack Framework"), updated badges
   (v4.0.1, 6,507 tests passing), fixed stale clone URL (`spec.git` → `framework.git`),
   added all missing packages (`driver-sql`, `driver-turso`, `plugin-audit`, `plugin-setup`,

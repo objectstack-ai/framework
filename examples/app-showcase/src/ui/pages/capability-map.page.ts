@@ -81,7 +81,7 @@ ${card('security', 'Roles, permissions & sharing', 'A role hierarchy, permission
   ['docs/showcase_tour_security', 'Read the Security tour'],
 ])}
 ${card('ai · deferred', 'Agents, tools & skills', 'Deliberately not demonstrated here: agents are platform-owned (ADR-0063) and the open framework exposes AI via MCP only. The coverage manifest waives agent/tool/skill with a tracking issue instead of faking a demo.', [
-  ['https://github.com/objectstack-ai/framework/issues/2610', 'Tracking issue #2610'],
+  ['https://github.com/objectstack-ai/objectstack/issues/2610', 'Tracking issue #2610'],
 ])}
   </div>
 

@@ -3,7 +3,7 @@
 **Status**: Accepted — implemented (proposed 2026-06-12 · calibrated 2026-06-12)
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: [ADR-0019](./0019-approval-as-flow-node.md) (approval as flow node), [ADR-0041](./0041-flow-trigger-family.md) (triggers vs jobs vs hooks — this is the canonical "jobs, not trigger" case), thread interactions (#1740)
-**Closes**: [#1742](https://github.com/objectstack-ai/framework/issues/1742)
+**Closes**: [#1742](https://github.com/objectstack-ai/objectstack/issues/1742)
 **Consumers**: `@objectstack/plugin-approvals` (scanner + execution), `@objectstack/service-job` (the clock), Console inbox (timeline rendering)
 
 ---

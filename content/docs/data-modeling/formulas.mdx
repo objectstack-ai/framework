@@ -183,7 +183,7 @@ All functions are pure given a pinned `now`, which is what makes
 | `min(a, b)` / `max(a, b)` | dyn | Smaller / larger operand (numeric comparison) |
 
 Add new helpers in
-[`packages/formula/src/stdlib.ts`](https://github.com/objectstack-ai/framework/blob/main/packages/formula/src/stdlib.ts).
+[`packages/formula/src/stdlib.ts`](https://github.com/objectstack-ai/objectstack/blob/main/packages/formula/src/stdlib.ts).
 Keep them pure, dependency-free, and AI-readable.
 
 ### Variable scope
@@ -548,5 +548,5 @@ agent-callable `validate_expression` tool), so an expression is checked before i
 - [Field Metadata](/docs/data-modeling/fields) — declaring `type: 'formula'` fields
 - [Seed Data](/docs/data-modeling/seed-data) — using `cel\`...\`` for dynamic install-time values
 - [Hook Bodies](/docs/automation/hook-bodies) — when to use a JS hook vs a CEL `condition`
-- [`packages/formula/`](https://github.com/objectstack-ai/framework/tree/main/packages/formula) — engine + stdlib source
+- [`packages/formula/`](https://github.com/objectstack-ai/objectstack/tree/main/packages/formula) — engine + stdlib source
 - [North Star](/docs/concepts/north-star) — architecture principles (typed metadata over custom DSLs)

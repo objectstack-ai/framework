@@ -8,7 +8,7 @@
 **Premise**: pre-launch — specify the target end-state. The platform already has the **package** primitive (ADR-0048) and a runtime overlay store (ADR-0005); what is missing is a *contract* that ties every runtime-authored item to a writable package and forbids package-less ("orphan") metadata. The **Airtable model** is the north star: you create a **base** (= a writable software package) first, then author objects/fields/views/flows **into it**; the base is the unit you organise, version, export, and **delete**. Items below are tagged **[existing]** / **[new]**.
 
 > **Trigger**: a business-user dogfood pass of Studio surfaced a family of related defects whose common root is the *absence of a package-first contract*:
-> 1. **Read-only-after-publish** ([framework#2252](https://github.com/objectstack-ai/framework/pull/2252)): authoring a new object while a *code* package was selected stamped the new row with that code package's `package_id`, so it read back as "code-provided" and locked itself read-only the moment it was published — the user could not edit what they had just created.
+> 1. **Read-only-after-publish** ([framework#2252](https://github.com/objectstack-ai/objectstack/pull/2252)): authoring a new object while a *code* package was selected stamped the new row with that code package's `package_id`, so it read back as "code-provided" and locked itself read-only the moment it was published — the user could not edit what they had just created.
 > 2. **The orphan pile / no delete unit** ([objectui#1946](https://github.com/objectstack-ai/objectui/pull/1946)): the band-aid for (1) coerces such writes to `package_id = null`. That correctly unblocks editing, but it scatters runtime metadata into a package-less bucket that the package-scoped Studio lists filter *out* — items become hard to find and, critically, **there is no container to delete**: "how do I clean up a pile of loose metadata?"
 > 3. **AI authoring can still orphan**: `../cloud`'s `service-ai-studio` resolves a target package with smart fallbacks (active package -> single-app package -> **auto-created `com.workspace`**) and rejects read-only code packages, but it never *requires* the user/agent to choose a base first — so it can silently default into a catch-all dumping ground.
 >
@@ -18,7 +18,7 @@
 
 Built across the three surfaces and verified end-to-end in a real environment via the AI build flow.
 
-- **P1 — Kernel (D1/D2)** — `@objectstack/objectql` ([framework#2285](https://github.com/objectstack-ai/framework/pull/2285)): `isWritablePackage` predicate; a runtime-only create targeting a read-only code/installed package is **rejected** with `writable_package_required` (422) instead of coerced to `null`.
+- **P1 — Kernel (D1/D2)** — `@objectstack/objectql` ([framework#2285](https://github.com/objectstack-ai/objectstack/pull/2285)): `isWritablePackage` predicate; a runtime-only create targeting a read-only code/installed package is **rejected** with `writable_package_required` (422) instead of coerced to `null`.
 - **P2 — Studio (D3)** — `../objectui` ([objectui#1970](https://github.com/objectstack-ai/objectui/pull/1970)): a create-flow gate that prompts/redirects to a writable base; `isLocalScope` / `writableBaseOptions` helpers; surfaces `writable_package_required` as an actionable error.
 - **P3 — AI (D3)** — `../cloud` `service-ai-studio` ([cloud#479](https://github.com/objectstack-ai/cloud/pull/479), [cloud#481](https://github.com/objectstack-ai/cloud/pull/481); tests [cloud#480](https://github.com/objectstack-ai/cloud/pull/480)): drops the shared `com.workspace` catch-all and auto-creates an **intentional named** base via `protocol.installPackage` (a real, Studio-visible package); single-writable-base coherence groups an incremental build into one base; an explicit platform/system `packageId` is discarded; empty field props are sanitized.
 - **Live dogfood (real LLM + runtime)**: a one-sentence magic build plus iterative business-user changes (add a related object, add a field) all landed in **one** app base (`app.iojn`), live and editable — no `com.workspace`, no orphans.
@@ -106,7 +106,7 @@ A metadata-customizable deployment is **single-tenant** (an *environment*; `proj
 
 ## Rollout (tracked separately — see the package-first epic)
 
-1. ✅ Kernel D1/D2 predicate + `writable_package_required` rejection (`@objectstack/objectql`) — [framework#2285](https://github.com/objectstack-ai/framework/pull/2285).
+1. ✅ Kernel D1/D2 predicate + `writable_package_required` rejection (`@objectstack/objectql`) — [framework#2285](https://github.com/objectstack-ai/objectstack/pull/2285).
 2. ✅ Studio D3 create-flow + selector default (`../objectui`) — [objectui#1970](https://github.com/objectstack-ai/objectui/pull/1970). (PackagesPage delete/duplicate moves to D4.)
 3. ✅ AI D3 in `service-ai-studio` (drop fallback, named base, skills) — [cloud#479](https://github.com/objectstack-ai/cloud/pull/479), [cloud#481](https://github.com/objectstack-ai/cloud/pull/481); tests [cloud#480](https://github.com/objectstack-ai/cloud/pull/480).
 4. ⏳ D4 package-as-unit (delete-cascade, export/duplicate).

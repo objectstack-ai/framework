@@ -20,7 +20,7 @@ second npm dependency to keep in sync.
 
 | | `@object-ui/console` | `@objectstack/console` |
 |---|---|---|
-| Repo | [`objectstack-ai/objectui`](https://github.com/objectstack-ai/objectui) | [`objectstack-ai/framework`](https://github.com/objectstack-ai/framework) |
+| Repo | [`objectstack-ai/objectui`](https://github.com/objectstack-ai/objectui) | [`objectstack-ai/objectstack`](https://github.com/objectstack-ai/objectstack) |
 | Role | Standalone Console SPA on its own release cadence | Prebuilt SPA frozen at the SHA this framework release was tested against |
 | Use | Cloud overlays, advanced users, anyone consuming Console directly | Default install for `@objectstack/framework` consumers |
 

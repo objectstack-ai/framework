@@ -162,7 +162,7 @@ The proposal's intent is fully delivered — converge to the `state_machine` rul
 
 ## Addendum — completing D3 for the whole `validations` union (#1475)
 
-This ADR enforced `state_machine` / `cross_field` / `script` and left the other six rule types declarative "until a later phase." [#1475](https://github.com/objectstack-ai/framework/issues/1475) finished that phase, applying the same "no advertised-but-unenforced capability" principle to the rest of the union. The "nine types" figure quoted in the problem statement above is therefore now **six**:
+This ADR enforced `state_machine` / `cross_field` / `script` and left the other six rule types declarative "until a later phase." [#1475](https://github.com/objectstack-ai/objectstack/issues/1475) finished that phase, applying the same "no advertised-but-unenforced capability" principle to the rest of the union. The "nine types" figure quoted in the problem statement above is therefore now **six**:
 
 - **Enforced (added by #1475):** `format` (regex / named email·url·phone·json), `json_schema` (ajv-compiled), `conditional` (recursive `when` → `then`/`otherwise`). These join the three this ADR shipped — all are deterministic, synchronous, side-effect-free predicates over one record, the contract that makes them safe on the write path.
 - **Removed from the schema:** `unique`, `async`, `custom`. Each needs I/O or a handler model a write-path rule must not carry, so it was trimmed rather than left a silent no-op, and redirected to the layer that already does it correctly: uniqueness → a unique **index** (`ObjectSchema.indexes`, `partial` for scope) or field-level `unique: true`; async/remote → the client form layer; custom code → a `beforeInsert`/`beforeUpdate` lifecycle hook.

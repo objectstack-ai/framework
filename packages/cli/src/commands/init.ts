@@ -539,7 +539,7 @@ export default class Init extends Command {
           printSuccess(`Scaffold validated (namespace: ${stack.manifest.namespace})`);
         } catch (err: any) {
           printError(`Scaffold validation failed: ${err.message || err}`);
-          console.log(chalk.dim('  This is a CLI bug — please report it at https://github.com/objectstack-ai/framework/issues'));
+          console.log(chalk.dim('  This is a CLI bug — please report it at https://github.com/objectstack-ai/objectstack/issues'));
           this.error('Scaffold validation failed');
         }
       }

@@ -4,7 +4,7 @@
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: [ADR-0054](./0054-runtime-proof-for-authorable-surface.md) (prove-it-runs for the authorable surface), [ADR-0049](./0049-no-unenforced-security-properties.md) (enforce-or-remove)
 **Consumers**: `@objectstack/spec` (the public API surface + `api-surface.json` snapshot), `@objectstack/downstream-contract` (the frozen fixture), the TypeScript Type Check + Test Core CI gates, the Release workflow, spec authors, platform contributors, and every third party consuming a published release.
-**Surfaced by**: [#2035](https://github.com/objectstack-ai/framework/issues/2035) — 16 writable domains had no `defineX` factory, so third parties authored them as bare output-type literals; and [#2023](https://github.com/objectstack-ai/framework/issues/2023), where a root-import resolved to `any` and silently swallowed ~30 real type errors in the examples.
+**Surfaced by**: [#2035](https://github.com/objectstack-ai/objectstack/issues/2035) — 16 writable domains had no `defineX` factory, so third parties authored them as bare output-type literals; and [#2023](https://github.com/objectstack-ai/objectstack/issues/2023), where a root-import resolved to `any` and silently swallowed ~30 real type errors in the examples.
 
 ---
 
@@ -68,13 +68,13 @@ something the change is **not allowed to edit**.
 ### 1. Every writable domain has a `defineX` factory; bare output-type literals are banned in authoring surfaces
 
 `defineX(config: z.input<typeof XSchema>): X { return XSchema.parse(config); }`
-is the single authoring entry for every writable domain ([#2088](https://github.com/objectstack-ai/framework/pull/2088)
+is the single authoring entry for every writable domain ([#2088](https://github.com/objectstack-ai/objectstack/pull/2088)
 completed the remaining 16). It is the only form that is simultaneously
 input-shape ergonomic, validated at authoring time, and — being a *value* import
 — impossible to silently degrade to `any`. A `no-restricted-syntax` lint guard
 bans bare `: DomainType` exported-const literals across `examples/**` and
-`packages/apps/**` ([#2088](https://github.com/objectstack-ai/framework/pull/2088),
-[#2097](https://github.com/objectstack-ai/framework/pull/2097)).
+`packages/apps/**` ([#2088](https://github.com/objectstack-ai/objectstack/pull/2088),
+[#2097](https://github.com/objectstack-ai/objectstack/pull/2097)).
 
 ### 2. `objectstack validate` is the third party's authoritative self-gate
 
@@ -85,18 +85,18 @@ the same check earlier and into the editor; it does not replace it.
 
 ### 3. The framework proves backward compatibility with two frozen in-repo gates + one live pre-publish gate
 
-- **Depth — `@objectstack/downstream-contract`** ([#2089](https://github.com/objectstack-ai/framework/pull/2089),
-  [#2095](https://github.com/objectstack-ai/framework/pull/2095)). A fixture
+- **Depth — `@objectstack/downstream-contract`** ([#2089](https://github.com/objectstack-ai/objectstack/pull/2089),
+  [#2095](https://github.com/objectstack-ai/objectstack/pull/2095)). A fixture
   authored the way an external consumer does — builder + factories + **bare
   literals** — across all 16 writable domains, typed with the spec's own input
   aliases and run through each schema's `.parse()` plus a `defineStack`
   assembly. Catches a narrowed/removed schema property on any domain.
-- **Breadth — the API-surface snapshot** ([#2092](https://github.com/objectstack-ai/framework/pull/2092)).
+- **Breadth — the API-surface snapshot** ([#2092](https://github.com/objectstack-ai/objectstack/pull/2092)).
   `packages/spec/api-surface.json` records every exported `name (kind)` of all 16
   public entry points. `check:api-surface` fails on any drift; a removal is
   breaking, an addition still requires regenerating the snapshot, so no change to
   the public surface is silent.
-- **Live — the pre-publish hotcrm smoke** ([#2093](https://github.com/objectstack-ai/framework/pull/2093)).
+- **Live — the pre-publish hotcrm smoke** ([#2093](https://github.com/objectstack-ai/objectstack/pull/2093)).
   The Release workflow clones `objectstack-ai/hotcrm` at a pinned tag, installs
   it against the **published** packages, overlays the about-to-publish spec, and
   runs hotcrm's own `typecheck` + `validate`. A red blocks the publish.

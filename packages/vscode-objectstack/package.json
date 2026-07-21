@@ -7,7 +7,7 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/objectstack-ai/framework.git",
+    "url": "https://github.com/objectstack-ai/objectstack.git",
     "directory": "packages/vscode-objectstack"
   },
   "engines": {
@@ -72,7 +72,7 @@
   ],
   "author": "ObjectStack",
   "homepage": "https://objectstack.ai/docs",
-  "bugs": "https://github.com/objectstack-ai/framework/issues",
+  "bugs": "https://github.com/objectstack-ai/objectstack/issues",
   "publishConfig": {
     "access": "public"
   },

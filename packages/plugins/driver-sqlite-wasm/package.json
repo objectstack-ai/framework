@@ -44,11 +44,11 @@
   "author": "ObjectStack",
   "repository": {
     "type": "git",
-    "url": "https://github.com/objectstack-ai/framework.git",
+    "url": "https://github.com/objectstack-ai/objectstack.git",
     "directory": "packages/plugins/driver-sqlite-wasm"
   },
   "homepage": "https://objectstack.ai/docs",
-  "bugs": "https://github.com/objectstack-ai/framework/issues",
+  "bugs": "https://github.com/objectstack-ai/objectstack/issues",
   "publishConfig": {
     "access": "public"
   },

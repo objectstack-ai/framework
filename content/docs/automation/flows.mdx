@@ -382,7 +382,7 @@ This is the **aggregating-node** pattern (Camunda multi-instance / Step Function
 `Map`): the run keeps a single program counter and pauses once, so it needs no
 concurrent-token machinery. Durable pause **inside** a hand-drawn `parallel`
 branch or `loop` iteration — where two unrelated positions pause independently —
-is a separate, larger capability ([ADR-0039](https://github.com/objectstack-ai/framework/blob/main/docs/adr/0039-token-scope-tree-execution.md)
+is a separate, larger capability ([ADR-0039](https://github.com/objectstack-ai/objectstack/blob/main/docs/adr/0039-token-scope-tree-execution.md)
 Track B); the aggregating node covers the common parallel/batch-approval demand
 without it. Worked example: `showcase_invoice_signoff` in the showcase app.
 
@@ -413,7 +413,7 @@ The run holds a **single program counter** the whole time: only one item's
 approval is open at any moment; when it is decided the engine **re-enters** the
 map node to start the next item. v1 is sequential and fail-fast (the first item
 whose subflow fails fails the map). Concurrent fan-out (all items at once) is the
-larger [ADR-0039](https://github.com/objectstack-ai/framework/blob/main/docs/adr/0039-token-scope-tree-execution.md)
+larger [ADR-0039](https://github.com/objectstack-ai/objectstack/blob/main/docs/adr/0039-token-scope-tree-execution.md)
 Track B work. Worked example: `showcase_release_signoff` → `showcase_one_task_signoff`.
 
 ### Nested pause — pausing inside a subflow

@@ -73,11 +73,11 @@ Run `npm run build` when you need the compiled `dist/objectstack.json` artifact.
 
 ## AI Skills
 
-This project uses ObjectStack skills from `objectstack-ai/framework`.
+This project uses ObjectStack skills from `objectstack-ai/objectstack`.
 Install or update skills with the standard [skills CLI](https://skills.sh/):
 
 ```bash
-npx skills add objectstack-ai/framework/skills
+npx skills add objectstack-ai/objectstack/skills
 ```
 
 Skills are triggered automatically based on task context:
@@ -97,5 +97,5 @@ Skills are triggered automatically based on task context:
 ## Learn More
 
 - [ObjectStack Documentation](https://objectstack.com/docs)
-- [GitHub: objectstack-ai/framework](https://github.com/objectstack-ai/framework)
+- [GitHub: objectstack-ai/objectstack](https://github.com/objectstack-ai/objectstack)
 - [Skills CLI](https://skills.sh/) — Manage AI skills across agents

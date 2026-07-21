@@ -43,9 +43,9 @@ by default** and disabled per-deployment with the `OS_PAGE_REACT=off` env
 variable. Both tiers can embed the platform's real data components
 (`<ObjectTable>`, `<ObjectForm>`, charts, metrics).
 
-> **Learn more:** [ADR-0080](https://github.com/objectstack-ai/framework/blob/main/docs/adr/0080-ai-authored-ui-jsx-source.md)
+> **Learn more:** [ADR-0080](https://github.com/objectstack-ai/objectstack/blob/main/docs/adr/0080-ai-authored-ui-jsx-source.md)
 > (the `html` tier — parse ≠ execute; the registry is the contract) and
-> [ADR-0081](https://github.com/objectstack-ai/framework/blob/main/docs/adr/0081-trusted-react-page-tier.md)
+> [ADR-0081](https://github.com/objectstack-ai/objectstack/blob/main/docs/adr/0081-trusted-react-page-tier.md)
 > (the trusted `react` tier). The rest of this page covers the structured mode.
 
 ## Layout Hierarchy
@@ -796,7 +796,7 @@ interface ResponsiveColumns {
 ### Visibility Rule
 
 Visibility is a single **CEL expression** string, not a structured rule object.
-Since [ADR-0089](https://github.com/objectstack-ai/framework/blob/main/docs/adr/0089-unify-visibility-predicate-naming.md) the one canonical key is **`visibleWhen`** across every
+Since [ADR-0089](https://github.com/objectstack-ai/objectstack/blob/main/docs/adr/0089-unify-visibility-predicate-naming.md) the one canonical key is **`visibleWhen`** across every
 layer — data fields, view form sections/fields, and page components — aligning with
 the `readonlyWhen` / `requiredWhen` family. The element is shown only when the
 expression evaluates truthy.
