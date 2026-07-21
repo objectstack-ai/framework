@@ -71,19 +71,31 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Check for changesets
+      - name: Check for a changeset added by this PR
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           if [ ! -d ".changeset" ]; then
             echo "::warning::.changeset directory not found. Skipping changeset check."
             exit 0
           fi
-          CHANGESET_COUNT=$(find .changeset -name '*.md' ! -name 'README.md' | wc -l)
-          if [ "$CHANGESET_COUNT" -eq 0 ]; then
-            echo "::error::No changeset found. Add one with 'pnpm changeset' if this PR includes user-facing changes, or apply the 'skip-changeset' label if it doesn't."
+          # Count changesets THIS PR adds (diff against the base commit), NOT
+          # the whole .changeset directory. A global `find | wc -l` is unsound:
+          # in pre-release (RC) mode `changeset version` RETAINS every consumed
+          # .md file, so the directory is permanently non-empty and the gate can
+          # never go red. #3373 merged a real spec/api-surface fix with no
+          # changeset while this step happily reported "Found 104 changeset(s)".
+          # Diffing against BASE_SHA ignores that residue and sees only what the
+          # PR itself introduced. An empty-frontmatter changeset still counts —
+          # it is the sanctioned "this PR releases nothing" declaration, on par
+          # with the skip-changeset label.
+          ADDED=$(git diff --name-only --diff-filter=A "$BASE_SHA" HEAD -- '.changeset/*.md' \
+                  | grep -v '/README\.md$' | wc -l | tr -d '[:space:]')
+          if [ "$ADDED" -eq 0 ]; then
+            echo "::error::This PR adds no changeset. Run 'pnpm changeset' (an empty changeset is fine for changes that release nothing), or apply the 'skip-changeset' label if it does not need one."
             exit 1
-          else
-            echo "Found $CHANGESET_COUNT changeset(s)"
           fi
+          echo "This PR adds $ADDED changeset(s)."
 
       - name: Guard against accidental major bumps (launch window)
         # Every publishable package is in one Changesets "fixed" (lockstep) group,
