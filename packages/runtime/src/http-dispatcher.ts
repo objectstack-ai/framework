@@ -1661,6 +1661,17 @@ export class HttpDispatcher {
                 // MCP (Streamable HTTP) is a default-on core capability —
                 // advertised unless OS_MCP_SERVER_ENABLED=false opts the env
                 // out. The objectui Integrations page reads this.
+                //
+                // `declared === enforced` here is guaranteed by a LOCKSTEP, not
+                // by service-presence gating like the routes above (#3369 /
+                // #2698): `os serve` auto-loads plugin-mcp from the SAME
+                // `isMcpServerEnabled()` flag that gates this advertisement, so
+                // whenever `/mcp` is advertised the handler is mounted (a key /
+                // token yields 401, never a 404/501). Kept flag-based on purpose
+                // — `@objectstack/rest` advertises `mcp` from the identical
+                // single source (rest-server.ts), so the two discovery producers
+                // stay symmetric. The route-parity gate asserts the lockstep
+                // holds (advertised ⇒ reachable, never 501).
                 mcp:           HttpDispatcher.isMcpEnabled() ? `${prefix}/mcp` : undefined,
         };
 
