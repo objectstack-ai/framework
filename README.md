@@ -4,15 +4,17 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue.svg)
 ![Tests](https://img.shields.io/badge/tests-6%2C507%20passing-brightgreen.svg)
 
-> ## AI writes the app. ObjectStack is what it writes.
+> ## A complete business system in 16k tokens.
 >
-> The open target format and runtime for AI-written business apps. Your coding
-> agent writes models, UI, workflows, and permissions as compact typed metadata —
-> [a complete CRM is under 2,000 lines](#why-the-mistakes-dont-ship), so the whole
-> app fits in the agent's context — and strict TypeScript, Zod schemas, and a
-> validation gate catch its mistakes at authoring time. The runtime derives the
-> database, REST API, UI, and MCP server, and enforces permissions and audit on
-> every call.
+> ObjectStack compresses an entire app — data model, UI, workflows,
+> permissions — into typed metadata an AI agent can hold in context, reason
+> about, and refactor whole ([a complete CRM is under 2,000
+> lines](#why-the-mistakes-dont-ship)). That metadata is your **business
+> ontology** — an open, versioned definition of your objects, permissions, and
+> flows that you own, not code scattered across a framework. Strict TypeScript,
+> Zod schemas, and a validation gate catch the agent's mistakes at authoring
+> time; the runtime derives the database, REST API, UI, and MCP server, and
+> enforces permissions and audit on every call.
 
 `Fits in an agent's context` · `Typed, validated, governed` · `Self-host anywhere` · Apache-2.0
 
