@@ -18,10 +18,10 @@ const mono = IBM_Plex_Mono({
 
 export const metadata: Metadata = {
   title: {
-    absolute: 'ObjectStack — AI writes the app. ObjectStack is what it writes.',
+    absolute: 'ObjectStack — A complete business system in 16k tokens',
   },
   description:
-    'The open target format and runtime for AI-written business apps. Agents write compact typed metadata — a complete CRM is under 2,000 lines, so the whole app fits in an agent\'s context — strict TypeScript, Zod, and a validation gate catch mistakes at authoring time, and the runtime derives the database, REST API, UI, and MCP server. Your business ontology as an open protocol.',
+    'ObjectStack compresses an entire business app — data model, UI, workflows, permissions — into typed metadata an AI agent can hold in context, reason about, and refactor whole; a complete CRM is under 2,000 lines. That metadata is your business ontology — an open, versioned definition you own. Strict TypeScript, Zod, and a validation gate catch the agent\'s mistakes at authoring time, and the runtime derives the database, REST API, UI, and MCP server, enforcing permissions and audit on every call.',
 };
 
 const VOCABULARY: { tag: string; title: string; copy: string }[] = [
@@ -114,18 +114,19 @@ export default function HomePage() {
               className="mt-5 text-[2.6rem]/[1.06] font-bold tracking-tight text-balance md:text-6xl/[1.04]"
               style={{ fontFamily: 'var(--l-display)' }}
             >
-              AI writes the app.{' '}
+              A complete business system{' '}
               <span className="block bg-gradient-to-r from-indigo-500 to-purple-500 bg-clip-text text-transparent dark:from-indigo-400 dark:to-purple-400">
-                ObjectStack is what it writes.
+                in 16k tokens.
               </span>
             </h1>
             <p className="mt-6 max-w-xl text-lg text-fd-muted-foreground text-pretty">
-              The open target format and runtime for AI-written business apps. Your coding agent
-              writes models, UI, workflows, and permissions as compact typed metadata — a
-              complete CRM is under 2,000 lines, so the whole app fits in the agent's context —
-              and strict TypeScript, Zod schemas, and a validation gate catch its mistakes at
-              authoring time. The runtime derives the database, REST API, UI, and MCP server,
-              and enforces permissions and audit on every call.
+              ObjectStack compresses an entire app — data model, UI, workflows, permissions —
+              into typed metadata an AI agent can hold in context, reason about, and refactor
+              whole; a complete CRM is under 2,000 lines. That metadata is your business
+              ontology — an open, versioned definition you own. Strict TypeScript, Zod schemas,
+              and a validation gate catch the agent's mistakes at authoring time, and the
+              runtime derives the database, REST API, UI, and MCP server — permissions and
+              audit enforced on every call.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <Link
@@ -332,7 +333,8 @@ export default function HomePage() {
               </a>
             </p>
             <p className="mt-3 text-sm text-fd-muted-foreground">
-              Want it governed and hosted, with Build &amp; Ask AI built in?{' '}
+              ObjectStack is build &amp; ask with Claude Code. Rather build &amp; ask online —
+              in the browser, nothing to install?{' '}
               <a
                 href="https://www.objectos.ai"
                 className="inline-flex items-center gap-1 font-medium text-fd-foreground underline underline-offset-4 transition-colors hover:text-fd-primary"
