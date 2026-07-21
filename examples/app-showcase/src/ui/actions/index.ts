@@ -4,6 +4,7 @@ import { defineAction } from '@objectstack/spec/ui';
 
 const task = 'showcase_task';
 const invoice = 'showcase_invoice';
+const fieldZoo = 'showcase_field_zoo';
 
 /**
  * Action matrix — covers every `ActionType` (script / url / flow / modal /
@@ -172,6 +173,60 @@ export const SubmitForSignoffAction = defineAction({
   refreshAfter: true,
 });
 
+/**
+ * script — the **action-param widget gallery** (ADR-0059). One inline param of
+ * every non-trivial widget type, so the `ActionParamDialog` renders each real
+ * field widget (not a text box): richtext editor, color picker, date picker,
+ * select, number, the AutoNumber widget for an `autonumber` param, and — the
+ * ⚠️ ones — `image`/`file` uploads through the ambient UploadProvider with
+ * `multiple` / `accept` / `maxSize` honored, and the **upload guard** (Confirm
+ * stays disabled while a file is still uploading). Lives on Field Zoo, the
+ * "one specimen of everything" object, next to its every-field-type record.
+ *
+ * The body just echoes the received keys — the point is the dialog, not a side
+ * effect — so it needs no capabilities.
+ */
+export const ActionParamGalleryAction = defineAction({
+  name: 'showcase_action_param_gallery',
+  label: 'Action Param Gallery',
+  icon: 'sparkles',
+  objectName: fieldZoo,
+  type: 'script',
+  params: [
+    { name: 'p_text', type: 'text', label: 'Title', required: true, placeholder: 'A short title' },
+    { name: 'p_richtext', type: 'richtext', label: 'Rich note', helpText: 'Renders the rich-text editor, not a plain textarea.' },
+    {
+      name: 'p_priority', type: 'select', label: 'Priority', defaultValue: 'normal',
+      options: [
+        { label: 'Low', value: 'low' },
+        { label: 'Normal', value: 'normal' },
+        { label: 'High', value: 'high' },
+      ],
+    },
+    { name: 'p_date', type: 'date', label: 'Effective date' },
+    { name: 'p_color', type: 'color', label: 'Accent color', defaultValue: '#7C3AED' },
+    // Spec `autonumber` param → the AutoNumber widget (read-only, auto-assigned).
+    { name: 'p_reference', type: 'autonumber', label: 'Reference #' },
+    // ⚠️ image/file uploads: real widget + upload guard + multiple/accept/maxSize.
+    { name: 'p_cover', type: 'image', label: 'Cover image', accept: ['image/*'], maxSize: 5 * 1024 * 1024 },
+    {
+      name: 'p_attachments', type: 'file', label: 'Attachments', multiple: true,
+      accept: ['application/pdf', 'image/*'], maxSize: 10 * 1024 * 1024,
+      helpText: 'Confirm stays disabled while a file is still uploading (ADR-0059 upload guard).',
+    },
+  ],
+  body: {
+    language: 'js',
+    // No side effect — the value of this action is the dialog's widgets. Echo
+    // the keys the dialog collected so the result dialog shows something.
+    source: 'return { ok: true, received: Object.keys(input || {}) };',
+    capabilities: [],
+  },
+  successMessage: 'Params received — every widget type rendered through the shared field-widget map.',
+  locations: ['record_header', 'list_item'],
+  refreshAfter: false,
+});
+
 export const allActions = [
   MarkDoneAction,
   OpenDocsAction,
@@ -181,4 +236,5 @@ export const allActions = [
   LogTimeAction,
   NewTaskAction,
   SubmitForSignoffAction,
+  ActionParamGalleryAction,
 ];

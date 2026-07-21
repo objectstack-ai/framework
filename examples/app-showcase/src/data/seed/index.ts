@@ -85,6 +85,18 @@ const contacts = defineSeed(Contact, {
     { name: '张伟', email: 'zhangwei@huaning.example', phone: '+86 21 5550 1111', company: '华宁科技', title: 'Engineering Manager', account: '华宁科技', stage: 'qualified' },
     { name: '王芳', email: 'wangfang@huaning.example', phone: '+86 21 5550 2222', company: '华宁科技', title: 'Procurement Director', account: '华宁科技', stage: 'working' },
     { name: '李雷', email: 'lilei@huaning.example', phone: '+86 21 5550 3333', company: '华宁科技', title: 'IT Specialist', account: '华宁科技', stage: 'new' },
+    // Bulk prospects under ONE account (Northwind) so its Account → Contacts
+    // related list exceeds a page and demonstrates server-side related-list
+    // pagination ($top/$skip, objectui#2711) on a fresh boot — every other
+    // account keeps a handful for a clean people picker.
+    ...Array.from({ length: 24 }, (_, i) => ({
+      name: `Prospect ${String(i + 1).padStart(2, '0')}`,
+      email: `prospect${i + 1}@northwind.example`,
+      company: 'Northwind',
+      title: 'Sales Prospect',
+      account: 'Northwind',
+      stage: 'new',
+    })),
   ],
 });
 
