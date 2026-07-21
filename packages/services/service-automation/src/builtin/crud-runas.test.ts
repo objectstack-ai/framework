@@ -292,3 +292,107 @@ describe('runtime-identity unscoped-run predicates (#1888 follow-up unit)', () =
     expect(flowTouchesData(undefined)).toBe(false);
   });
 });
+
+/**
+ * #3356 (follow-up to #1888) — a `runAs:'user'` run's data ops must enforce the
+ * TRIGGERING user's real authorization. The record-change hook session carries
+ * only a `userId` (never the writer's positions/permission sets), so the engine
+ * resolves the user's full grants at run setup via an injected resolver
+ * (bridged to `@objectstack/core`'s `resolveUserAuthzGrants` by the plugin).
+ * These tests pin the resolve-at-setup behavior and its guardrails.
+ */
+describe("runAs:'user' resolves the triggering user's grants at run setup (#3356)", () => {
+  it('resolves positions + permission sets and threads them to EVERY data op', async () => {
+    const engine = new AutomationEngine(makeLogger());
+    const { data, calls } = fakeData();
+    registerCrudNodes(engine, ctxWith(data));
+    engine.registerFlow('usr', allOpsFlow('usr', 'user'));
+
+    const seen: Array<{ userId: string; tenantId?: string }> = [];
+    engine.setUserGrantsResolver((userId, tenantId) => {
+      seen.push({ userId, tenantId });
+      return { positions: ['approver', 'everyone'], permissions: ['ehr_all'], tenantId: 'org1' };
+    });
+
+    // The record-change hook shape: ONLY a userId (no positions/permissions).
+    const res = await engine.execute('usr', { userId: 'u1' });
+    expect(res.success).toBe(true);
+
+    // Resolver invoked exactly once per run, for the triggering user.
+    expect(seen).toEqual([{ userId: 'u1', tenantId: undefined }]);
+
+    for (const c of calls) {
+      expect(c.ctx.isSystem, `${c.op} wrongly elevated`).toBe(false);
+      expect(c.ctx.userId).toBe('u1');
+      expect(c.ctx.positions).toEqual(['approver', 'everyone']);
+      expect(c.ctx.permissions, `${c.op} lost the resolved permission sets`).toEqual(['ehr_all']);
+      expect(c.ctx.tenantId).toBe('org1');
+    }
+  });
+
+  it('does NOT re-resolve when the trigger already carried permissions (agent/REST envelope preserved)', async () => {
+    const engine = new AutomationEngine(makeLogger());
+    const { data, calls } = fakeData();
+    registerCrudNodes(engine, ctxWith(data));
+    engine.registerFlow('usr', allOpsFlow('usr', 'user'));
+
+    let called = 0;
+    engine.setUserGrantsResolver(() => {
+      called++;
+      return { positions: ['SHOULD_NOT_APPLY'], permissions: ['SHOULD_NOT_APPLY'] };
+    });
+
+    // An already-resolved envelope — e.g. an ADR-0090 agent ceiling acting
+    // on-behalf-of a user (always non-empty). Must be honored verbatim, NOT
+    // re-broadened to the human's full grants.
+    await engine.execute('usr', { userId: 'u1', positions: ['agent'], permissions: ['mcp_agent_read'], tenantId: 't1' });
+    expect(called).toBe(0);
+    for (const c of calls) {
+      expect(c.ctx.permissions).toEqual(['mcp_agent_read']);
+      expect(c.ctx.positions).toEqual(['agent']);
+    }
+  });
+
+  it("does NOT resolve for runAs:'system' (explicit elevation wins)", async () => {
+    const engine = new AutomationEngine(makeLogger());
+    const { data, calls } = fakeData();
+    registerCrudNodes(engine, ctxWith(data));
+    engine.registerFlow('sys', allOpsFlow('sys', 'system'));
+    let called = 0;
+    engine.setUserGrantsResolver(() => { called++; return { positions: [], permissions: [] }; });
+    await engine.execute('sys', { userId: 'u1' });
+    expect(called).toBe(0);
+    for (const c of calls) expect(c.ctx.isSystem).toBe(true);
+  });
+
+  it('does NOT resolve when there is no trigger user (stays the unscoped fail-open)', async () => {
+    const engine = new AutomationEngine(makeLogger());
+    const { data, calls } = fakeData();
+    registerCrudNodes(engine, ctxWith(data));
+    engine.registerFlow('sched', allOpsFlow('sched')); // default user, no userId
+    let called = 0;
+    engine.setUserGrantsResolver(() => { called++; return { positions: [], permissions: [] }; });
+    await engine.execute('sched', { event: 'schedule' });
+    expect(called).toBe(0);
+    for (const c of calls) expect(c.ctx, `${c.op} should stay unscoped`).toBeUndefined();
+  });
+
+  it('fail-safe: a resolver error warns and keeps the bare user — never elevates', async () => {
+    const { logger, warns } = recordingLogger();
+    const engine = new AutomationEngine(logger);
+    const { data, calls } = fakeData();
+    registerCrudNodes(engine, ctxWith(data));
+    engine.registerFlow('usr', allOpsFlow('usr', 'user'));
+    engine.setUserGrantsResolver(() => { throw new Error('db down'); });
+
+    const res = await engine.execute('usr', { userId: 'u1' });
+    expect(res.success).toBe(true);
+    // The degraded resolution is AUDIBLE, and the run is NOT elevated.
+    expect(runAsWarns(warns).some((w) => w.includes('could not resolve grants'))).toBe(true);
+    for (const c of calls) {
+      expect(c.ctx.isSystem, `${c.op} wrongly elevated on resolver failure`).toBe(false);
+      expect(c.ctx.userId).toBe('u1');
+      expect(c.ctx.permissions).toEqual([]); // unresolved → data middleware applies its baseline
+    }
+  });
+});

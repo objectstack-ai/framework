@@ -1,6 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import type { Plugin, PluginContext } from '@objectstack/core';
+import { resolveUserAuthzGrants } from '@objectstack/core';
 import type { IJobService } from '@objectstack/spec/contracts';
 import type {
     Connector,
@@ -489,6 +490,41 @@ export class AutomationServicePlugin implements Plugin {
             }
         } catch {
             ctx.logger.debug('[Automation] objectql registry not present — flow-condition checks limited to syntax');
+        }
+
+        // #3356 (follow-up to #1888) — bridge the shared authz resolver so a
+        // `runAs:'user'` run enforces the TRIGGERING user's REAL grants. The
+        // record-change hook session carries only a `userId` (never the writer's
+        // positions/permission sets), so without this the run's data ops fell
+        // back to a bare member/everyone principal — a 403 on private objects and
+        // silent field strips on public ones — even when the triggering user was
+        // fully authorized. `resolveUserAuthzGrants` reads the same
+        // sys_member / sys_user_position / sys_*_permission_set tables a REST
+        // request resolves through, so a flow "as the user" matches that user's
+        // own direct request. Wired off the same objectql/data engine the CRUD
+        // nodes use. Best-effort: without an ObjectQL engine there are no grants
+        // to resolve and run identity is unchanged (the trigger context is used
+        // verbatim, the pre-#3356 behavior).
+        try {
+            let ql: { find?: unknown } | undefined;
+            try { ql = ctx.getService<{ find?: unknown }>('objectql'); }
+            catch { try { ql = ctx.getService<{ find?: unknown }>('data'); } catch { ql = undefined; } }
+            if (ql && typeof ql.find === 'function') {
+                const engineQl = ql;
+                this.engine.setUserGrantsResolver(async (userId, tenantId) => {
+                    const grants = await resolveUserAuthzGrants(engineQl, userId, { tenantId });
+                    return {
+                        positions: grants.positions,
+                        permissions: grants.permissions,
+                        ...(tenantId ? { tenantId } : {}),
+                    };
+                });
+                ctx.logger.debug('[Automation] runAs:user grant resolver bridged to @objectstack/core resolveUserAuthzGrants (#3356)');
+            } else {
+                ctx.logger.debug('[Automation] objectql not present — runAs:user runs keep the trigger-supplied identity');
+            }
+        } catch (err) {
+            ctx.logger.debug(`[Automation] runAs:user grant resolver not wired: ${(err as Error).message}`);
         }
 
         // Pull flow definitions from the ObjectQL schema registry. AppPlugin.init()

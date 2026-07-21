@@ -1,7 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { describe, it, expect } from 'vitest';
-import { resolveAuthzContext, resolveLocalizationContext } from './resolve-authz-context.js';
+import { resolveAuthzContext, resolveUserAuthzGrants, resolveLocalizationContext } from './resolve-authz-context.js';
 import { POSTURE_RANK } from './posture-ladder.js';
 import type { AuthzPosture } from '@objectstack/spec/security';
 
@@ -372,6 +372,97 @@ describe('resolveAuthzContext — posture ladder (ADR-0095 D2/D3)', () => {
   it('anonymous principal carries no posture rung', async () => {
     const ctx = await resolveAuthzContext({ ql: makeQl({}), headers: H(), getSession: async () => undefined });
     expect(ctx.posture).toBeUndefined();
+  });
+});
+
+/**
+ * #3356 — the userId-driven core, callable WITHOUT an HTTP request. A
+ * `runAs:'user'` automation run knows the triggering user's id (the record-change
+ * hook session carries only that) and must build the SAME positions/permissions
+ * envelope a direct REST request from that user would resolve, so its data ops
+ * enforce RLS as that user — not the bare member/everyone fallback.
+ */
+describe('resolveUserAuthzGrants — userId-driven authz for non-HTTP surfaces (#3356)', () => {
+  it("resolves a known user's positions + permission-set names from the DB", async () => {
+    const ql = makeQl({
+      sys_user: [{ id: 'u1', email: 'ada@x.com' }],
+      sys_member: [{ user_id: 'u1', role: 'admin', organization_id: 'o1' }],
+      sys_user_position: [{ user_id: 'u1', position: 'approver', organization_id: null }],
+      sys_user_permission_set: [{ user_id: 'u1', permission_set_id: 'psA', organization_id: null }],
+      sys_permission_set: [{ id: 'psA', name: 'ehr_all', system_permissions: ['cap_ehr'] }],
+    });
+    const grants = await resolveUserAuthzGrants(ql, 'u1', { tenantId: 'o1' });
+    expect(grants.positions).toContain('org_admin'); // sys_member owner/admin normalized
+    expect(grants.positions).toContain('approver'); // sys_user_position
+    expect(grants.positions).toContain('everyone'); // implicit audience anchor
+    expect(grants.permissions).toContain('ehr_all'); // user-scoped permission set
+    expect(grants.systemPermissions).toContain('cap_ehr');
+    expect(grants.email).toBe('ada@x.com');
+  });
+
+  it('matches resolveAuthzContext for the same user — one resolver, one envelope', async () => {
+    const tables = {
+      sys_user: [{ id: 'u1', email: 'ada@x.com' }],
+      sys_member: [],
+      sys_user_position: [{ user_id: 'u1', position: 'contributor', organization_id: null }],
+      sys_user_permission_set: [{ user_id: 'u1', permission_set_id: 'ps1', organization_id: null }],
+      sys_position: [{ id: 'r1', name: 'contributor' }],
+      sys_position_permission_set: [{ position_id: 'r1', permission_set_id: 'ps1' }],
+      sys_permission_set: [{ id: 'ps1', name: 'contributor_ps', system_permissions: ['cap_x'] }],
+    };
+    const viaHttp = await resolveAuthzContext({ ql: makeQl(tables), headers: H(), getSession: session('u1') });
+    const viaUser = await resolveUserAuthzGrants(makeQl(tables), 'u1');
+    expect([...viaUser.positions].sort()).toEqual([...viaHttp.positions].sort());
+    expect([...viaUser.permissions].sort()).toEqual([...viaHttp.permissions].sort());
+    expect([...viaUser.systemPermissions].sort()).toEqual([...viaHttp.systemPermissions].sort());
+    expect(viaUser.posture).toBe(viaHttp.posture);
+  });
+
+  it('seeds caller-supplied permissions FIRST, then appends resolved set names', async () => {
+    const ql = makeQl({
+      sys_user: [{ id: 'u1' }],
+      sys_member: [],
+      sys_user_position: [],
+      sys_user_permission_set: [{ user_id: 'u1', permission_set_id: 'ps1', organization_id: null }],
+      sys_permission_set: [{ id: 'ps1', name: 'sales_ps' }],
+    });
+    const grants = await resolveUserAuthzGrants(ql, 'u1', { seedPermissions: ['api:scope'] });
+    expect(grants.permissions[0]).toBe('api:scope');
+    expect(grants.permissions).toContain('sales_ps');
+  });
+
+  it('a caller-supplied email wins over the sys_user read', async () => {
+    const ql = makeQl({ sys_user: [{ id: 'u1', email: 'db@x.com' }], sys_member: [], sys_user_position: [], sys_user_permission_set: [] });
+    const grants = await resolveUserAuthzGrants(ql, 'u1', { seedEmail: 'session@x.com' });
+    expect(grants.email).toBe('session@x.com');
+  });
+
+  it('a user with no grants gets the implicit everyone anchor, empty permissions (never null)', async () => {
+    const ql = makeQl({ sys_user: [{ id: 'u1' }], sys_member: [], sys_user_position: [], sys_user_permission_set: [] });
+    const grants = await resolveUserAuthzGrants(ql, 'u1');
+    expect(grants.positions).toEqual(['everyone']);
+    expect(grants.permissions).toEqual([]);
+    expect(grants.org_user_ids).toEqual(['u1']);
+  });
+
+  it('fail-closed: no data engine yields an empty-but-valid envelope and never throws', async () => {
+    const grants = await resolveUserAuthzGrants(undefined, 'u1', { seedPermissions: ['api:scope'] });
+    expect(grants.positions).toEqual([]);
+    expect(grants.permissions).toEqual(['api:scope']);
+    expect(grants.org_user_ids).toEqual(['u1']);
+  });
+
+  it('drops permission-set grants outside their validity window (ADR-0091)', async () => {
+    const past = new Date(Date.now() - 86_400_000).toISOString();
+    const ql = makeQl({
+      sys_user: [{ id: 'u1' }],
+      sys_member: [],
+      sys_user_position: [],
+      sys_user_permission_set: [{ user_id: 'u1', permission_set_id: 'psA', organization_id: null, valid_until: past }],
+      sys_permission_set: [{ id: 'psA', name: 'expired_ps' }],
+    });
+    const grants = await resolveUserAuthzGrants(ql, 'u1');
+    expect(grants.permissions).not.toContain('expired_ps');
   });
 });
 

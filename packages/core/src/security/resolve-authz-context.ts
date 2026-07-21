@@ -135,6 +135,97 @@ export async function resolveAuthzContext(input: ResolveAuthzInput): Promise<Res
   if (tenantId) ctx.tenantId = tenantId;
   if (!ql || typeof ql.find !== 'function') return ctx;
 
+  // The principal is now known — delegate ALL position/permission/RLS
+  // aggregation to the shared userId-driven resolver. Seed it with the API-key
+  // scopes already collected (step 1) and any session-supplied email so the
+  // resulting order + email fallback are byte-identical to the logic this
+  // replaced. `resolveUserAuthzGrants` is the single place that reads
+  // `sys_member` / `sys_user_position` / `sys_*_permission_set`, so a non-HTTP
+  // surface that already knows the user id (a `runAs:'user'` automation run,
+  // #3356) can build the SAME envelope without re-implementing any of it.
+  const grants = await resolveUserAuthzGrants(ql, userId, {
+    tenantId,
+    nowMs: input.nowMs,
+    seedPermissions: ctx.permissions,
+    seedEmail: ctx.email,
+  });
+  ctx.positions = grants.positions;
+  ctx.permissions = grants.permissions;
+  ctx.systemPermissions = grants.systemPermissions;
+  ctx.org_user_ids = grants.org_user_ids;
+  if (grants.tabPermissions) ctx.tabPermissions = grants.tabPermissions;
+  if (grants.posture) ctx.posture = grants.posture;
+  if (grants.email && !ctx.email) ctx.email = grants.email;
+
+  return ctx;
+}
+
+/** The authorization grants a KNOWN user holds — a subset of {@link ResolvedAuthzContext}. */
+export interface UserAuthzGrants {
+  positions: string[];
+  permissions: string[];
+  systemPermissions: string[];
+  /** Fellow-org user IDs for RLS scoping of identity tables (`id IN (...)`). */
+  org_user_ids: string[];
+  tabPermissions?: Record<string, 'visible' | 'hidden' | 'default_on' | 'default_off'>;
+  posture?: AuthzPosture;
+  /** The user's unique email (`sys_user`), for `current_user.email` owner RLS. */
+  email?: string;
+}
+
+export interface ResolveUserAuthzGrantsOptions {
+  /** Active org/tenant id — scopes org-bound grants (a null-org row is global). */
+  tenantId?: string;
+  /** Clock injection for grant validity windows (tests). */
+  nowMs?: number;
+  /**
+   * Permission names the CALLER already resolved (e.g. API-key scopes) to seed
+   * `permissions` BEFORE permission-set names are appended, so a mixed
+   * API-key+session principal keeps every scope and the ordering is preserved.
+   * Copied, never mutated.
+   */
+  seedPermissions?: string[];
+  /** A caller-supplied email (e.g. from the session) that wins over the `sys_user` read. */
+  seedEmail?: string;
+}
+
+/**
+ * resolveUserAuthzGrants — the userId-driven core of {@link resolveAuthzContext}.
+ *
+ * Given a KNOWN user id, aggregate the authorization grants that user holds:
+ * org-admin positions (`sys_member`), platform-RBAC positions
+ * (`sys_user_position`), user- and position-bound permission sets
+ * (`sys_user_permission_set` / `sys_position_permission_set` →
+ * `sys_permission_set`), the derived `platform_admin` built-in + posture rung,
+ * fellow-org peers for identity-table RLS, and the env-side `ai_seat`.
+ *
+ * Factored out of `resolveAuthzContext` so a surface that already knows WHO the
+ * principal is — with no HTTP request to resolve it from — can build the SAME
+ * envelope through the ONE resolver, instead of re-reading `sys_member` /
+ * `sys_user_position` / `sys_*_permission_set` itself. The motivating consumer
+ * is a `runAs:'user'` automation run resolving the triggering user's grants
+ * (#3356): the record-change hook session carries only a `userId`, so the
+ * automation engine calls this to run the flow's data ops exactly as that user
+ * — not the bare member/everyone fallback the missing grants used to leave it.
+ *
+ * Fail-closed like its parent: every read is defensive, a missing engine/table
+ * yields an empty-but-valid envelope, and it never throws.
+ */
+export async function resolveUserAuthzGrants(
+  ql: any,
+  userId: string,
+  opts: ResolveUserAuthzGrantsOptions = {},
+): Promise<UserAuthzGrants> {
+  const { tenantId } = opts;
+  const grants: UserAuthzGrants = {
+    positions: [],
+    permissions: Array.isArray(opts.seedPermissions) ? [...opts.seedPermissions] : [],
+    systemPermissions: [],
+    org_user_ids: [userId],
+  };
+  if (opts.seedEmail) grants.email = opts.seedEmail;
+  if (!ql || typeof ql.find !== 'function') return grants;
+
   // sys_user is needed for both the `current_user.email` fallback (API-key auth,
   // where the session didn't supply an email) and the ai_seat synthesis below.
   // Read the row at most once per resolution — the two reads were a duplicate
@@ -151,10 +242,10 @@ export async function resolveAuthzContext(input: ResolveAuthzInput): Promise<Res
   };
 
   // Resolve the caller's unique email for `current_user.email` RLS owner
-  // policies when the session path didn't supply it (e.g. API-key auth).
-  if (!ctx.email) {
+  // policies when the caller didn't supply it (e.g. API-key auth).
+  if (!grants.email) {
     const u = await getUserRow();
-    if (u?.email) ctx.email = String(u.email);
+    if (u?.email) grants.email = String(u.email);
   }
 
   // 3. Organization-administration roles via sys_member (better-auth), normalized
@@ -172,7 +263,7 @@ export async function resolveAuthzContext(input: ResolveAuthzInput): Promise<Res
     if (m.role && typeof m.role === 'string') {
       for (const raw of m.role.split(',').map((s: string) => s.trim()).filter(Boolean)) {
         const r = mapMembershipRole(raw);
-        if (!ctx.positions.includes(r)) ctx.positions.push(r);
+        if (!grants.positions.includes(r)) grants.positions.push(r);
       }
     }
   }
@@ -180,7 +271,7 @@ export async function resolveAuthzContext(input: ResolveAuthzInput): Promise<Res
   // Single clock for every validity-window check in this resolution
   // (ADR-0091 D2 — a grant row outside [valid_from, valid_until) does not
   // resolve, fail-closed, with no background job involved).
-  const nowMs = input.nowMs ?? Date.now();
+  const nowMs = opts.nowMs ?? Date.now();
 
   // 4. [ADR-0057 D4] Platform-owned RBAC role assignments (sys_user_position) — the
   //    source of truth for custom roles, decoupled from sys_member.role.
@@ -191,7 +282,7 @@ export async function resolveAuthzContext(input: ResolveAuthzInput): Promise<Res
     if (org && tenantId && org !== tenantId) continue;
     if (!isGrantActive(ur, nowMs)) continue;
     const r = ur.position;
-    if (typeof r === 'string' && r && !ctx.positions.includes(r)) ctx.positions.push(r);
+    if (typeof r === 'string' && r && !grants.positions.includes(r)) grants.positions.push(r);
   }
 
   // 5. Fellow-org user IDs so RLS can scope identity tables to collaborators.
@@ -203,9 +294,7 @@ export async function resolveAuthzContext(input: ResolveAuthzInput): Promise<Res
         .filter((v): v is string => typeof v === 'string' && v.length > 0),
     );
     ids.add(userId);
-    ctx.org_user_ids = Array.from(ids);
-  } else {
-    ctx.org_user_ids = [userId];
+    grants.org_user_ids = Array.from(ids);
   }
 
   // 6. Permission sets — user-scoped grants (null org = global, else active org).
@@ -236,12 +325,12 @@ export async function resolveAuthzContext(input: ResolveAuthzInput): Promise<Res
   //     holds the built-in `everyone` position, so sets bound to it resolve
   //     below exactly like any other position-bound grant — ADDITIVE, with no
   //     "only when the user has nothing else" cliff.
-  if (!ctx.positions.includes('everyone')) ctx.positions.push('everyone');
+  if (!grants.positions.includes('everyone')) grants.positions.push('everyone');
 
   // 6a. Position-bound permission sets (sys_position_permission_set): a position
   //     carries its permission sets.
-  if (ctx.positions.length > 0) {
-    const positionRows = await tryFind(ql, 'sys_position', { name: { $in: ctx.positions } }, 100);
+  if (grants.positions.length > 0) {
+    const positionRows = await tryFind(ql, 'sys_position', { name: { $in: grants.positions } }, 100);
     const positionIds = positionRows.map((r) => r.id).filter(Boolean);
     if (positionIds.length > 0) {
       const rpsRows = await tryFind(ql, 'sys_position_permission_set', { position_id: { $in: positionIds } }, 500);
@@ -252,21 +341,21 @@ export async function resolveAuthzContext(input: ResolveAuthzInput): Promise<Res
     }
   }
 
-  // 6b. Resolve permission-set details (names → ctx.permissions; system_permissions;
+  // 6b. Resolve permission-set details (names → grants.permissions; system_permissions;
   //     tab_permissions merged by highest visibility).
   if (psIds.size > 0) {
     const psRows = await tryFind(ql, 'sys_permission_set', { id: { $in: Array.from(psIds) } }, 500);
     const tabRank: Record<string, number> = { hidden: 0, default_off: 1, default_on: 2, visible: 3 };
     const mergedTabs: Record<string, 'visible' | 'hidden' | 'default_on' | 'default_off'> = {};
     for (const ps of psRows) {
-      if (ps.name && !ctx.permissions.includes(ps.name)) ctx.permissions.push(ps.name);
+      if (ps.name && !grants.permissions.includes(ps.name)) grants.permissions.push(ps.name);
       if (ps.name === ADMIN_FULL_ACCESS && unscopedUserPsIds.has(ps.id)) hasPlatformAdminGrant = true;
       const sysPerms = typeof ps.system_permissions === 'string'
         ? safeJsonParse(ps.system_permissions, [])
         : (ps.system_permissions ?? ps.systemPermissions);
       if (Array.isArray(sysPerms)) {
         for (const p of sysPerms) {
-          if (typeof p === 'string' && !ctx.systemPermissions.includes(p)) ctx.systemPermissions.push(p);
+          if (typeof p === 'string' && !grants.systemPermissions.includes(p)) grants.systemPermissions.push(p);
         }
       }
       const tabs = typeof ps.tab_permissions === 'string'
@@ -282,12 +371,12 @@ export async function resolveAuthzContext(input: ResolveAuthzInput): Promise<Res
         }
       }
     }
-    if (Object.keys(mergedTabs).length > 0) ctx.tabPermissions = mergedTabs;
+    if (Object.keys(mergedTabs).length > 0) grants.tabPermissions = mergedTabs;
   }
 
   // 6c. Project the derived platform_admin built-in role (leads the list).
-  if (hasPlatformAdminGrant && !ctx.positions.includes(BUILTIN_IDENTITY_PLATFORM_ADMIN)) {
-    ctx.positions.unshift(BUILTIN_IDENTITY_PLATFORM_ADMIN);
+  if (hasPlatformAdminGrant && !grants.positions.includes(BUILTIN_IDENTITY_PLATFORM_ADMIN)) {
+    grants.positions.unshift(BUILTIN_IDENTITY_PLATFORM_ADMIN);
   }
 
   // 6d. [ADR-0095 D2/D3] Resolve the posture rung ONCE, from held CAPABILITY
@@ -300,19 +389,19 @@ export async function resolveAuthzContext(input: ResolveAuthzInput): Promise<Res
   //     behavior is unchanged: the per-object Layer 0 exemption + per-side
   //     superuser bypass still gate access; posture is the carried, explainable
   //     tier. `EXTERNAL` is never derived (no external principal type yet).
-  ctx.posture = derivePosture({
+  grants.posture = derivePosture({
     isPlatformAdmin: hasPlatformAdminGrant,
-    isTenantAdmin: ctx.permissions.includes(ORGANIZATION_ADMIN),
+    isTenantAdmin: grants.permissions.includes(ORGANIZATION_ADMIN),
   });
 
   // 7. [ADR-0024] Env-side AI seat: synthesize the `ai_seat` capability from the
   //    boolean sys_user.ai_access (sqlite returns 1/0; memory returns boolean).
-  if (!ctx.permissions.includes('ai_seat')) {
+  if (!grants.permissions.includes('ai_seat')) {
     const aiAccess = ((await getUserRow()) as { ai_access?: unknown } | undefined)?.ai_access;
-    if (aiAccess === true || aiAccess === 1 || aiAccess === '1') ctx.permissions.push('ai_seat');
+    if (aiAccess === true || aiAccess === 1 || aiAccess === '1') grants.permissions.push('ai_seat');
   }
 
-  return ctx;
+  return grants;
 }
 
 // ── Localization (ADR-0053 Phase 2) ─────────────────────────────────────────

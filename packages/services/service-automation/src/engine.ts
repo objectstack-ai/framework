@@ -251,6 +251,36 @@ export type FlowObjectSchemaResolver = (
 ) => { fields?: readonly string[]; fieldTypes?: Record<string, string> } | undefined;
 
 /**
+ * The authorization envelope a `runAs:'user'` run needs to enforce its data
+ * ops as the triggering user (#3356): the user's resolved position names and
+ * permission-set names (the two lists the data security middleware keys on),
+ * plus their tenant. Built by {@link FlowUserGrantsResolver}.
+ */
+export interface FlowUserGrants {
+  positions: string[];
+  permissions: string[];
+  tenantId?: string;
+}
+
+/**
+ * Resolves the authorization grants held by the triggering user of a
+ * `runAs:'user'` run, so its data nodes enforce RLS exactly as that user rather
+ * than the bare member/everyone fallback (#3356, follow-up to #1888). Injected
+ * by the host — the automation plugin bridges it to `@objectstack/core`'s
+ * `resolveUserAuthzGrants`, which reads `sys_member` / `sys_user_position` /
+ * `sys_*_permission_set` — so the engine stays decoupled from the identity
+ * store. Returns `undefined` (or throws, tolerated) when grants can't be
+ * resolved; the run then keeps whatever identity the trigger already carried
+ * (see {@link AutomationEngine.resolveRunContext}). When unwired, run identity
+ * is unchanged from the pre-#3356 behavior (the trigger-supplied context is
+ * used verbatim), so a bare engine in tests is unaffected.
+ */
+export type FlowUserGrantsResolver = (
+  userId: string,
+  tenantId: string | undefined,
+) => Promise<FlowUserGrants | undefined> | FlowUserGrants | undefined;
+
+/**
  * A designer-facing view of one connector action — identity + its JSON-Schema
  * input/output. The runtime handler is intentionally omitted; this is metadata.
  */
@@ -617,6 +647,9 @@ export class AutomationEngine implements IAutomationService {
     /** Bridge to the host object registry for schema-aware condition validation at
      *  registration (#1928), if wired. Advisory-only — see {@link FlowObjectSchemaResolver}. */
     private objectSchemaResolver: FlowObjectSchemaResolver | null = null;
+    /** Bridge to the host authz resolver so a `runAs:'user'` run enforces the
+     *  triggering user's real grants (#3356), if wired. See {@link FlowUserGrantsResolver}. */
+    private userGrantsResolver: FlowUserGrantsResolver | null = null;
     private executionLogs: ExecutionLogEntry[] = [];
     private readonly maxLogSize: number;
     private logger: Logger;
@@ -1073,6 +1106,20 @@ export class AutomationEngine implements IAutomationService {
     }
 
     /**
+     * Wire the engine to the host's authorization resolver (#3356) so a
+     * `runAs:'user'` run resolves the TRIGGERING user's real positions +
+     * permission sets at run setup — the record-change hook session carries
+     * only a `userId`, so without this the run's data ops fell back to a bare
+     * member/everyone principal even when the triggering user was fully
+     * authorized. The automation plugin bridges it to `@objectstack/core`'s
+     * `resolveUserAuthzGrants`. Passing `null` detaches the bridge (run identity
+     * reverts to whatever the trigger supplied).
+     */
+    setUserGrantsResolver(resolver: FlowUserGrantsResolver | null): void {
+        this.userGrantsResolver = resolver;
+    }
+
+    /**
      * Resolve a named function for a `script` node. Returns `undefined` when no
      * resolver is wired or the name is unregistered — the node then fails the
      * step with a clear error rather than silently no-op'ing.
@@ -1455,8 +1502,49 @@ export class AutomationEngine implements IAutomationService {
      * `runAs:'system'` to make scheduled elevation explicit (the build-time lint
      * `flow-schedule-runas-unscoped` flags the same shape earlier).
      */
-    private resolveRunContext(flow: FlowParsed, context?: AutomationContext): AutomationContext {
+    private async resolveRunContext(flow: FlowParsed, context?: AutomationContext): Promise<AutomationContext> {
         const runContext: AutomationContext = { ...(context ?? {}), runAs: flow.runAs ?? 'user' };
+
+        // #3356 (follow-up to #1888) — a `runAs:'user'` run must enforce its data
+        // ops as the TRIGGERING user's real authorization. Most trigger surfaces
+        // (REST action / trigger endpoint) already resolve the full envelope and
+        // forward `permissions`; the ObjectQL record-change hook does NOT — its
+        // session carries only a `userId`, so the run used to fall back to a bare
+        // member/everyone principal (403 on private objects; silent field strips
+        // on public ones) even when the triggering user was fully authorized.
+        // When a grants resolver is wired and the trigger left the authz envelope
+        // unresolved (no `permissions`), resolve the user's real positions +
+        // permission sets here — the single point where every trigger type's run
+        // identity is established. Contexts that ALREADY carry `permissions` are
+        // left untouched: that includes an ADR-0090 agent principal acting
+        // on-behalf-of a user (its scope-derived ceiling is always non-empty), so
+        // this never re-broadens a deliberately narrowed identity.
+        if (
+            runContext.runAs !== 'system' &&
+            runContext.userId &&
+            !Array.isArray(runContext.permissions) &&
+            this.userGrantsResolver
+        ) {
+            try {
+                const grants = await this.userGrantsResolver(runContext.userId, runContext.tenantId);
+                if (grants) {
+                    runContext.positions = Array.isArray(grants.positions) ? grants.positions : [];
+                    runContext.permissions = Array.isArray(grants.permissions) ? grants.permissions : [];
+                    if (grants.tenantId && !runContext.tenantId) runContext.tenantId = grants.tenantId;
+                }
+            } catch (err) {
+                // Fail-safe, never fail-open: on a resolution error the run keeps
+                // the trigger's (unresolved) identity — the data middleware applies
+                // its baseline member fallback, NOT elevation — and we warn loudly
+                // so the degraded authorization is audible rather than silent.
+                this.logger.warn(
+                    `[runAs] flow '${flow.name}' could not resolve grants for triggering user ` +
+                    `'${runContext.userId}': ${(err as Error)?.message ?? String(err)}. Its data ops fall ` +
+                    `back to baseline member permissions (not elevated).`,
+                );
+            }
+        }
+
         if (runIsUnscopedUserMode(runContext) && flowTouchesData(flow)) {
             this.logger.warn(
                 `[runAs] flow '${flow.name}' executes with runAs:'user' but its trigger carries no user ` +
@@ -1537,8 +1625,9 @@ export class AutomationEngine implements IAutomationService {
         // ADR-0049 / #1888 — establish the run's effective execution identity
         // from flow.runAs (a COPY, never mutating the caller's context, so the
         // elevation is scoped to this run and the caller's identity is restored
-        // when execute() returns). Surfaces the user-less fail-open (see helper).
-        const runContext = this.resolveRunContext(flow, context);
+        // when execute() returns). Surfaces the user-less fail-open (see helper)
+        // and resolves the triggering user's real grants for `runAs:'user'` (#3356).
+        const runContext = await this.resolveRunContext(flow, context);
 
         try {
             // Find the start node
@@ -2871,7 +2960,7 @@ export class AutomationEngine implements IAutomationService {
 
         // ADR-0049 / #1888 — establish the run's effective execution identity
         // from flow.runAs (see execute() / resolveRunContext); threaded below.
-        const runContext = this.resolveRunContext(flow, context);
+        const runContext = await this.resolveRunContext(flow, context);
 
         try {
             const startNode = flow.nodes.find(n => n.type === 'start');

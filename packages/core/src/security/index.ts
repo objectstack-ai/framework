@@ -82,9 +82,12 @@ export {
 
 export {
   resolveAuthzContext,
+  resolveUserAuthzGrants,
   resolveLocalizationContext,
   type ResolvedAuthzContext,
   type ResolveAuthzInput,
+  type UserAuthzGrants,
+  type ResolveUserAuthzGrantsOptions,
   type ResolveLocalizationInput,
 } from './resolve-authz-context.js';
 

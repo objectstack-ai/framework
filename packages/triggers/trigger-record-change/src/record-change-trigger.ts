@@ -225,7 +225,7 @@ export class RecordChangeTrigger implements FlowTrigger {
                   { ...(inputDoc ?? {}), ...after }
                 : inputDoc ?? (previous && typeof previous === 'object' ? previous : {});
 
-        const session = (ctx.session ?? {}) as { userId?: string; organizationId?: string; positions?: string[] };
+        const session = (ctx.session ?? {}) as { userId?: string; organizationId?: string };
 
         return {
             record,
@@ -233,13 +233,19 @@ export class RecordChangeTrigger implements FlowTrigger {
             object: binding.object ?? ctx.object,
             event: binding.event,
             userId: session.userId,
-            // Forward the writer's roles/org so a `runAs:'user'` flow enforces
-            // RLS exactly as the user who made the change, not a member fallback
-            // (#1888). The engine elevates only for `runAs:'system'`. The hook
-            // session exposes the active org as `organizationId` (the deprecated
-            // `session.tenantId` alias was removed in v11, #3290); it feeds the
-            // automation context's driver-layer `tenantId` field unchanged.
-            ...(Array.isArray(session.positions) && session.positions.length ? { positions: session.positions } : {}),
+            // Forward the writer's identity so a `runAs:'user'` flow enforces RLS
+            // exactly as the user who made the change (#1888). We forward the
+            // `userId` (+ the active org as `tenantId`) ONLY: the ObjectQL hook
+            // session does NOT carry the writer's positions / permission sets, so
+            // the automation engine resolves the triggering user's FULL grants
+            // from this `userId` at run setup (#3356). Forwarding a half-populated
+            // `positions` here (empty in practice, and never `permissions`) was the
+            // hollow-credential bug #3356 fixed — an incomplete, misleading
+            // duplicate of what the engine now resolves authoritatively. The
+            // engine elevates only for `runAs:'system'`. The hook session exposes
+            // the active org as `organizationId` (the deprecated `session.tenantId`
+            // alias was removed in v11, #3290); it feeds the automation context's
+            // driver-layer `tenantId` field unchanged.
             ...(session.organizationId ? { tenantId: session.organizationId } : {}),
             // Expose the record as params too, so flows with named `isInput`
             // variables matching record fields get them seeded.
