@@ -125,4 +125,14 @@ export {
 } from './validate-security-posture.js';
 export type { SecurityFinding, SecuritySeverity } from './validate-security-posture.js';
 
+export {
+  validateDashboardActionRefs,
+  DASHBOARD_ACTION_TARGET_UNDEFINED,
+  DASHBOARD_ACTION_ROUTE_UNRESOLVED,
+} from './validate-dashboard-action-refs.js';
+export type {
+  DashboardActionRefFinding,
+  DashboardActionRefSeverity,
+} from './validate-dashboard-action-refs.js';
+
 export { buildAccessMatrix, diffAccessMatrix } from './build-access-matrix.js';

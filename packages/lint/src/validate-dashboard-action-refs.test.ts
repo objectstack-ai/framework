@@ -1,0 +1,214 @@
+// Copyright (c) 2026 ObjectStack. Licensed under the Apache-2.0 license.
+
+import { describe, it, expect } from 'vitest';
+import {
+  validateDashboardActionRefs,
+  DASHBOARD_ACTION_TARGET_UNDEFINED,
+  DASHBOARD_ACTION_ROUTE_UNRESOLVED,
+} from './validate-dashboard-action-refs';
+
+/** Build a stack with a single dashboard whose header carries `actions`. */
+function dashWithHeaderActions(actions: unknown[], extra: Record<string, unknown> = {}) {
+  return {
+    ...extra,
+    dashboards: [
+      { name: 'exec', label: 'Executive', header: { actions }, widgets: [] },
+    ],
+  };
+}
+
+describe('validateDashboardActionRefs (ADR-0049 references / #3367)', () => {
+  it('passes a script action that names a defined global action', () => {
+    const findings = validateDashboardActionRefs(
+      dashWithHeaderActions(
+        [{ label: 'Recalc', actionType: 'script', actionUrl: 'recalc_totals' }],
+        { actions: [{ name: 'recalc_totals', type: 'script' }] },
+      ),
+    );
+    expect(findings).toEqual([]);
+  });
+
+  it('passes a script action that names a defined object-embedded action', () => {
+    const findings = validateDashboardActionRefs(
+      dashWithHeaderActions(
+        [{ label: 'Close', actionType: 'script', actionUrl: 'close_deal' }],
+        { objects: [{ name: 'opportunity', actions: [{ name: 'close_deal', type: 'script' }] }] },
+      ),
+    );
+    expect(findings).toEqual([]);
+  });
+
+  it('ERRORS on a script action whose target is defined nowhere', () => {
+    const findings = validateDashboardActionRefs(
+      dashWithHeaderActions([
+        { label: 'Export PDF', actionType: 'script', actionUrl: 'export_dashboard_pdf' },
+      ]),
+    );
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toMatchObject({
+      severity: 'error',
+      rule: DASHBOARD_ACTION_TARGET_UNDEFINED,
+      where: 'dashboard "exec" · header action "Export PDF"',
+      path: 'dashboards[0].header.actions[0].actionUrl',
+    });
+    expect(findings[0].message).toContain('export_dashboard_pdf');
+  });
+
+  it('passes a modal action that names a defined action', () => {
+    const findings = validateDashboardActionRefs(
+      dashWithHeaderActions(
+        [{ label: 'New Deal', actionType: 'modal', actionUrl: 'quick_create_deal' }],
+        { actions: [{ name: 'quick_create_deal', type: 'modal' }] },
+      ),
+    );
+    expect(findings).toEqual([]);
+  });
+
+  it('passes a modal action using the <verb>_<object> convention against a real object', () => {
+    const findings = validateDashboardActionRefs(
+      dashWithHeaderActions(
+        [{ label: 'New Deal', actionType: 'modal', actionUrl: 'create_opportunity' }],
+        { objects: [{ name: 'opportunity' }] },
+      ),
+    );
+    expect(findings).toEqual([]);
+  });
+
+  it('passes a modal action that is a bare object name (create-form fallback)', () => {
+    const findings = validateDashboardActionRefs(
+      dashWithHeaderActions(
+        [{ label: 'Add Lead', actionType: 'modal', actionUrl: 'lead' }],
+        { objects: [{ name: 'lead' }] },
+      ),
+    );
+    expect(findings).toEqual([]);
+  });
+
+  it('ERRORS on a modal action whose target is neither a defined action nor a real object', () => {
+    const findings = validateDashboardActionRefs(
+      dashWithHeaderActions(
+        [{ label: 'New Deal', actionType: 'modal', actionUrl: 'create_opportunity' }],
+        { objects: [{ name: 'account' }] }, // no `opportunity`
+      ),
+    );
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toMatchObject({
+      severity: 'error',
+      rule: DASHBOARD_ACTION_TARGET_UNDEFINED,
+    });
+    expect(findings[0].message).toContain('create_opportunity');
+    expect(findings[0].message).toContain('or object');
+  });
+
+  it('passes a url action pointing at a registered report route', () => {
+    const findings = validateDashboardActionRefs(
+      dashWithHeaderActions(
+        [{ label: 'Forecast', actionType: 'url', actionUrl: '/reports/forecast' }],
+        { reports: [{ name: 'forecast' }] },
+      ),
+    );
+    expect(findings).toEqual([]);
+  });
+
+  it('WARNS on a url action pointing at a non-existent in-app route', () => {
+    const findings = validateDashboardActionRefs(
+      dashWithHeaderActions([
+        { label: 'Forecast', actionType: 'url', actionUrl: '/reports/forecast' },
+      ]),
+    );
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toMatchObject({
+      severity: 'warning',
+      rule: DASHBOARD_ACTION_ROUTE_UNRESOLVED,
+      where: 'dashboard "exec" · header action "Forecast"',
+      path: 'dashboards[0].header.actions[0].actionUrl',
+    });
+    expect(findings[0].message).toContain('/reports/forecast');
+    expect(findings[0].message).toContain('report named "forecast"');
+  });
+
+  it('resolves an object route embedded mid-path (app-scoped route)', () => {
+    const findings = validateDashboardActionRefs(
+      dashWithHeaderActions(
+        [{ label: 'Deals', actionType: 'url', actionUrl: '/apps/crm/objects/deal' }],
+        { objects: [{ name: 'deal' }] },
+      ),
+    );
+    expect(findings).toEqual([]);
+  });
+
+  it('skips external URLs, interpolated targets, and opaque routes (no false positives)', () => {
+    const findings = validateDashboardActionRefs(
+      dashWithHeaderActions([
+        { label: 'Docs', actionType: 'url', actionUrl: 'https://example.com/x' },
+        { label: 'Proto', actionType: 'url', actionUrl: '//cdn.example.com/y' },
+        { label: 'Dyn', actionType: 'url', actionUrl: '/reports/${ctx.reportId}' },
+        { label: 'Home', actionType: 'url', actionUrl: '/home' },
+        { label: 'Settings', actionType: 'url', actionUrl: '/settings/profile' },
+        { label: 'Bare', actionType: 'url', actionUrl: 'some-handler' },
+      ]),
+    );
+    expect(findings).toEqual([]);
+  });
+
+  it('defaults a missing actionType to url (never errors on an unqualified target)', () => {
+    const findings = validateDashboardActionRefs(
+      dashWithHeaderActions([{ label: 'Mystery', actionUrl: 'do_something' }]),
+    );
+    // `do_something` has no leading slash → treated as opaque url → skipped.
+    expect(findings).toEqual([]);
+  });
+
+  it('checks per-widget actionUrl buttons (script)', () => {
+    const findings = validateDashboardActionRefs({
+      dashboards: [
+        {
+          name: 'ops',
+          label: 'Ops',
+          widgets: [
+            { id: 'kpi', dataset: 'd', values: ['x'], actionType: 'script', actionUrl: 'ghost_action' },
+            { id: 'noaction', dataset: 'd', values: ['x'] },
+          ],
+        },
+      ],
+    });
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toMatchObject({
+      severity: 'error',
+      rule: DASHBOARD_ACTION_TARGET_UNDEFINED,
+      where: 'dashboard "ops" · widget "kpi" action',
+      path: 'dashboards[0].widgets[0].actionUrl',
+    });
+  });
+
+  it('covers the issue #3367 repro: one script + one modal error, one url warning', () => {
+    // Faithful to the runtime: `create_opportunity` resolves via the modal
+    // <verb>_<object> convention ONLY when an `opportunity` object exists. Here
+    // it does not, so all three targets are dead.
+    const findings = validateDashboardActionRefs(
+      dashWithHeaderActions([
+        { label: 'Export PDF', actionType: 'script', actionUrl: 'export_dashboard_pdf' },
+        { label: 'New Deal', actionType: 'modal', actionUrl: 'create_opportunity' },
+        { label: 'Forecast', actionType: 'url', actionUrl: '/reports/forecast' },
+      ]),
+    );
+    const errors = findings.filter((f) => f.severity === 'error');
+    const warnings = findings.filter((f) => f.severity === 'warning');
+    expect(errors).toHaveLength(2);
+    expect(warnings).toHaveLength(1);
+    expect(errors.map((e) => e.path)).toEqual([
+      'dashboards[0].header.actions[0].actionUrl',
+      'dashboards[0].header.actions[1].actionUrl',
+    ]);
+  });
+
+  it('tolerates junk / empty input and dashboards without actions', () => {
+    expect(validateDashboardActionRefs({})).toEqual([]);
+    expect(validateDashboardActionRefs(undefined as unknown as Record<string, unknown>)).toEqual([]);
+    expect(validateDashboardActionRefs({ dashboards: [] })).toEqual([]);
+    expect(validateDashboardActionRefs({ dashboards: [null, 42] as unknown })).toEqual([]);
+    expect(
+      validateDashboardActionRefs({ dashboards: [{ name: 'd', widgets: [], header: {} }] }),
+    ).toEqual([]);
+  });
+});

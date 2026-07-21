@@ -1,0 +1,339 @@
+// Copyright (c) 2026 ObjectStack. Licensed under the Apache-2.0 license.
+
+/**
+ * [ADR-0049 — references] Reference-integrity for dashboard header & widget
+ * action targets (issue #3367).
+ *
+ * ADR-0049 established the "enforce-or-remove" gate for spec *properties*: a
+ * declared property the runtime does not honour is a false promise and must be
+ * enforced, marked experimental, or removed. This rule applies the SAME honesty
+ * principle to *references*. A dashboard header action (or a widget's header
+ * action button) names a target — a `script`/`modal` action, or a `url` route —
+ * that must actually resolve. A dangling target ships a button that renders and,
+ * on click, silently does nothing: a false affordance, exactly the failure
+ * ADR-0049 exists to prevent, just for a reference rather than a property.
+ *
+ * Nothing in the protocol schema can express this: `actionUrl` is a free string,
+ * so `{ actionType: 'script', actionUrl: 'export_dashboard_pdf' }` parses and
+ * ships even when no such action is defined anywhere in the stack.
+ *
+ * Surfaces checked:
+ *   - dashboard `header.actions[]` — each `{ actionType, actionUrl }`
+ *   - dashboard `widgets[].actionUrl` (+ `actionType`) — the per-widget button
+ *
+ * Resolution mirrors the objectui runtime dispatch (`DashboardRenderer` +
+ * `DashboardView`) so the lint flags exactly what would fail to resolve at
+ * runtime:
+ *
+ *   actionType 'script' → `actionUrl` must name a DEFINED action (`stack.actions`
+ *       or any `object.actions`, by `name`). A script target that names no
+ *       defined action fails open at runtime ("action not found"). → ERROR.
+ *
+ *   actionType 'modal'  → `actionUrl` resolves if it names a defined action, OR
+ *       matches the runtime `<verb>_<object>` convention the modalHandler
+ *       implements (create_/new_/add_/edit_/update_ + a defined object), OR is a
+ *       bare defined object name (the handler falls back to that object's create
+ *       form). Otherwise → ERROR.
+ *
+ *   actionType 'url'    → a relative in-app path. WARN when a recognizable
+ *       `<collection>/<name>` segment (objects/reports/dashboards/pages/views)
+ *       names an entity that does not exist in this stack. External URLs
+ *       (`http(s)://`, `//`), interpolated targets (`${…}`), and opaque routes
+ *       (no recognized collection segment) are skipped — they cannot be resolved
+ *       statically and may be host/app/plugin routes. → WARNING.
+ *
+ *   actionType 'flow' | 'api' — not checked: flow targets resolve against the
+ *       automation engine / other packages, and api targets are opaque endpoints.
+ *       Out of scope for #3367.
+ *
+ * Severity split follows the issue's acceptance criteria: an undefined
+ * `script`/`modal` target FAILS validation (a genuine dead reference that fails
+ * open at runtime as a dead button); an unresolved `url` route is advisory
+ * (route resolution is app-context-dependent, and a path may be served by
+ * another installed package or a host/console route). External, interpolated,
+ * convention, and opaque targets are exempted to keep false positives near zero
+ * — the same conservative posture as the sibling `lint-view-refs` and
+ * `validate-capability-references` rules.
+ */
+
+export const DASHBOARD_ACTION_TARGET_UNDEFINED = 'dashboard-action-target-undefined';
+export const DASHBOARD_ACTION_ROUTE_UNRESOLVED = 'dashboard-action-route-unresolved';
+
+export type DashboardActionRefSeverity = 'error' | 'warning';
+
+export interface DashboardActionRefFinding {
+  /** `error` for a dangling script/modal action; `warning` for an unresolved url route. */
+  severity: DashboardActionRefSeverity;
+  /** Diagnostic rule id. */
+  rule: string;
+  /** Human-readable location, e.g. `dashboard "sales_overview" · header action "Export PDF"`. */
+  where: string;
+  /** Config path, e.g. `dashboards[2].header.actions[0].actionUrl`. */
+  path: string;
+  /** What is wrong. */
+  message: string;
+  /** How to fix it. */
+  hint: string;
+}
+
+type AnyRec = Record<string, unknown>;
+
+/** Coerce a collection (array or name-keyed map) to an array of records, injecting
+ *  `name` from the map key — mirrors the helper in the sibling authoring lints so
+ *  the rule works on both the parsed (array) and normalized (map) stack shapes. */
+function asArray(v: unknown): AnyRec[] {
+  if (Array.isArray(v)) return v as AnyRec[];
+  if (v && typeof v === 'object') {
+    return Object.entries(v as AnyRec).map(([name, def]) => ({ name, ...(def as AnyRec) }));
+  }
+  return [];
+}
+
+function strName(v: unknown): string | undefined {
+  return typeof v === 'string' && v.length > 0 ? v : undefined;
+}
+
+/** The runtime modal `<verb>_<object>` convention (objectui `DashboardView`
+ *  modalHandler): `create_/new_/add_/edit_/update_` + an object name opens that
+ *  object's create/edit form. */
+const MODAL_VERB_RE = /^(?:create|new|add|edit|update)_(.+)$/;
+
+/** URL path segments that name a metadata collection, mapped to the stack key
+ *  whose members can appear after them in an in-app route
+ *  (`/…/objects/crm_lead`, `/reports/forecast`, `/dashboards/exec`, …). Both the
+ *  singular and plural spellings are accepted. */
+const URL_COLLECTION_TO_STACK_KEY: Record<string, 'objects' | 'reports' | 'dashboards' | 'pages' | 'views'> = {
+  object: 'objects',
+  objects: 'objects',
+  report: 'reports',
+  reports: 'reports',
+  dashboard: 'dashboards',
+  dashboards: 'dashboards',
+  page: 'pages',
+  pages: 'pages',
+  view: 'views',
+  views: 'views',
+};
+
+/** Derive the name a top-level `views` container registers under (mirrors the
+ *  runtime loader's `resolveMetadataItemName('views', …)` fallbacks). */
+function viewContainerName(item: AnyRec): string | undefined {
+  return (
+    strName(item.name) ??
+    strName(item.id) ??
+    strName(item.object) ??
+    strName((item.list as AnyRec | undefined)?.data && ((item.list as AnyRec).data as AnyRec).object) ??
+    strName((item.form as AnyRec | undefined)?.data && ((item.form as AnyRec).data as AnyRec).object)
+  );
+}
+
+interface KnownTargets {
+  /** Every action name defined in the stack (global + object-embedded). */
+  actions: Set<string>;
+  /** Object names (also valid as bare modal targets and `objects/<name>` routes). */
+  objects: Set<string>;
+  reports: Set<string>;
+  dashboards: Set<string>;
+  pages: Set<string>;
+  /** View names routable as `views/<name>` — container names plus object names. */
+  views: Set<string>;
+}
+
+/** Build the author-time "known target" sets from a stack. */
+function collectKnownTargets(stack: AnyRec): KnownTargets {
+  const actions = new Set<string>();
+  const objects = new Set<string>();
+  const reports = new Set<string>();
+  const dashboards = new Set<string>();
+  const pages = new Set<string>();
+  const views = new Set<string>();
+
+  const collectNames = (v: unknown, into: Set<string>, name: (rec: AnyRec) => string | undefined) => {
+    for (const item of asArray(v)) {
+      if (!item || typeof item !== 'object') continue;
+      const n = name(item);
+      if (n) into.add(n);
+    }
+  };
+
+  collectNames(stack.actions, actions, (a) => strName(a.name));
+  for (const obj of asArray(stack.objects)) {
+    if (!obj || typeof obj !== 'object') continue;
+    const n = strName(obj.name);
+    if (n) objects.add(n);
+    collectNames(obj.actions, actions, (a) => strName(a.name));
+  }
+  collectNames(stack.reports, reports, (r) => strName(r.name));
+  collectNames(stack.dashboards, dashboards, (d) => strName(d.name));
+  collectNames(stack.pages, pages, (p) => strName(p.name));
+  collectNames(stack.views, views, viewContainerName);
+  // An object's default view is routable by the object's own name too.
+  for (const o of objects) views.add(o);
+
+  return { actions, objects, reports, dashboards, pages, views };
+}
+
+/** Does a `script`/`modal` `actionUrl` resolve? */
+function resolveActionTarget(
+  actionType: 'script' | 'modal',
+  target: string,
+  known: KnownTargets,
+): boolean {
+  if (known.actions.has(target)) return true;
+  if (actionType === 'modal') {
+    // Runtime modalHandler convention: `<verb>_<object>` or a bare object name
+    // opens that object's create/edit form.
+    if (known.objects.has(target)) return true;
+    const m = MODAL_VERB_RE.exec(target);
+    if (m && known.objects.has(m[1])) return true;
+  }
+  return false;
+}
+
+/**
+ * Resolve a relative `url` in-app route. Returns:
+ *   - `null` when the target is not statically resolvable (external, interpolated,
+ *     or carries no recognized `<collection>/<name>` segment) — SKIP, no finding.
+ *   - `{ collection, name }` for a recognized `<collection>/<name>` pair that does
+ *     NOT exist in the stack — WARN.
+ *   - `undefined` when a recognized pair DID resolve — OK, no finding.
+ */
+function resolveUrlRoute(
+  target: string,
+  known: KnownTargets,
+): { collection: string; name: string } | null | undefined {
+  // External / protocol-relative — leaves the app; not an in-app route.
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(target) || target.startsWith('//')) return null;
+  // Interpolated — resolved by the renderer at click time, not statically known.
+  if (target.includes('${')) return null;
+  // Only relative in-app paths are considered.
+  if (!target.startsWith('/')) return null;
+
+  // Strip query + hash, then split into non-empty segments.
+  const pathPart = target.split(/[?#]/, 1)[0];
+  const segments = pathPart.split('/').filter(Boolean);
+
+  for (let i = 0; i < segments.length - 1; i++) {
+    const stackKey = URL_COLLECTION_TO_STACK_KEY[segments[i]];
+    if (!stackKey) continue;
+    const name = segments[i + 1];
+    if (known[stackKey].has(name)) return undefined; // resolved
+    return { collection: segments[i], name }; // recognized shape, unknown name
+  }
+  return null; // no recognized collection segment — opaque route, skip
+}
+
+interface HeaderAction {
+  actionType?: string;
+  actionUrl?: string;
+  label?: string;
+}
+
+/**
+ * Validate every dashboard header / widget action reference in a stack. Returns
+ * findings (empty = clean). `script`/`modal` dead targets are errors; `url`
+ * unresolved routes are warnings.
+ */
+export function validateDashboardActionRefs(stack: AnyRec): DashboardActionRefFinding[] {
+  const findings: DashboardActionRefFinding[] = [];
+  if (!stack || typeof stack !== 'object') return findings;
+
+  const dashboards = asArray(stack.dashboards);
+  if (dashboards.length === 0) return findings;
+
+  const known = collectKnownTargets(stack);
+
+  const checkOne = (
+    action: HeaderAction,
+    where: string,
+    path: string,
+  ) => {
+    const target = strName(action.actionUrl);
+    if (!target) return; // nothing referenced (widget with no action button)
+    if (target.includes('${')) return; // dynamic target — not statically resolvable
+
+    // Renderer default: a missing actionType is treated as a 'url' navigation
+    // (DashboardRenderer builds header ActionDefs with `type: actionType || 'url'`).
+    const actionType = strName(action.actionType) ?? 'url';
+
+    if (actionType === 'script' || actionType === 'modal') {
+      if (resolveActionTarget(actionType, target, known)) return;
+      const kindWord = actionType === 'script' ? 'script' : 'modal';
+      findings.push({
+        severity: 'error',
+        rule: DASHBOARD_ACTION_TARGET_UNDEFINED,
+        where,
+        path,
+        message:
+          `${kindWord} action target "${target}" resolves to no defined action` +
+          (actionType === 'modal' ? ' or object' : '') +
+          `. The button renders but does nothing when clicked — a dangling reference ` +
+          `the runtime cannot dispatch (ADR-0049: a declared reference must resolve).`,
+        hint:
+          actionType === 'modal'
+            ? `Define an action named "${target}" (stack.actions or the object's actions), ` +
+              `use the "<verb>_<object>" convention against a real object ` +
+              `(e.g. "create_<object>"), point actionUrl at an existing object, or remove the button.`
+            : `Define a script action named "${target}" (stack.actions or the object's actions) ` +
+              `with an inline body or a registered handler, or remove the button.`,
+      });
+      return;
+    }
+
+    if (actionType === 'url') {
+      const route = resolveUrlRoute(target, known);
+      if (!route) return; // skip (external/interpolated/opaque) or resolved
+      findings.push({
+        severity: 'warning',
+        rule: DASHBOARD_ACTION_ROUTE_UNRESOLVED,
+        where,
+        path,
+        message:
+          `url action target "${target}" points at ${route.collection}/${route.name}, ` +
+          `but no ${route.collection.replace(/s$/, '')} named "${route.name}" is registered ` +
+          `in this stack — the button likely navigates to a dead route.`,
+        hint:
+          `Check the path for a typo, define the referenced ${route.collection.replace(/s$/, '')}, ` +
+          `or ignore this if the route is served by another installed package or a host/console route.`,
+      });
+      return;
+    }
+    // 'flow' | 'api' | custom types are out of scope (see module header).
+  };
+
+  for (let di = 0; di < dashboards.length; di++) {
+    const dash = dashboards[di];
+    if (!dash || typeof dash !== 'object') continue;
+    const dashName = strName(dash.name) ?? `(dashboard ${di})`;
+    const dashPath = `dashboards[${di}]`;
+
+    // Header actions.
+    const headerActions = asArray((dash.header as AnyRec | undefined)?.actions);
+    for (let ai = 0; ai < headerActions.length; ai++) {
+      const action = headerActions[ai] as HeaderAction | null;
+      if (!action || typeof action !== 'object') continue;
+      const label = strName(action.label) ?? strName(action.actionUrl) ?? `#${ai}`;
+      checkOne(
+        action,
+        `dashboard "${dashName}" · header action "${label}"`,
+        `${dashPath}.header.actions[${ai}].actionUrl`,
+      );
+    }
+
+    // Per-widget action buttons.
+    const widgets = asArray(dash.widgets);
+    for (let wi = 0; wi < widgets.length; wi++) {
+      const widget = widgets[wi];
+      if (!widget || typeof widget !== 'object') continue;
+      if (!strName(widget.actionUrl)) continue;
+      const widgetId = strName(widget.id) ?? `#${wi}`;
+      checkOne(
+        { actionType: widget.actionType as string | undefined, actionUrl: widget.actionUrl as string | undefined },
+        `dashboard "${dashName}" · widget "${widgetId}" action`,
+        `${dashPath}.widgets[${wi}].actionUrl`,
+      );
+    }
+  }
+
+  return findings;
+}

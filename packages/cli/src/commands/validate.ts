@@ -12,6 +12,7 @@ import { validateStackExpressions } from '@objectstack/lint';
 import { validateListViewMode } from '@objectstack/lint';
 import { validateViewContainers } from '@objectstack/lint';
 import { validateWidgetBindings } from '@objectstack/lint';
+import { validateDashboardActionRefs } from '@objectstack/lint';
 import { validateResponsiveStyles } from '@objectstack/lint';
 import { validateJsxPages, validateReactPages, validateReactPageProps, validatePageSourceStyling } from '@objectstack/lint';
 import { validateCapabilityReferences } from '@objectstack/lint';
@@ -208,6 +209,43 @@ export default class Validate extends Command {
           console.log(chalk.dim(`      rule: ${f.rule}  at ${f.path}`));
         }
         this.exit(1);
+      }
+
+      // 3a-bis. Dashboard action/route reference integrity (ADR-0049 for
+      //     references, #3367) — a header/widget action names a `script`/`modal`
+      //     target that resolves to no defined action, or a `url` target that
+      //     matches no in-app route. Nothing else flags it, so it ships as a
+      //     button that renders and silently does nothing on click (a false
+      //     affordance). Dead script/modal targets are errors (fail open at
+      //     runtime); unresolved url routes are advisory warnings.
+      if (!flags.json) printStep('Checking dashboard action references (ADR-0049)...');
+      const actionRefFindings = validateDashboardActionRefs(result.data as Record<string, unknown>);
+      const actionRefErrors = actionRefFindings.filter((f) => f.severity === 'error');
+      const actionRefWarnings = actionRefFindings.filter((f) => f.severity === 'warning');
+      if (actionRefErrors.length > 0) {
+        if (flags.json) {
+          console.log(JSON.stringify({
+            valid: false,
+            errors: actionRefErrors,
+            warnings: [...widgetWarnings, ...actionRefWarnings],
+            duration: timer.elapsed(),
+          }, null, 2));
+          this.exit(1);
+        }
+        console.log('');
+        printError(`Dashboard action reference check failed (${actionRefErrors.length} issue${actionRefErrors.length > 1 ? 's' : ''})`);
+        for (const f of actionRefErrors.slice(0, 50)) {
+          console.log(`  • ${f.where}: ${f.message}`);
+          console.log(chalk.dim(`      ${f.hint}`));
+          console.log(chalk.dim(`      rule: ${f.rule}  at ${f.path}`));
+        }
+        this.exit(1);
+      }
+      if (!flags.json) {
+        for (const w of actionRefWarnings.slice(0, 50)) {
+          console.log(chalk.yellow(`  ⚠ ${w.where}: ${w.message}`));
+          console.log(chalk.dim(`      ${w.hint}`));
+        }
       }
 
       // 3b. SDUI scoped-styling correctness (ADR-0065) — a styled node's
@@ -471,7 +509,7 @@ export default class Validate extends Command {
           valid: true,
           manifest: config.manifest,
           stats,
-          warnings: [...exprWarnings, ...widgetWarnings, ...styleWarnings, ...jsxWarnings, ...capWarnings, ...flowReadinessWarnings, ...securityAdvisories, ...capProviderWarnings],
+          warnings: [...exprWarnings, ...widgetWarnings, ...actionRefWarnings, ...styleWarnings, ...jsxWarnings, ...capWarnings, ...flowReadinessWarnings, ...securityAdvisories, ...capProviderWarnings],
           conversions: conversionNotices,
           specVersionGap: specGap,
           duration: timer.elapsed(),
