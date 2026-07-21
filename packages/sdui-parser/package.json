@@ -30,11 +30,11 @@
   "author": "ObjectStack",
   "repository": {
     "type": "git",
-    "url": "https://github.com/objectstack-ai/framework.git",
+    "url": "https://github.com/objectstack-ai/objectstack.git",
     "directory": "packages/sdui-parser"
   },
   "homepage": "https://objectstack.ai/docs",
-  "bugs": "https://github.com/objectstack-ai/framework/issues",
+  "bugs": "https://github.com/objectstack-ai/objectstack/issues",
   "publishConfig": {
     "access": "public"
   }

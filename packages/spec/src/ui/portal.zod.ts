@@ -35,7 +35,7 @@
  *   - objectui ThemeProvider: inject `theme` as CSS variables.
  *
  * See framework issue
- *   https://github.com/objectstack-ai/framework/issues/1294
+ *   https://github.com/objectstack-ai/objectstack/issues/1294
  * for the design rationale.
  */
 

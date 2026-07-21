@@ -39,8 +39,8 @@ export type KindCoverage =
   | { status: 'waived'; reason: string; issue: string };
 
 const ISSUE = {
-  aiDeferred: 'https://github.com/objectstack-ai/framework/issues/2610',
-  noAuthoringSurface: 'https://github.com/objectstack-ai/framework/issues/2613',
+  aiDeferred: 'https://github.com/objectstack-ai/objectstack/issues/2610',
+  noAuthoringSurface: 'https://github.com/objectstack-ai/objectstack/issues/2613',
 } as const;
 
 /**

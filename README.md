@@ -186,8 +186,8 @@ See [Self-Hosted Deployment](https://objectstack.ai/docs/deployment/self-hosting
 ## Working on the framework itself
 
 ```bash
-git clone https://github.com/objectstack-ai/framework.git
-cd framework
+git clone https://github.com/objectstack-ai/objectstack.git
+cd objectstack
 pnpm install     # Node 18+, pnpm 8+ (corepack enable)
 pnpm build       # build all packages
 pnpm dev         # run the showcase example (REST + Console on :3000)
@@ -374,7 +374,7 @@ Run locally: `pnpm docs:dev`
 ## Community
 
 - ⭐ **Star this repo** if ObjectStack is useful — it helps others find it.
-- 🐛 Questions, bugs, or feature requests → [open an issue](https://github.com/objectstack-ai/framework/issues).
+- 🐛 Questions, bugs, or feature requests → [open an issue](https://github.com/objectstack-ai/objectstack/issues).
 - 🤝 Want to contribute? See [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ## License

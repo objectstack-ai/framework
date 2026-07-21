@@ -5,7 +5,7 @@ description: Complete guide to all ObjectStack packages, services, drivers, plug
 
 # Package Overview
 
-ObjectStack is organized into **71 package manifests** across multiple categories. This guide provides an overview of the framework packages, services, drivers, plugins, and adapters in the [framework repository](https://github.com/objectstack-ai/framework/tree/main/packages).
+ObjectStack is organized into **71 package manifests** across multiple categories. This guide provides an overview of the framework packages, services, drivers, plugins, and adapters in the [framework repository](https://github.com/objectstack-ai/objectstack/tree/main/packages).
 
 ### Package categories at a glance
 
@@ -44,7 +44,7 @@ import { ObjectSchema, Field } from '@objectstack/spec/data';
 - **Purpose**: ObjectKernel with dependency injection, lifecycle hooks, and event bus
 - **Exports**: `ObjectKernel`, `LiteKernel`, `Plugin` interface, service management
 - **When to use**: Bootstrap your application, manage plugins and services
-- **README**: [View README](https://github.com/objectstack-ai/framework/blob/main/packages/core/README.md)
+- **README**: [View README](https://github.com/objectstack-ai/objectstack/blob/main/packages/core/README.md)
 
 ```typescript
 import { ObjectKernel } from '@objectstack/core';
@@ -58,7 +58,7 @@ const kernel = new ObjectKernel();
 - **Purpose**: High-level runtime bootstrap and plugin composition
 - **Exports**: Runtime configuration, plugin loaders, capability system
 - **When to use**: Use with `defineStack()` for application setup
-- **README**: [View README](https://github.com/objectstack-ai/framework/blob/main/packages/runtime/README.md)
+- **README**: [View README](https://github.com/objectstack-ai/objectstack/blob/main/packages/runtime/README.md)
 
 ### @objectstack/objectql
 
@@ -67,7 +67,7 @@ const kernel = new ObjectKernel();
 - **Purpose**: ObjectQL query engine with filters, aggregations, and window functions
 - **Exports**: Query parser, filter engine, schema registry
 - **When to use**: Advanced query operations, custom data access patterns
-- **README**: [View README](https://github.com/objectstack-ai/framework/blob/main/packages/objectql/README.md)
+- **README**: [View README](https://github.com/objectstack-ai/objectstack/blob/main/packages/objectql/README.md)
 
 ### @objectstack/metadata
 
@@ -76,7 +76,7 @@ const kernel = new ObjectKernel();
 - **Purpose**: Load, validate, and manage metadata from files or runtime
 - **Exports**: Metadata loaders, serializers, overlay system, validation
 - **When to use**: Dynamic metadata loading, multi-source metadata composition
-- **README**: [View README](https://github.com/objectstack-ai/framework/blob/main/packages/metadata/README.md)
+- **README**: [View README](https://github.com/objectstack-ai/objectstack/blob/main/packages/metadata/README.md)
 
 ### @objectstack/rest
 
@@ -85,7 +85,7 @@ const kernel = new ObjectKernel();
 - **Purpose**: Automatic REST API generation based on object definitions
 - **Exports**: REST server, route generators, middleware
 - **When to use**: Expose ObjectStack data via REST API
-- **README**: [View README](https://github.com/objectstack-ai/framework/blob/main/packages/rest/README.md)
+- **README**: [View README](https://github.com/objectstack-ai/objectstack/blob/main/packages/rest/README.md)
 
 ### @objectstack/formula
 
@@ -113,7 +113,7 @@ const kernel = new ObjectKernel();
 - **Purpose**: Type-safe client for ObjectStack REST API with batching and error handling
 - **Exports**: `ObjectStackClient`, query builders, error classes
 - **When to use**: Any JavaScript/TypeScript application (Node, React, Vue, Angular, etc.)
-- **README**: [View README](https://github.com/objectstack-ai/framework/blob/main/packages/client/README.md)
+- **README**: [View README](https://github.com/objectstack-ai/objectstack/blob/main/packages/client/README.md)
 
 ```typescript
 import { ObjectStackClient } from '@objectstack/client';
@@ -127,7 +127,7 @@ const client = new ObjectStackClient({ baseUrl: 'https://api.example.com' });
 - **Purpose**: React hooks for queries, mutations, real-time subscriptions
 - **Exports**: `useQuery`, `useMutation`, `useRealtimeConnection`, `useView`, `useObject`, `useMetadata`, etc.
 - **When to use**: React applications
-- **README**: [View README](https://github.com/objectstack-ai/framework/blob/main/packages/client-react/README.md)
+- **README**: [View README](https://github.com/objectstack-ai/objectstack/blob/main/packages/client-react/README.md)
 
 ```typescript
 import { useQuery, useMutation } from '@objectstack/client-react';
@@ -143,7 +143,7 @@ import { useQuery, useMutation } from '@objectstack/client-react';
 
 - **Purpose**: Fast in-memory data storage with full ObjectQL support
 - **When to use**: Development, testing, demos (data is lost on restart)
-- **README**: [View README](https://github.com/objectstack-ai/framework/blob/main/packages/plugins/driver-memory/README.md)
+- **README**: [View README](https://github.com/objectstack-ai/objectstack/blob/main/packages/plugins/driver-memory/README.md)
 
 ```typescript
 import { InMemoryDriver } from '@objectstack/driver-memory';
@@ -156,7 +156,7 @@ import { InMemoryDriver } from '@objectstack/driver-memory';
 - **Purpose**: Production-ready SQL database support with migrations
 - **Supports**: PostgreSQL, MySQL, SQLite, and all Knex-compatible databases
 - **When to use**: Traditional relational database deployments
-- **README**: [View README](https://github.com/objectstack-ai/framework/blob/main/packages/plugins/driver-sql/README.md)
+- **README**: [View README](https://github.com/objectstack-ai/objectstack/blob/main/packages/plugins/driver-sql/README.md)
 
 ```typescript
 import { SqlDriver } from '@objectstack/driver-sql';
@@ -173,7 +173,7 @@ const driver = new SqlDriver({
 - **Purpose**: SQLite running entirely in WebAssembly (no native bindings), with optional `fs`-backed persistence
 - **Modes**: In-memory (`:memory:`) or a file path persisted via the `persist` option
 - **When to use**: Environments without native SQLite, edge/browser runtimes, lightweight local-first storage
-- **README**: [View README](https://github.com/objectstack-ai/framework/blob/main/packages/plugins/driver-sqlite-wasm/README.md)
+- **README**: [View README](https://github.com/objectstack-ai/objectstack/blob/main/packages/plugins/driver-sqlite-wasm/README.md)
 
 ```typescript
 import { SqliteWasmDriver } from '@objectstack/driver-sqlite-wasm';
@@ -186,7 +186,7 @@ const driver = new SqliteWasmDriver({ filename: ':memory:' });
 
 - **Purpose**: Native MongoDB driver for ObjectQL with document-flavored objects
 - **When to use**: Existing MongoDB infrastructure, document-shaped data
-- **README**: [View README](https://github.com/objectstack-ai/framework/blob/main/packages/plugins/driver-mongodb/README.md)
+- **README**: [View README](https://github.com/objectstack-ai/objectstack/blob/main/packages/plugins/driver-mongodb/README.md)
 
 ---
 
@@ -200,7 +200,7 @@ All services implement contracts from `@objectstack/spec/contracts` and are kern
 
 - **Features**: Aggregations, time series, funnels, dashboards
 - **When to use**: Business intelligence, reporting, metrics dashboards
-- **README**: [View README](https://github.com/objectstack-ai/framework/blob/main/packages/services/service-analytics/README.md)
+- **README**: [View README](https://github.com/objectstack-ai/objectstack/blob/main/packages/services/service-analytics/README.md)
 
 ### @objectstack/service-automation
 
@@ -208,7 +208,7 @@ All services implement contracts from `@objectstack/spec/contracts` and are kern
 
 - **Features**: Autolaunched, screen, and scheduled flows with visual builder support
 - **When to use**: Business process automation, approval workflows, scheduled tasks
-- **README**: [View README](https://github.com/objectstack-ai/framework/blob/main/packages/services/service-automation/README.md)
+- **README**: [View README](https://github.com/objectstack-ai/objectstack/blob/main/packages/services/service-automation/README.md)
 
 ### @objectstack/service-cache
 
@@ -217,7 +217,7 @@ All services implement contracts from `@objectstack/spec/contracts` and are kern
 - **Adapters**: Memory (dev), Redis (production)
 - **Features**: TTL, namespaces, pattern matching, statistics
 - **When to use**: Performance optimization, reduce database load
-- **README**: [View README](https://github.com/objectstack-ai/framework/blob/main/packages/services/service-cache/README.md)
+- **README**: [View README](https://github.com/objectstack-ai/objectstack/blob/main/packages/services/service-cache/README.md)
 
 ### @objectstack/service-messaging
 
@@ -239,7 +239,7 @@ All services implement contracts from `@objectstack/spec/contracts` and are kern
 
 - **Features**: Multi-language support, interpolation, pluralization, fallback chains
 - **When to use**: Multi-language applications, global deployments
-- **README**: [View README](https://github.com/objectstack-ai/framework/blob/main/packages/services/service-i18n/README.md)
+- **README**: [View README](https://github.com/objectstack-ai/objectstack/blob/main/packages/services/service-i18n/README.md)
 
 ### @objectstack/service-job
 
@@ -247,7 +247,7 @@ All services implement contracts from `@objectstack/spec/contracts` and are kern
 
 - **Features**: Cron expressions, intervals, one-time jobs, retry logic, history
 - **When to use**: Background tasks, scheduled reports, cleanup jobs
-- **README**: [View README](https://github.com/objectstack-ai/framework/blob/main/packages/services/service-job/README.md)
+- **README**: [View README](https://github.com/objectstack-ai/objectstack/blob/main/packages/services/service-job/README.md)
 
 ### @objectstack/service-queue
 
@@ -255,7 +255,7 @@ All services implement contracts from `@objectstack/spec/contracts` and are kern
 
 - **Features**: Priority queues, retry, rate limiting, worker pools, job events
 - **When to use**: Async processing, email sending, report generation, webhooks
-- **README**: [View README](https://github.com/objectstack-ai/framework/blob/main/packages/services/service-queue/README.md)
+- **README**: [View README](https://github.com/objectstack-ai/objectstack/blob/main/packages/services/service-queue/README.md)
 
 ### @objectstack/service-realtime
 
@@ -263,7 +263,7 @@ All services implement contracts from `@objectstack/spec/contracts` and are kern
 
 - **Features**: Channels, presence, broadcasting, typing indicators, cursor tracking
 - **When to use**: Real-time dashboards, collaborative editing, live notifications
-- **README**: [View README](https://github.com/objectstack-ai/framework/blob/main/packages/services/service-realtime/README.md)
+- **README**: [View README](https://github.com/objectstack-ai/objectstack/blob/main/packages/services/service-realtime/README.md)
 
 ### @objectstack/service-storage
 
@@ -271,7 +271,7 @@ All services implement contracts from `@objectstack/spec/contracts` and are kern
 
 - **Features**: Upload, download, signed URLs, multipart uploads, metadata
 - **When to use**: File attachments, document management, media storage
-- **README**: [View README](https://github.com/objectstack-ai/framework/blob/main/packages/services/service-storage/README.md)
+- **README**: [View README](https://github.com/objectstack-ai/objectstack/blob/main/packages/services/service-storage/README.md)
 
 ### @objectstack/service-package
 
@@ -279,7 +279,7 @@ All services implement contracts from `@objectstack/spec/contracts` and are kern
 
 - **Features**: Upsert by `(id, version)`, SHA-256 integrity hash, `latest` resolution, bulk list/delete
 - **When to use**: Marketplace backends, internal tenant-facing registries, CI-driven metadata distribution
-- **README**: [View README](https://github.com/objectstack-ai/framework/blob/main/packages/services/service-package/README.md)
+- **README**: [View README](https://github.com/objectstack-ai/objectstack/blob/main/packages/services/service-package/README.md)
 
 ### @objectstack/service-settings
 
@@ -287,7 +287,7 @@ All services implement contracts from `@objectstack/spec/contracts` and are kern
 
 - **Features**: Per-org / per-user settings, Zod-validated namespaces, default fallbacks
 - **When to use**: Application/feature configuration that must be editable at runtime
-- **README**: [View README](https://github.com/objectstack-ai/framework/blob/main/packages/services/service-settings/README.md)
+- **README**: [View README](https://github.com/objectstack-ai/objectstack/blob/main/packages/services/service-settings/README.md)
 
 ---
 
@@ -299,7 +299,7 @@ All services implement contracts from `@objectstack/spec/contracts` and are kern
 
 - **Features**: Email/password, OAuth providers, session management, RBAC
 - **When to use**: User authentication and authorization
-- **README**: [View README](https://github.com/objectstack-ai/framework/blob/main/packages/plugins/plugin-auth/README.md)
+- **README**: [View README](https://github.com/objectstack-ai/objectstack/blob/main/packages/plugins/plugin-auth/README.md)
 
 ### @objectstack/plugin-security
 
@@ -307,7 +307,7 @@ All services implement contracts from `@objectstack/spec/contracts` and are kern
 
 - **Features**: Role-based access control, object/field permissions, row-level security, `owner_id` auto-stamp
 - **When to use**: Multi-user applications with access control requirements
-- **README**: [View README](https://github.com/objectstack-ai/framework/blob/main/packages/plugins/plugin-security/README.md)
+- **README**: [View README](https://github.com/objectstack-ai/objectstack/blob/main/packages/plugins/plugin-security/README.md)
 
 ### @objectstack/organizations (enterprise)
 
@@ -322,7 +322,7 @@ All services implement contracts from `@objectstack/spec/contracts` and are kern
 
 - **Features**: CRUD audit logs, field-level changes, security events, compliance reports
 - **When to use**: SOC 2, HIPAA, GDPR compliance, security monitoring
-- **README**: [View README](https://github.com/objectstack-ai/framework/blob/main/packages/plugins/plugin-audit/README.md)
+- **README**: [View README](https://github.com/objectstack-ai/objectstack/blob/main/packages/plugins/plugin-audit/README.md)
 
 ### @objectstack/mcp
 
@@ -330,7 +330,7 @@ All services implement contracts from `@objectstack/spec/contracts` and are kern
 
 - **Features**: AI tools, data resources, prompt templates for Claude, Cursor, Cline
 - **When to use**: AI agent integration, MCP-compatible tools
-- **README**: [View README](https://github.com/objectstack-ai/framework/blob/main/packages/mcp/README.md)
+- **README**: [View README](https://github.com/objectstack-ai/objectstack/blob/main/packages/mcp/README.md)
 
 ### @objectstack/plugin-hono-server
 
@@ -338,7 +338,7 @@ All services implement contracts from `@objectstack/spec/contracts` and are kern
 
 - **Features**: Lightweight HTTP server, middleware support, edge-compatible
 - **When to use**: Serve ObjectStack REST API with Hono
-- **README**: [View README](https://github.com/objectstack-ai/framework/blob/main/packages/plugins/plugin-hono-server/README.md)
+- **README**: [View README](https://github.com/objectstack-ai/objectstack/blob/main/packages/plugins/plugin-hono-server/README.md)
 
 ### @objectstack/plugin-dev
 
@@ -346,7 +346,7 @@ All services implement contracts from `@objectstack/spec/contracts` and are kern
 
 - **Features**: Metadata validation, schema introspection, debugging tools
 - **When to use**: Development and debugging
-- **README**: [View README](https://github.com/objectstack-ai/framework/blob/main/packages/plugins/plugin-dev/README.md)
+- **README**: [View README](https://github.com/objectstack-ai/objectstack/blob/main/packages/plugins/plugin-dev/README.md)
 
 ### @objectstack/plugin-approvals
 
@@ -394,7 +394,7 @@ The open edition ships the **Hono** adapter. Hono runs on Node.js, Bun, Deno, an
 **Hono Adapter** — the supported HTTP adapter; edge-native and multi-runtime.
 
 - **Use case**: Node.js, Bun, Deno, Cloudflare Workers, Vercel Edge
-- **README**: [View README](https://github.com/objectstack-ai/framework/blob/main/packages/adapters/hono/README.md)
+- **README**: [View README](https://github.com/objectstack-ai/objectstack/blob/main/packages/adapters/hono/README.md)
 
 ---
 
@@ -406,7 +406,7 @@ The open edition ships the **Hono** adapter. Hono runs on Node.js, Bun, Deno, an
 
 - **Commands**: `serve`, `dev`, `start`, `doctor`, `compile`, `build`, `validate`, `generate`, `package`, `meta`, … (binary is `os` / `objectstack`)
 - **When to use**: Development, deployment, project management
-- **README**: [View README](https://github.com/objectstack-ai/framework/blob/main/packages/cli/README.md)
+- **README**: [View README](https://github.com/objectstack-ai/objectstack/blob/main/packages/cli/README.md)
 
 ```bash
 npx os serve --dev
@@ -418,7 +418,7 @@ npx os serve --dev
 
 - **Templates**: `blank` (default, bundled), plus remote templates `todo`, `compliance`, `content`, `contracts`, `procurement`
 - **When to use**: Start a new ObjectStack project
-- **README**: [View README](https://github.com/objectstack-ai/framework/blob/main/packages/create-objectstack/README.md)
+- **README**: [View README](https://github.com/objectstack-ai/objectstack/blob/main/packages/create-objectstack/README.md)
 
 ```bash
 npx create-objectstack my-app
@@ -430,7 +430,7 @@ npx create-objectstack my-app
 
 - **Features**: Syntax highlighting, autocomplete, validation for metadata files
 - **When to use**: Enhanced development experience in VS Code
-- **README**: [View README](https://github.com/objectstack-ai/framework/blob/main/packages/vscode-objectstack/README.md)
+- **README**: [View README](https://github.com/objectstack-ai/objectstack/blob/main/packages/vscode-objectstack/README.md)
 
 ---
 
@@ -442,7 +442,7 @@ npx create-objectstack my-app
 
 - **Exports**: Type helpers, utility types, branded types
 - **When to use**: Imported automatically by other packages
-- **README**: [View README](https://github.com/objectstack-ai/framework/blob/main/packages/types/README.md)
+- **README**: [View README](https://github.com/objectstack-ai/objectstack/blob/main/packages/types/README.md)
 
 ---
 

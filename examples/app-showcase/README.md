@@ -89,7 +89,7 @@ pnpm verify
 > third parties author skills/tools, never agents), and the open framework
 > exposes AI via `@objectstack/mcp` only. Rather than fake a demo, the
 > coverage manifest **waives** `agent`/`tool`/`skill` with tracking issue
-> [#2610](https://github.com/objectstack-ai/framework/issues/2610).
+> [#2610](https://github.com/objectstack-ai/objectstack/issues/2610).
 
 ## The coverage manifest — how "confirm" works
 

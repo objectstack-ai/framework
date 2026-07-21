@@ -6,7 +6,7 @@
 
 **Status**: **Superseded by [ADR-0063](./0063-two-kernel-agents-skills-are-the-extension-primitive.md)** — original: Proposed (2026-06-11)
 **Deciders**: ObjectStack Protocol Architects
-**Builds on**: [ADR-0033](./0033-ai-assisted-metadata-authoring.md) (draft-gated authoring tools the assistant drives), [ADR-0038](./0038-build-verification-loop.md) (the verify-fix-reverify discipline carried by skills), ADR-0037 / [framework#1694](https://github.com/objectstack-ai/framework/pull/1694) (Live Canvas — the surface the unified assistant builds into)
+**Builds on**: [ADR-0033](./0033-ai-assisted-metadata-authoring.md) (draft-gated authoring tools the assistant drives), [ADR-0038](./0038-build-verification-loop.md) (the verify-fix-reverify discipline carried by skills), ADR-0037 / [framework#1694](https://github.com/objectstack-ai/objectstack/pull/1694) (Live Canvas — the surface the unified assistant builds into)
 **Consumers**: `@objectstack/spec` (agent/skill types — clarified, not changed), `@objectstack/service-ai` (default agent composition), `../cloud/service-ai-studio` (authoring skills attach to the platform assistant), `../objectui` (chat surfaces drop the agent picker)
 
 **Premise**: pre-launch, no back-compat debt — specify the target end-state directly.

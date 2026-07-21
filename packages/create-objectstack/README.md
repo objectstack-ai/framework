@@ -59,7 +59,7 @@ offline.
    (`blank_note` → `my_app_note`).
 2. Installs dependencies (pnpm if available, otherwise npm).
 3. Installs the ObjectStack AI skills bundle for coding agents
-   (`npx skills add objectstack-ai/framework/skills --all` — scoped to the
+   (`npx skills add objectstack-ai/objectstack/skills --all` — scoped to the
    curated `skills/` catalog).
 4. Writes `AGENTS.md` and `.github/copilot-instructions.md` with the project
    conventions — unless the template ships its own.

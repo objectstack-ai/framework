@@ -56,7 +56,7 @@ The scaffolder does more than copy files. It:
 - derives a **namespace** from the name (`support-desk` → `support_desk`), so
   every object you create is named `support_desk_*`;
 - installs dependencies;
-- runs `npx skills add objectstack-ai/framework/skills --all` to install the **AI skills
+- runs `npx skills add objectstack-ai/objectstack/skills --all` to install the **AI skills
   bundle**;
 - writes an **`AGENTS.md`** (and `.github/copilot-instructions.md`) that teach your
   coding agent the project layout, the naming rules, and — critically — *to run
@@ -335,7 +335,7 @@ Two habits keep this reliable as the app grows:
   translations all go through the same `npm run validate` — the agent should run
   it after each change, exactly as `AGENTS.md` instructs.
 - **Keep the skills current.** After upgrading `@objectstack/spec`, re-run
-  `npx skills add objectstack-ai/framework/skills --all` so the agent authors
+  `npx skills add objectstack-ai/objectstack/skills --all` so the agent authors
   against the schemas you actually run. The full catalog is documented in the
   [AI Skills Reference](/docs/ai/skills-reference).
 

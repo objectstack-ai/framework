@@ -3,7 +3,7 @@
 **Status**: Accepted — implemented (proposed 2026-06-12 · calibrated 2026-06-12)
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: [ADR-0042](./0042-approval-sla-escalation.md) (reserved system actors, audit-first discipline), thread interactions (#1740), [ADR-0012/0030](./0030-notification-platform-convergence.md) (messaging + outbox)
-**Closes**: [#1743](https://github.com/objectstack-ai/framework/issues/1743)
+**Closes**: [#1743](https://github.com/objectstack-ai/objectstack/issues/1743)
 **Consumers**: `@objectstack/plugin-approvals` (token store + redemption + pages), messaging templates, future email channel wiring
 
 ---

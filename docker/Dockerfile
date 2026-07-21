@@ -30,7 +30,7 @@ ARG OS_CLI_VERSION=latest
 RUN npm install -g @objectstack/cli@${OS_CLI_VERSION} \
  && npm cache clean --force
 
-LABEL org.opencontainers.image.source="https://github.com/objectstack-ai/framework" \
+LABEL org.opencontainers.image.source="https://github.com/objectstack-ai/objectstack" \
       org.opencontainers.image.title="ObjectStack" \
       org.opencontainers.image.description="Official ObjectStack runtime: os start + your compiled objectstack.json artifact" \
       org.opencontainers.image.licenses="Apache-2.0"

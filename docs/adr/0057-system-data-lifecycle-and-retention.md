@@ -1,6 +1,6 @@
 # ADR-0057: System data has a lifecycle — declarative retention, rotation, and reclamation for platform-generated objects
 
-**Status**: Accepted — **P0–P4 implemented** (P0 shipped with this ADR, [#2079](https://github.com/objectstack-ai/framework/pull/2079); P1–P4 in [#2791](https://github.com/objectstack-ai/framework/pull/2791), tracked in [#2786](https://github.com/objectstack-ai/framework/issues/2786)) (proposed 2026-06-20 · implemented 2026-07-10)
+**Status**: Accepted — **P0–P4 implemented** (P0 shipped with this ADR, [#2079](https://github.com/objectstack-ai/objectstack/pull/2079); P1–P4 in [#2791](https://github.com/objectstack-ai/objectstack/pull/2791), tracked in [#2786](https://github.com/objectstack-ai/objectstack/issues/2786)) (proposed 2026-06-20 · implemented 2026-07-10)
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: [ADR-0052](./0052-audit-is-not-the-activity-feed.md) (decomposed audit / activity / collaboration into bounded contexts — this ADR adds the *orthogonal* axis those contexts never specified: **how long each one lives and how its space is reclaimed**), [ADR-0049](./0049-no-unenforced-security-properties.md) (enforce-or-remove — a declared `retention` that drives no sweeper is dead surface; this ADR wires it to a runtime consumer), [ADR-0030](./0030-notification-platform-convergence.md) (notification objects are messaging-owned with their own lifecycle), [ADR-0021](./0021-analytics-dataset-semantic-layer.md) (precedent for moving event-shaped data off the primary OLTP store)
 **Consumers**: `@objectstack/spec` (`lifecycle` object property + `LifecycleClass`), `@objectstack/objectql` (LifecycleService: Reaper / Rotator / Archiver), `@objectstack/plugin-audit` (audit/activity exclusion of telemetry objects — shipped P0), `@objectstack/driver-sql` (`auto_vacuum=INCREMENTAL` default + incremental-vacuum hook — shipped P0), `@objectstack/dogfood` (storage-growth regression gate), platform spec-liveness gate
@@ -235,15 +235,15 @@ engine — splitting their storage would split their brain.
 
 ## 4. Rollout
 
-P1–P4 are tracked in [#2786](https://github.com/objectstack-ai/framework/issues/2786).
+P1–P4 are tracked in [#2786](https://github.com/objectstack-ai/objectstack/issues/2786).
 
 | Phase | Scope | Status |
 |---|---|---|
-| **P0 — stop the bleed** | (a) exclude operational/plumbing objects from the audit+activity writer (`plugin-audit` `SKIP_OBJECTS`); (b) SQLite `auto_vacuum=INCREMENTAL` driver default; (c) showcase digest interval 20s→60s, flagged demo-only | **shipped with this ADR ([#2079](https://github.com/objectstack-ai/framework/pull/2079))** |
-| **P1 — contract** | `lifecycleClass` + `lifecycle` spec; LifecycleService Reaper; spec-liveness enforcement; dogfood growth gate | **implemented ([#2791](https://github.com/objectstack-ai/framework/pull/2791))** |
-| **P2 — rotation/TTL** | Rotator (shard + DROP) for high-freq telemetry; transient TTL expiry | **implemented ([#2791](https://github.com/objectstack-ai/framework/pull/2791))** |
-| **P3 — separation** | telemetry/audit on a dedicated datasource; Archiver cold-store | **implemented ([#2791](https://github.com/objectstack-ai/framework/pull/2791))** |
-| **P4 — governance** | per-table storage quotas, growth alerts, tenant-level retention overrides | **implemented ([#2791](https://github.com/objectstack-ai/framework/pull/2791))** |
+| **P0 — stop the bleed** | (a) exclude operational/plumbing objects from the audit+activity writer (`plugin-audit` `SKIP_OBJECTS`); (b) SQLite `auto_vacuum=INCREMENTAL` driver default; (c) showcase digest interval 20s→60s, flagged demo-only | **shipped with this ADR ([#2079](https://github.com/objectstack-ai/objectstack/pull/2079))** |
+| **P1 — contract** | `lifecycleClass` + `lifecycle` spec; LifecycleService Reaper; spec-liveness enforcement; dogfood growth gate | **implemented ([#2791](https://github.com/objectstack-ai/objectstack/pull/2791))** |
+| **P2 — rotation/TTL** | Rotator (shard + DROP) for high-freq telemetry; transient TTL expiry | **implemented ([#2791](https://github.com/objectstack-ai/objectstack/pull/2791))** |
+| **P3 — separation** | telemetry/audit on a dedicated datasource; Archiver cold-store | **implemented ([#2791](https://github.com/objectstack-ai/objectstack/pull/2791))** |
+| **P4 — governance** | per-table storage quotas, growth alerts, tenant-level retention overrides | **implemented ([#2791](https://github.com/objectstack-ai/objectstack/pull/2791))** |
 
 P0 alone removes ~76 % of the row growth (audit/activity exclusion) and a
 further 3× (interval), and lets space be reclaimed — without any schema change

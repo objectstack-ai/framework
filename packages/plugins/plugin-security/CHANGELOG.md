@@ -514,7 +514,7 @@
   八格(伪造异租户 → 拒、同租户 → 通过、缺省 → 放行、无活动组织 → 拒、platform-admin 私有对象豁免、
   public 业务对象不豁免、tenancy-disabled 对象不适用、单组织模式不检查)。授权一致性 ledger
   新增 `multi-tenant-insert-postimage` 行。配套 cloud `@objectstack/organizations` 的 auto-stamp
-  权威覆盖(纵深防御)。Closes objectstack-ai/framework#2937。
+  权威覆盖(纵深防御)。Closes objectstack-ai/objectstack#2937。
 
 - ef70521: fix(plugin-security): 堵跨租户 UPDATE 写 + org_admin 越 private 租户对象墙（security）
 
@@ -528,7 +528,7 @@
 
   **为何不用 `ctx.posture` 作豁免门：** B2 已把 `PLATFORM_ADMIN` posture 落进 `resolve-authz-context.ts` 的 `ctx.posture`，但该字段**未被 plumb 进** enforcement 中间件收到的 ExecutionContext（rest-server 与 runtime dispatcher 都丢弃了它），直接消费会静默 no-op。改用平台专属能力探针，读的是 enforcement 已用的同一套 permission sets，覆盖所有入口，且天然 fail-safe。
 
-  矩阵门：`authz-matrix-gate.test.ts` 更新 `private_obj.org_admin` 格（read `null` → `{organization_id:'org-1'}`）并新增 `[Finding 1 …]`（8 格：成员重指异租户 → 拒、同租户 → 通过、不碰 org_id→ 放行、无活动组织 → 拒、org_admin 重指 → 拒、platform-admin private 对象 → 放行、public 对象 → 拒、单组织 → 不检查）与 `[Finding 2 …]`（5 格：org_admin private 对象读/写墙到本租户、真平台管理员仍豁免、org_admin public 对象回归、better-auth carve-out 不受影响）。授权一致性 ledger 更新 `multi-tenant-write-postimage`（覆盖 insert+update）并新增 `multi-tenant-exemption-posture`。关联 objectstack-ai/framework#2920。
+  矩阵门：`authz-matrix-gate.test.ts` 更新 `private_obj.org_admin` 格（read `null` → `{organization_id:'org-1'}`）并新增 `[Finding 1 …]`（8 格：成员重指异租户 → 拒、同租户 → 通过、不碰 org_id→ 放行、无活动组织 → 拒、org_admin 重指 → 拒、platform-admin private 对象 → 放行、public 对象 → 拒、单组织 → 不检查）与 `[Finding 2 …]`（5 格：org_admin private 对象读/写墙到本租户、真平台管理员仍豁免、org_admin public 对象回归、better-auth carve-out 不受影响）。授权一致性 ledger 更新 `multi-tenant-write-postimage`（覆盖 insert+update）并新增 `multi-tenant-exemption-posture`。关联 objectstack-ai/objectstack#2920。
 
 ### Minor Changes
 

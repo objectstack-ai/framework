@@ -8,7 +8,7 @@ Static gates — `build`, unit tests, spec-liveness, CodeQL — verify each laye
 isolation, usually against mocks. They cannot catch a break that only appears
 when the **real engine + strategies + services + HTTP context run together**.
 
-The canonical example is [#2018](https://github.com/objectstack-ai/framework/pull/2018):
+The canonical example is [#2018](https://github.com/objectstack-ai/objectstack/pull/2018):
 "organization timezone drives analytics date bucketing" was broken across three
 seams (analytics strategy routing, in-memory count, REST execution-context).
 Every static gate was green — 900+ unit tests included — because each layer was
@@ -77,7 +77,7 @@ app-agnostic invariant (`runRlsProofs`, from `@objectstack/verify`):
 
 > **A user who cannot READ a record must not be able to WRITE it.**
 
-[#1994](https://github.com/objectstack-ai/framework/pull/1994) was exactly this
+[#1994](https://github.com/objectstack-ai/objectstack/pull/1994) was exactly this
 hole: a single-id `update`/`delete` goes straight to `driver.update(object, id)`
 and builds no query AST, so the row-level `where` filter the middleware injects
 on the *read* path was never applied to *by-id writes*. Any member could PATCH a

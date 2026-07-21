@@ -18,7 +18,7 @@ description: The same data serves different audiences. Give end users a curated 
 | **End user (consumer)** | a curated **App** → `page` / `view` (interface mode) | `App.requiredPermissions`, permission-set `tabPermissions`, nav-item gating |
 | **Builder / admin** | **Setup / Studio**, raw object tables (data mode) | capabilities: `setup.access`, `studio.access`, `manage_metadata` |
 
-The built-in permission sets already encode this split: `member_default` and `viewer_readonly` do **not** carry `studio.access` / `manage_metadata`, so Studio and schema-design surfaces are invisible to them; `admin_full_access` carries both, while `organization_admin` gets `setup.access` only — the Setup shell is reachable but Studio and schema design stay hidden from org-scoped admins (see [`default-permission-sets.ts`](https://github.com/objectstack-ai/framework/blob/main/packages/plugins/plugin-security/src/objects/default-permission-sets.ts)).
+The built-in permission sets already encode this split: `member_default` and `viewer_readonly` do **not** carry `studio.access` / `manage_metadata`, so Studio and schema-design surfaces are invisible to them; `admin_full_access` carries both, while `organization_admin` gets `setup.access` only — the Setup shell is reachable but Studio and schema design stay hidden from org-scoped admins (see [`default-permission-sets.ts`](https://github.com/objectstack-ai/objectstack/blob/main/packages/plugins/plugin-security/src/objects/default-permission-sets.ts)).
 
 ### 1. Gate the app and its navigation
 
@@ -59,8 +59,8 @@ This is the lesson from Airtable's surfaces: the **Automations tab is visible to
 
 ## Runnable example
 
-- Permission sets: [`default-permission-sets.ts`](https://github.com/objectstack-ai/framework/blob/main/packages/plugins/plugin-security/src/objects/default-permission-sets.ts) — `member_default` / `viewer_readonly` vs `organization_admin` / `admin_full_access`.
-- Apps: [`examples/app-showcase/src/ui/apps`](https://github.com/objectstack-ai/framework/tree/main/examples/app-showcase/src/ui/apps).
+- Permission sets: [`default-permission-sets.ts`](https://github.com/objectstack-ai/objectstack/blob/main/packages/plugins/plugin-security/src/objects/default-permission-sets.ts) — `member_default` / `viewer_readonly` vs `organization_admin` / `admin_full_access`.
+- Apps: [`examples/app-showcase/src/ui/apps`](https://github.com/objectstack-ai/objectstack/tree/main/examples/app-showcase/src/ui/apps).
 
 ## Anti-patterns
 

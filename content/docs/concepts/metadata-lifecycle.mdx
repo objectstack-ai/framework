@@ -5,7 +5,7 @@ description: How metadata flows through Repository → Change Log → Cache → 
 
 # Metadata Lifecycle & HMR
 
-This page documents the metadata data path introduced by [ADR-0008](https://github.com/objectstack-ai/framework/blob/main/docs/adr/0008-metadata-repository-and-change-log.md) and refined by [ADR-0005](https://github.com/objectstack-ai/framework/blob/main/docs/adr/0005-metadata-customization-overlay.md). It is the canonical event stream that powers Studio Hot Module Replacement (HMR), REST writes, and future cloud editing.
+This page documents the metadata data path introduced by [ADR-0008](https://github.com/objectstack-ai/objectstack/blob/main/docs/adr/0008-metadata-repository-and-change-log.md) and refined by [ADR-0005](https://github.com/objectstack-ai/objectstack/blob/main/docs/adr/0005-metadata-customization-overlay.md). It is the canonical event stream that powers Studio Hot Module Replacement (HMR), REST writes, and future cloud editing.
 
 <Callout type="info">
 **TL;DR** — Every write goes through a single `MetadataRepository.put()` call. The repository appends to a change log, emits a watch event with a monotonic `seq`, and broadcasts over SSE to the Studio UI. The Studio's `useMetadataHmr` hook displays the latest `seq` in the status badge and re-fetches affected views.
@@ -49,12 +49,12 @@ Reads walk top-to-bottom: the first non-null layer wins. Writes always route to 
 
 | Primitive | Package | Purpose |
 | :--- | :--- | :--- |
-| **Repository** | `@objectstack/metadata-core` | CRUD + watch interface over a single metadata source. `InMemoryRepository` and `LayeredRepository` ship from `@objectstack/metadata-core`; `FileSystemRepository` from `@objectstack/metadata-fs`; `SysMetadataRepository` from `@objectstack/metadata-protocol` (re-exported by `@objectstack/objectql` for back-compat, per [ADR-0076](https://github.com/objectstack-ai/framework/blob/main/docs/adr/0076-objectql-core-tiering.md)). |
+| **Repository** | `@objectstack/metadata-core` | CRUD + watch interface over a single metadata source. `InMemoryRepository` and `LayeredRepository` ship from `@objectstack/metadata-core`; `FileSystemRepository` from `@objectstack/metadata-fs`; `SysMetadataRepository` from `@objectstack/metadata-protocol` (re-exported by `@objectstack/objectql` for back-compat, per [ADR-0076](https://github.com/objectstack-ai/objectstack/blob/main/docs/adr/0076-objectql-core-tiering.md)). |
 | **Change Log** | `@objectstack/metadata-core` | Append-only log of every mutation, tagged with a monotonic `seq`. Watchers can replay from any `since`. |
 | **Cache** | `@objectstack/metadata-core` | In-memory snapshot of the registry, keyed by `MetaRef`. Invalidated by change-log events. |
-| **Registry** | *(per consumer)* | Not a single package — each consumer owns a typed projection over the cache (e.g. `SchemaRegistry` in `@objectstack/objectql`), per [ADR-0008 §2.9](https://github.com/objectstack-ai/framework/blob/main/docs/adr/0008-metadata-repository-and-change-log.md#29-registry-layer). |
+| **Registry** | *(per consumer)* | Not a single package — each consumer owns a typed projection over the cache (e.g. `SchemaRegistry` in `@objectstack/objectql`), per [ADR-0008 §2.9](https://github.com/objectstack-ai/objectstack/blob/main/docs/adr/0008-metadata-repository-and-change-log.md#29-registry-layer). |
 
-`MetaRef = (type, name, org)`. As of [ADR-0008 §0 amendment (2026-04-13)](https://github.com/objectstack-ai/framework/blob/main/docs/adr/0008-metadata-repository-and-change-log.md#0-2026-04-13-amendment--drop-project-and-branch-from-metaref), `project` and `branch` are removed from the runtime tuple. Project survives only as an artifact-packaging concept on the `objectstack.json` envelope; branching is left to Git.
+`MetaRef = (type, name, org)`. As of [ADR-0008 §0 amendment (2026-04-13)](https://github.com/objectstack-ai/objectstack/blob/main/docs/adr/0008-metadata-repository-and-change-log.md#0-2026-04-13-amendment--drop-project-and-branch-from-metaref), `project` and `branch` are removed from the runtime tuple. Project survives only as an artifact-packaging concept on the `objectstack.json` envelope; branching is left to Git.
 
 ---
 
@@ -84,7 +84,7 @@ first step of any Studio/API authoring action is to target a *writable* package 
 "base"): a create/update aimed at a read-only package is rejected, and the author
 is asked to pick or create a writable base first. New objects, fields, views, and
 flows are namespaced into that package — which is exactly what `os package publish`
-later ships. See [ADR-0070](https://github.com/objectstack-ai/framework/blob/main/docs/adr/0070-package-first-authoring.md).
+later ships. See [ADR-0070](https://github.com/objectstack-ai/objectstack/blob/main/docs/adr/0070-package-first-authoring.md).
 
 > Note: "package" here is the runtime **authoring base** (a `package_id`-bearing
 > container of metadata), distinct from the npm `@objectstack/*` packages listed in
@@ -103,9 +103,9 @@ In shared-database multi-tenancy, **most metadata types must not be per-org cust
 | `object`, `field` | ❌ | Defines the table schema. Overriding would break existing data. |
 | `datasource` | ❌ | Connection strings; multi-tenant isolation is enforced at a higher layer. |
 
-There is no `workflow` metadata type (per [ADR-0020](https://github.com/objectstack-ai/framework/blob/main/docs/adr/0020-state-machine-converge-and-enforce.md), record state machines are a `state_machine` validation). The runtime gate is implemented in `OVERLAY_ALLOWED_TYPES` (derived from the registry) and enforced by `SysMetadataRepository.put()`. Denied types return `403 not_overridable`.
+There is no `workflow` metadata type (per [ADR-0020](https://github.com/objectstack-ai/objectstack/blob/main/docs/adr/0020-state-machine-converge-and-enforce.md), record state machines are a `state_machine` validation). The runtime gate is implemented in `OVERLAY_ALLOWED_TYPES` (derived from the registry) and enforced by `SysMetadataRepository.put()`. Denied types return `403 not_overridable`.
 
-See [ADR-0005](https://github.com/objectstack-ai/framework/blob/main/docs/adr/0005-metadata-customization-overlay.md) for the full design and amendments.
+See [ADR-0005](https://github.com/objectstack-ai/objectstack/blob/main/docs/adr/0005-metadata-customization-overlay.md) for the full design and amendments.
 
 ---
 
@@ -127,9 +127,9 @@ The hash is `sha256:` + 64-hex of a canonical (sorted-keys, no-undefined) JSON s
 
 ## Cross-references
 
-- [ADR-0005: Metadata customization overlay](https://github.com/objectstack-ai/framework/blob/main/docs/adr/0005-metadata-customization-overlay.md) — overlay semantics, whitelist, conflict rules.
-- [ADR-0008 §0 amendment (2026-04): project/branch removal](https://github.com/objectstack-ai/framework/blob/main/docs/adr/0008-metadata-repository-and-change-log.md#0-2026-04-13-amendment--drop-project-and-branch-from-metaref) — why `MetaRef.project` and `MetaRef.branch` are dead.
-- [ADR-0008: Metadata Repository & Change Log](https://github.com/objectstack-ai/framework/blob/main/docs/adr/0008-metadata-repository-and-change-log.md) — the four-primitive architecture.
+- [ADR-0005: Metadata customization overlay](https://github.com/objectstack-ai/objectstack/blob/main/docs/adr/0005-metadata-customization-overlay.md) — overlay semantics, whitelist, conflict rules.
+- [ADR-0008 §0 amendment (2026-04): project/branch removal](https://github.com/objectstack-ai/objectstack/blob/main/docs/adr/0008-metadata-repository-and-change-log.md#0-2026-04-13-amendment--drop-project-and-branch-from-metaref) — why `MetaRef.project` and `MetaRef.branch` are dead.
+- [ADR-0008: Metadata Repository & Change Log](https://github.com/objectstack-ai/objectstack/blob/main/docs/adr/0008-metadata-repository-and-change-log.md) — the four-primitive architecture.
 - [IMetadataService Contract](/docs/kernel/contracts/metadata-service) — the runtime API plugins call.
 - [North Star](/docs/concepts/north-star) — the product shape these primitives serve.
 

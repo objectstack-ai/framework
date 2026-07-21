@@ -300,10 +300,10 @@ describe('skills catalog boundary', () => {
 
   it('scaffolder installs from the curated skills/ subpath, not the repo root', () => {
     expect(REGISTRY_SOURCE).toContain(
-      'skills add objectstack-ai/framework/skills --all',
+      'skills add objectstack-ai/objectstack/skills --all',
     );
     expect(REGISTRY_SOURCE).not.toMatch(
-      /skills add objectstack-ai\/framework(?!\/skills)/,
+      /skills add objectstack-ai\/objectstack(?!\/skills)/,
     );
   });
 
@@ -320,7 +320,7 @@ describe('skills catalog boundary', () => {
       ':(exclude)packages/create-objectstack/src/template-consistency.test.ts',
       // CHANGELOGs are auto-generated from changeset prose and legitimately
       // quote a removed command in past tense while documenting its removal
-      // (#3101: "…advertised `skills add objectstack-ai/framework --all` … now
+      // (#3101: "…advertised `skills add objectstack-ai/objectstack --all` … now
       // scoped to the /skills subpath"). Documenting a fix is not advertising
       // the anti-pattern — only real customer-facing surfaces count.
       ':(exclude)**/CHANGELOG.md',
@@ -329,7 +329,7 @@ describe('skills catalog boundary', () => {
     try {
       candidates = execFileSync(
         'git',
-        ['grep', '-nF', 'skills add objectstack-ai/framework', '--', ...surfaces],
+        ['grep', '-nF', 'skills add objectstack-ai/objectstack', '--', ...surfaces],
         { cwd: repoRoot, encoding: 'utf8' },
       );
     } catch {
@@ -337,10 +337,10 @@ describe('skills catalog boundary', () => {
     }
     const rootInstalls = candidates
       .split('\n')
-      .filter((line) => /skills add objectstack-ai\/framework(?!\/skills)/.test(line));
+      .filter((line) => /skills add objectstack-ai\/objectstack(?!\/skills)/.test(line));
     expect(
       rootInstalls,
-      'these lines advertise `skills add objectstack-ai/framework` without ' +
+      'these lines advertise `skills add objectstack-ai/objectstack` without ' +
         'the /skills subpath — repo-root + --all installs internal skills',
     ).toEqual([]);
   });

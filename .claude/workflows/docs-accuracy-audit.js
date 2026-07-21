@@ -41,7 +41,7 @@ const HOUSE_FACTS = `ESTABLISHED CORRECTIONS from prior doc-accuracy audits (PR 
 - Console/portal path is /_console — NOT /_studio.
 - REST data path is /api/v1/data/{object} — NOT /api/v1/{object}. REST routes carry the /v1 prefix.
 - Env vars are OS_AUTH_SECRET (not AUTH_SECRET) and OS_PORT (not PORT); nested keys use single underscore unless the schema says otherwise. Mock-server toggle is VITE_USE_MOCK_SERVER (no VITE_RUNTIME_MODE or ?mode= switch).
-- The repo is github.com/objectstack-ai/framework (NOT objectstack-ai/spec). Fix broken cross-repo links/paths accordingly.
+- The repo is github.com/objectstack-ai/objectstack (NOT objectstack-ai/spec). Fix broken cross-repo links/paths accordingly.
 - Package names: @objectstack/<x> (e.g. @objectstack/service-cache, NOT @objectstack/services/service-cache). Some types only export via subpaths (e.g. @objectstack/spec/ui).
 - Auto-generated reference docs live in content/docs/references/ and are OUT OF SCOPE — never edit them.`
 
