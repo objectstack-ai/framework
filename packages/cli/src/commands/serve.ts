@@ -11,6 +11,7 @@ import { isHostConfig, shouldBootWithLibrary } from '../utils/plugin-detection.j
 import { resolveDriverType, createStorageDriver, UnsupportedDriverError } from '../utils/storage-driver.js';
 import { readEnvWithDeprecation, resolveMultiOrgEnabled, resolveAllowDegradedTenancy, isMcpServerEnabled, resolveSearchPinyinEnabled, isModuleNotFoundError } from '@objectstack/types';
 import { PLATFORM_CAPABILITY_TOKENS } from '@objectstack/spec/kernel';
+import { missingProviderMessage } from '../utils/capability-preflight.js';
 import { resolveObjectStackHome } from '@objectstack/runtime';
 import { LOG_LEVELS, resolveLogLevel, readLogLevelEnv } from '../utils/log-level.js';
 import {
@@ -1840,7 +1841,7 @@ export default class Serve extends Command {
       const loadOptionalServicePlugin = async (
         pkg: string,
         exportName: string,
-        opts: { required: boolean; label: string; track: string },
+        opts: { required: boolean; label: string; track: string; capability: string },
       ): Promise<boolean> => {
         try {
           const mod: any = await importFromHost(pkg);
@@ -1860,9 +1861,12 @@ export default class Serve extends Command {
           if (opts.required) {
             const msg = err instanceof Error ? err.message : String(err);
             throw new Error(
+              // #3366 — an absent provider is classified by edition: a cloud-only
+              // capability (e.g. `ai` → @objectstack/service-ai) says so instead of
+              // the un-followable "add it to your dependencies". Same wording the
+              // `os build` preflight prints, so boot and preflight read identically.
               Serve.isModuleNotFoundError(err)
-                ? `[${opts.label}] required but ${pkg} is not installed. `
-                    + `Add it to the app's dependencies, or drop the capability from \`requires\`.`
+                ? missingProviderMessage(opts.capability)
                 : `[${opts.label}] failed to start: ${msg}`,
             );
           }
@@ -1900,7 +1904,7 @@ export default class Serve extends Command {
         const aiLoaded = await loadOptionalServicePlugin(
           '@objectstack/service-ai',
           'AIServicePlugin',
-          { required: aiDecision === 'required', label: 'AI', track: 'AIService' },
+          { required: aiDecision === 'required', label: 'AI', track: 'AIService', capability: 'ai' },
         );
 
         // AI Studio (AI-driven metadata authoring / "online development") builds on
@@ -1927,7 +1931,7 @@ export default class Serve extends Command {
               await loadOptionalServicePlugin(
                 '@objectstack/service-ai-studio',
                 'AIStudioPlugin',
-                { required: studioDecision === 'required', label: 'AI Studio', track: 'AIStudio' },
+                { required: studioDecision === 'required', label: 'AI Studio', track: 'AIStudio', capability: 'ai-studio' },
               );
             }
           }
@@ -2100,9 +2104,12 @@ export default class Serve extends Command {
           // best-effort: absent ⇒ warn, crash ⇒ error, boot continues.
           if (declaredRequires.has(cap)) {
             throw new Error(
+              // #3366 — edition-aware message via the shared classifier (same
+              // wording the `os build` preflight prints). For these CAPABILITY_
+              // PROVIDERS tokens (all open-edition) that's the `pnpm add` hint;
+              // the cloud-only tokens surface their edition boundary instead.
               missing
-                ? `Capability "${cap}" is required but ${spec.pkg} is not installed. `
-                    + `Add it to the app's dependencies, or remove "${cap}" from \`requires\`.`
+                ? missingProviderMessage(cap)
                 : `Capability "${cap}" (${spec.pkg}) failed to start: ${msg}`,
             );
           }
