@@ -62,7 +62,44 @@ dangling one.
 
 So `os validate` is the fast inner-loop check (no artifact); `os build` is what
 you run when you need the deployable artifact. A config that passes `os validate`
-will not fail `os build` on schema/predicate/binding grounds.
+will not fail `os build` on schema/predicate/binding grounds. Both entry points
+also check SDUI styling (ADR-0065), and `os validate` additionally runs a set of
+view- and page-shape checks — list-view navigation modes (ADR-0053), view
+container shape, and JSX/React page sources (ADR-0080/0081) — that catch UI
+metadata which would otherwise be silently dropped.
+
+A clean run walks each gate and reports timing:
+
+```
+◆ Validate
+────────────────────────────────────────
+  → Loading configuration...
+  Config: /path/to/support-desk/objectstack.config.ts
+  Load time: 21ms
+  → Validating against ObjectStack Protocol...
+  → Validating expressions (ADR-0032)...
+  → Checking list-view navigation modes (ADR-0053)...
+  → Checking view container shape...
+  → Checking dashboard widget bindings (ADR-0021)...
+  → Checking SDUI styling (ADR-0065)...
+  → Checking JSX-source pages (ADR-0080)...
+  → Checking React-source pages (ADR-0081)...
+  → Checking React-source page props (ADR-0081)...
+  → Checking source-page styling (ADR-0065)...
+  → Checking capability references (ADR-0066)...
+  → Checking flow trigger wiring...
+  → Checking security posture (ADR-0090 D7)...
+
+  ✓ Validation passed (64ms)
+
+  Support Desk v0.1.0
+  Data: 1 Objects  6 Fields
+  UI: 1 Apps  1 Views  1 Actions
+```
+
+On failure the exit code is non-zero and the error is located and corrective —
+see [the gate in action](/docs/getting-started/build-with-claude-code#4-the-gate-os-validate-catches-ai-mistakes)
+for the bare-reference example verbatim.
 
 <Callout type="info">
 `os lint` is a **separate** pass — style and convention checks (snake_case
@@ -79,8 +116,7 @@ npm run typecheck    # tsc --noEmit — types against @objectstack/spec
 ```
 
 **Rule of thumb: never report a metadata change as done until `npm run validate`
-passes.** In the example apps the equivalent is `pnpm --filter <pkg> validate`
-(`pnpm verify` in `app-showcase`, which chains validate + typecheck + test).
+passes.**
 
 ### Checking a single expression
 
