@@ -41,7 +41,7 @@ hand-edits generated glue, and no metadata mistake reaches the browser unchecked
 
 | You need | Why |
 |:---|:---|
-| **Node.js 18+** and **pnpm** | Runs the scaffolder and the dev server (see [prerequisites](/docs/getting-started#prerequisites)). |
+| **Node.js 18+** and npm (pnpm / yarn / bun also work) | Runs the scaffolder and the dev server (see [prerequisites](/docs/getting-started#prerequisites)). |
 | **[Claude Code](https://claude.com/claude-code)** (or Cursor / Copilot) | Your agent reads `AGENTS.md` + the ObjectStack skills and authors the metadata. |
 
 ## 1. Scaffold the project
@@ -63,10 +63,6 @@ The scaffolder does more than copy files. It:
   `npm run validate` after every metadata change*.
 
 ```
-  ╔═══════════════════════════════════╗
-  ║   ◆ Create ObjectStack v6.x       ║
-  ╚═══════════════════════════════════╝
-
 ◆ New Environment
 ────────────────────────────────────────
   Environment: support-desk
@@ -75,6 +71,12 @@ The scaffolder does more than copy files. It:
   …
   → Installing AI skills for your coding agent...
   ✓ Environment created!
+
+  Next steps:
+    cd support-desk
+    npm install
+    npm run dev           # Start development server
+    npm run validate      # Verify metadata: schema + predicates + bindings
 ```
 
 This is why AI authoring is reliable rather than a guessing game: **the agent
@@ -192,8 +194,19 @@ export const TicketViews = defineView({
 });
 ```
 
+The agent also **wires the new files into `objectstack.config.ts`** — the object
+through the `src/objects/index.ts` barrel, and the action and view via the
+`actions:` / `views:` arrays in `defineStack()`. There is no filename-suffix
+magic: metadata exists in the app only if the config imports it, so if a
+freshly-authored action doesn't show up, the wiring is the first thing to check.
+
 This is the same metadata that powers the REST API, the Console UI, **and the MCP
 tools exposed to AI** — define it once, and ObjectStack derives the rest.
+
+<Callout type="info">
+Every example on this page was authored against `@objectstack/spec` 16.x and
+passes `os validate` verbatim in a freshly scaffolded project.
+</Callout>
 
 ## 4. The gate: `os validate` catches AI mistakes
 
@@ -288,6 +301,43 @@ to confirm. **That's the whole loop** — describe → author → gate → verif
 tightening on each pass until the app is right. See
 [How AI development works](/docs/getting-started/how-ai-development-works) for why
 this stays fast and safe as the app grows.
+
+<Callout type="tip">
+Beyond the pass/fail gate there's a **quality rubric**: `npx os lint --score`
+prints a 0–100 metadata-quality score (relationship patterns, missing options,
+roll-ups, name fields). Ask the agent to keep the project lint-clean — "run
+`os lint` and fix the warnings" is a perfectly good prompt.
+</Callout>
+
+## Beyond the first app — one skill per metadata domain
+
+The loop above never changes; what changes is **which skill the agent loads**.
+The bundle ships nine, one per metadata domain, and the agent picks by task
+context (the trigger table lives in your project's `AGENTS.md`). To grow the
+support desk into a full application, keep describing — each row is a real
+prompt you can give verbatim:
+
+| You want | Skill the agent loads | Say something like |
+|:---|:---|:---|
+| Data model — objects, fields, relationships, validations, seeds | `objectstack-data` | "Add an `account` object and link tickets to it with a required lookup. Seed three demo accounts." |
+| Queries & reports over records | `objectstack-query` | "Show me the count of open tickets per priority, using an aggregation." |
+| Views, dashboards, apps, record pages | `objectstack-ui` | "Add a dashboard with a metric for open tickets and a bar chart of tickets by priority." |
+| Business automation — flows, approvals, schedules | `objectstack-automation` | "Every day at 9:00, escalate tickets that have been open more than 48 hours." |
+| Permissions & row-level security | `objectstack-data` (security sections) | "Members should only see their own tickets; support managers see everything." |
+| Formula / conditional-field logic (CEL) | `objectstack-formula` | "Make `resolved_at` required and visible only when status is resolved." |
+| AI agents & tools inside your app | `objectstack-ai` | "Add an AI skill that triages new tickets into a priority." |
+| REST/auth surface tuning | `objectstack-api` | "Restrict the ticket API to read-only for non-members." |
+| Translations | `objectstack-i18n` | "Add a zh-CN translation bundle for the ticket object and app navigation." |
+
+Two habits keep this reliable as the app grows:
+
+- **The gate applies to every domain.** Flows, dashboards, permissions, and
+  translations all go through the same `npm run validate` — the agent should run
+  it after each change, exactly as `AGENTS.md` instructs.
+- **Keep the skills current.** After upgrading `@objectstack/spec`, re-run
+  `npx skills add objectstack-ai/framework/skills --all` so the agent authors
+  against the schemas you actually run. The full catalog is documented in the
+  [AI Skills Reference](/docs/ai/skills-reference).
 
 ## 7. Your app is natively AI-operable (MCP)
 
