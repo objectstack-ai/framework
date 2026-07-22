@@ -1,6 +1,6 @@
 # ADR-0104: Field runtime value-shape as a first-class contract — spec-owned value schemas, typed action handlers, file-as-reference
 
-- **Status**: Proposed
+- **Status**: Accepted (2026-07-22) — implementation staged per D4; phase 1 (D1) tracked on its own PR
 - **Date**: 2026-07-22
 - **Issue**: design follow-up generalizing #3405 / #3406 (inline lookup param
   silently stripped); relates #3407 (silently dropped writes), #1878 / #1891
