@@ -1,5 +1,60 @@
 # @objectstack/cli
 
+## 16.2.0
+
+### Patch Changes
+
+- Updated dependencies [d0fea33]
+- Updated dependencies [f243727]
+- Updated dependencies [54f479a]
+  - @objectstack/plugin-auth@16.2.0
+  - @objectstack/plugin-audit@16.2.0
+  - @objectstack/objectql@16.2.0
+  - @objectstack/runtime@16.2.0
+  - @objectstack/verify@16.2.0
+  - @objectstack/client@16.2.0
+  - @objectstack/plugin-pinyin-search@16.2.0
+  - @objectstack/plugin-sharing@16.2.0
+  - @objectstack/rest@16.2.0
+  - @objectstack/trigger-record-change@16.2.0
+  - @objectstack/cloud-connection@16.2.0
+  - @objectstack/spec@16.2.0
+  - @objectstack/console@16.2.0
+  - @objectstack/core@16.2.0
+  - @objectstack/types@16.2.0
+  - @objectstack/metadata@16.2.0
+  - @objectstack/observability@16.2.0
+  - @objectstack/formula@16.2.0
+  - @objectstack/lint@16.2.0
+  - @objectstack/platform-objects@16.2.0
+  - @objectstack/setup@16.2.0
+  - @objectstack/driver-memory@16.2.0
+  - @objectstack/driver-sql@16.2.0
+  - @objectstack/driver-mongodb@16.2.0
+  - @objectstack/driver-sqlite-wasm@16.2.0
+  - @objectstack/plugin-approvals@16.2.0
+  - @objectstack/plugin-email@16.2.0
+  - @objectstack/plugin-hono-server@16.2.0
+  - @objectstack/mcp@16.2.0
+  - @objectstack/plugin-reports@16.2.0
+  - @objectstack/plugin-security@16.2.0
+  - @objectstack/service-sms@16.2.0
+  - @objectstack/plugin-webhooks@16.2.0
+  - @objectstack/trigger-api@16.2.0
+  - @objectstack/trigger-schedule@16.2.0
+  - @objectstack/service-analytics@16.2.0
+  - @objectstack/service-automation@16.2.0
+  - @objectstack/service-cache@16.2.0
+  - @objectstack/service-datasource@16.2.0
+  - @objectstack/service-job@16.2.0
+  - @objectstack/service-messaging@16.2.0
+  - @objectstack/service-package@16.2.0
+  - @objectstack/service-queue@16.2.0
+  - @objectstack/service-realtime@16.2.0
+  - @objectstack/service-settings@16.2.0
+  - @objectstack/service-storage@16.2.0
+  - @objectstack/account@16.2.0
+
 ## 16.1.0
 
 ### Minor Changes

@@ -1,5 +1,13 @@
 # @objectstack/lint
 
+## 16.2.0
+
+### Patch Changes
+
+- @objectstack/spec@16.2.0
+- @objectstack/formula@16.2.0
+- @objectstack/sdui-parser@16.2.0
+
 ## 16.1.0
 
 ### Minor Changes

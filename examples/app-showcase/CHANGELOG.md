@@ -1,5 +1,19 @@
 # @objectstack/example-showcase
 
+## 0.3.14
+
+### Patch Changes
+
+- @objectstack/runtime@16.2.0
+- @objectstack/cloud-connection@16.2.0
+- @objectstack/spec@16.2.0
+- @objectstack/driver-sql@16.2.0
+- @objectstack/connector-mcp@16.2.0
+- @objectstack/connector-rest@16.2.0
+- @objectstack/connector-slack@16.2.0
+- @objectstack/service-datasource@16.2.0
+- @objectstack/connector-openapi@16.2.0
+
 ## 0.3.13
 
 ### Patch Changes
