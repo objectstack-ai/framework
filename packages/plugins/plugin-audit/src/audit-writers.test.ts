@@ -661,18 +661,6 @@ describe('audit writers — localized activity summaries (framework#3039)', { ti
     return { fire, emits };
   }
 
-  it('localizes the assignment notification title to the recipient locale', async () => {
-    const { fire, emits } = setupWithMessaging('zh-CN', await makeI18n());
-    await fire('afterInsert', {
-      ...insertCtx(),
-      result: { id: 'q-1', name: 'OC-00001', owner_id: 'user-2' },
-    });
-    const assignment = emits.find((e) => e.topic === 'collab.assignment');
-    expect(assignment).toBeDefined();
-    expect(assignment.audience).toEqual(['user-2']);
-    expect(assignment.payload.title).toBe('人员资质 "OC-00001" 已分配给你');
-  });
-
   it('localizes the @mention notification title to the recipient locale', async () => {
     const { fire, emits } = setupWithMessaging('zh-CN', await makeI18n());
     await fire('afterInsert', {
@@ -694,12 +682,15 @@ describe('audit writers — localized activity summaries (framework#3039)', { ti
     expect(mention.payload.title).toBe('Alice 提到了你');
   });
 
-  it('falls back to an English title with the authored object label when i18n misses', async () => {
+  // framework#3403 — the kernel no longer emits assignment notifications from
+  // owner/assignee field changes (that policy moved to user-space automation
+  // flows). Setting owner_id must NOT produce a `collab.assignment` emit.
+  it('does NOT emit an assignment notification when an owner field is set (framework#3403)', async () => {
     const { fire, emits } = setupWithMessaging(
       undefined,
       undefined,
       { crm_lead: { label: 'Lead' } },
-      { ...SINGLE_TENANT, crm_lead: ['id', 'name'] },
+      { ...SINGLE_TENANT, crm_lead: ['id', 'name', 'owner_id'] },
     );
     await fire('afterInsert', {
       object: 'crm_lead',
@@ -707,7 +698,6 @@ describe('audit writers — localized activity summaries (framework#3039)', { ti
       result: { id: 'l-1', name: 'Acme', owner_id: 'user-2' },
       session: { tenantId: 'org-1', userId: 'user-1' },
     });
-    const assignment = emits.find((e) => e.topic === 'collab.assignment');
-    expect(assignment.payload.title).toBe('Lead "Acme" assigned to you');
+    expect(emits.find((e) => e.topic === 'collab.assignment')).toBeUndefined();
   });
 });

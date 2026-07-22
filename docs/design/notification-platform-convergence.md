@@ -19,6 +19,14 @@
 
 > **Single ingress.** Every producer calls `NotificationService.emit(...)`. **No producer writes a per-user inbox/materialization row directly.** The in-app inbox is a *materialization of delivery*.
 
+> **⚠️ Superseded (framework#3403, 2026-07):** the **assignment** notifier described
+> throughout this doc was *removed* from the kernel, not merely re-routed. Deciding
+> that an owner/assignee change warrants a bell is a business policy; the field-name
+> heuristic (`owner_id` et al.) misfired on system records like `sys_file`
+> (framework#3402). Assignment notifications are now user-space automation (a
+> `record-after-update` trigger + a `notify` node). The `@mention` convergence below
+> still stands. Assignment mentions in the sections that follow are historical.
+
 Current violations to remove:
 - `plugin-audit/src/audit-writers.ts` writes `sys_notification` directly (`@mention`, assignment) — re-route to `emit()`.
 - `service-messaging` inbox channel writes `sys_inbox_message` directly from the `notify` node — keep the channel, but it must run **after** the pipeline (event → resolve → deliver), not as the producer.

@@ -6,6 +6,14 @@
 (Console bell) cut-over, mark-read write path, incremental channels, topic
 catalog, and hardening remain. Date: 2026-06-01.
 
+> **⚠️ Superseded in part (framework#3403, 2026-07):** the **assignment**
+> (`collab.assignment`) producer documented below was later *removed* from the
+> kernel — assignment notifications are a business policy, and the field-name
+> heuristic that drove them misfired on system records (framework#3402). They now
+> live in user-space automation (`record-after-update` + a `notify` node). The
+> `@mention` (`collab.mention`) producer and the single-ingress model are unchanged.
+> Assignment references below are historical.
+
 ---
 
 ## What shipped in this repo (framework)
