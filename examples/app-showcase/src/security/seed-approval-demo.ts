@@ -26,9 +26,11 @@
  *      inbox);
  *   2. provision a phone-based demo user so the "phone sign-in surfaces" show
  *      a real number in the All Users list + record detail;
- *   3. launch the Invoice Dual Sign-off (finance ∧ legal — 会签) and the
- *      High-Value Committee Quorum (2-of-3) flows through the real automation
- *      engine, so genuine, resumable pending requests land in the inbox.
+ *   3. launch one flow per approval behavior through the real automation engine,
+ *      so genuine, resumable pending requests land in the inbox — Invoice Dual
+ *      Sign-off (`unanimous`: finance ∧ legal), High-Value Committee
+ *      (`quorum`: 2-of-3), and Expense Sign-off (`per_group` 会签: one approval
+ *      from each of the manager / finance groups).
  *
  * Everything is idempotent: a persistent DB keeps the assignments/requests, and
  * `openNodeRequest` rejects a duplicate pending request per (object, record),
@@ -48,6 +50,18 @@ const PHONE_DEMO_USER = {
   name: 'Mei Phone (demo)',
   email: 'phone.demo@example.com',
   phone_number: '+8613800138000',
+} as const;
+
+/**
+ * A second persona holding ONLY `auditor`, which is the position behind the
+ * `finance` group of the per-group (会签) demo. It has to be a *different* user
+ * from the admin: with one user in both groups a single decision would satisfy
+ * both tallies at once, and "one approval per group" would never be observable.
+ */
+const AUDITOR_DEMO_USER = {
+  id: 'usr_showcase_auditor_demo',
+  name: 'Ada Auditor (demo)',
+  email: 'auditor.demo@example.com',
 } as const;
 
 interface ApprovalDemoContext {
@@ -91,15 +105,17 @@ async function findOne(
   }
 }
 
-/** Grant the admin the approval-routing positions (idempotent by stable id). */
-async function assignAdminPositions(
+/** Grant a user approval-routing positions (idempotent by stable id). */
+async function assignPositions(
   ctx: ApprovalDemoContext,
-  adminId: string,
+  userId: string,
+  positions: readonly string[],
   organizationId: string | null,
+  idPrefix: string,
 ): Promise<void> {
-  for (const position of ADMIN_APPROVAL_POSITIONS) {
+  for (const position of positions) {
     const existing = await findOne(ctx, 'sys_user_position', {
-      user_id: adminId,
+      user_id: userId,
       position,
       ...(organizationId ? { organization_id: organizationId } : {}),
     });
@@ -108,11 +124,11 @@ async function assignAdminPositions(
       await ctx.ql.insert(
         'sys_user_position',
         {
-          id: `usp_showcase_admin_${position}`,
-          user_id: adminId,
+          id: `usp_showcase_${idPrefix}_${position}`,
+          user_id: userId,
           position,
           ...(organizationId ? { organization_id: organizationId } : {}),
-          reason: 'Showcase approval demo — admin holds every approver position so requests are actionable.',
+          reason: 'Showcase approval demo — demo personas hold the approver positions so requests are actionable.',
         },
         { context: SYS },
       );
@@ -125,24 +141,34 @@ async function assignAdminPositions(
   }
 }
 
-/** Provision a phone-based demo user (best-effort; renders the phone surfaces). */
-async function ensurePhoneDemoUser(ctx: ApprovalDemoContext): Promise<void> {
-  const existing = await findOne(ctx, 'sys_user', { email: PHONE_DEMO_USER.email });
-  if (existing) return;
+/**
+ * Provision a demo persona row (best-effort). Returns the user id, whether it
+ * was just created or already present, so callers can route positions at it.
+ */
+async function ensureDemoUser(
+  ctx: ApprovalDemoContext,
+  user: { id: string; name: string; email: string; phone_number?: string },
+): Promise<string | undefined> {
+  const existing = await findOne(ctx, 'sys_user', { email: user.email });
+  if (existing?.id) return String(existing.id);
   try {
     // `sys_user` carries NO org column — org membership lives on `sys_member`
     // (see the resolution in `run` below). An `organization_id` key here is not
     // silently dropped: it reaches SQL as a real column and the insert dies with
     // "table sys_user has no column named organization_id", so the demo user is
-    // never provisioned and the phone surfaces render empty.
-    await ctx.ql.insert('sys_user', { ...PHONE_DEMO_USER }, { context: SYS });
-    ctx.logger?.info?.('[showcase] approval-demo phone user provisioned', { email: PHONE_DEMO_USER.email });
+    // never provisioned and its surfaces render empty.
+    await ctx.ql.insert('sys_user', { ...user }, { context: SYS });
+    ctx.logger?.info?.('[showcase] approval-demo persona provisioned', { email: user.email });
+    return user.id;
   } catch (err) {
     // Non-fatal: sign-in still needs a better-auth account; this row just makes
-    // the phone number visible in the All Users list + record detail.
-    ctx.logger?.warn?.('[showcase] approval-demo phone user insert failed (surfaces only)', {
+    // the persona visible in the All Users list + record detail, and routable
+    // as an approver.
+    ctx.logger?.warn?.('[showcase] approval-demo persona insert failed (surfaces only)', {
+      email: user.email,
       error: err instanceof Error ? err.message : String(err),
     });
+    return undefined;
   }
 }
 
@@ -223,8 +249,13 @@ export function registerShowcaseApprovalDemo(ctx: ApprovalDemoContext): void {
     const anyMember = ownerMember ?? (await findOne(ctx, 'sys_member', { user_id: adminId }));
     const organizationId = (anyMember?.organization_id as string | undefined) ?? null;
 
-    await assignAdminPositions(ctx, adminId, organizationId);
-    await ensurePhoneDemoUser(ctx);
+    await assignPositions(ctx, adminId, ADMIN_APPROVAL_POSITIONS, organizationId, 'admin');
+    await ensureDemoUser(ctx, PHONE_DEMO_USER);
+    // The auditor persona backs the `finance` group of the per-group demo. It
+    // deliberately holds ONLY `auditor`, so the two groups have distinct
+    // holders and the request stays open until each group has answered.
+    const auditorId = await ensureDemoUser(ctx, AUDITOR_DEMO_USER);
+    if (auditorId) await assignPositions(ctx, auditorId, ['auditor'], organizationId, 'auditor');
 
     let engine: AutomationEngineLike | undefined;
     try {
@@ -237,9 +268,10 @@ export function registerShowcaseApprovalDemo(ctx: ApprovalDemoContext): void {
       return;
     }
 
-    // 会签 (per_group): Invoice Dual Sign-off needs a `sent` invoice; the start
-    // gate is `status == "sent" && previous.status != "sent"`, so it entered
-    // from `draft`.
+    // `unanimous`: Invoice Dual Sign-off needs a `sent` invoice; the start gate
+    // is `status == "sent" && previous.status != "sent"`, so it entered from
+    // `draft`. Both named approvers must answer (not one-per-group — that is
+    // the expense demo below).
     const sentInvoice = await findOne(ctx, 'showcase_invoice', { status: 'sent' });
     if (sentInvoice) {
       await launchSignoff(ctx, engine, 'showcase_invoice_signoff', 'showcase_invoice', sentInvoice, organizationId, 'draft');
@@ -251,6 +283,23 @@ export function registerShowcaseApprovalDemo(ctx: ApprovalDemoContext): void {
     const demoExpense = await findOne(ctx, 'showcase_expense_report', { name: 'EXP-DEMO' });
     if (demoExpense) {
       await launchSignoff(ctx, engine, 'showcase_committee_quorum', 'showcase_expense_report', demoExpense, organizationId, 'draft');
+    }
+
+    // 会签 (per_group): Expense Sign-off needs one approval from EACH of the
+    // `manager` and `finance` groups. Deliberately routed at EXP-2001 ($1,500),
+    // which sits UNDER the $5,000 committee threshold, so the quorum flow above
+    // does not also open a request on the same record and blur the two demos.
+    const perGroupExpense = await findOne(ctx, 'showcase_expense_report', { name: 'EXP-2001' });
+    if (perGroupExpense) {
+      await launchSignoff(
+        ctx,
+        engine,
+        'showcase_expense_signoff',
+        'showcase_expense_report',
+        perGroupExpense,
+        organizationId,
+        'draft',
+      );
     }
   };
 
