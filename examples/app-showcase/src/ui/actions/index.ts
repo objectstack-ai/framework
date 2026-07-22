@@ -204,6 +204,14 @@ export const ActionParamGalleryAction = defineAction({
       ],
     },
     { name: 'p_date', type: 'date', label: 'Effective date' },
+    // #3405 — an INLINE record picker. `reference` names the object the picker
+    // searches; without it the param would degrade to a "paste the record id
+    // (UUID)" text box, which is what shipped before. Accounts are seeded with
+    // enough volume (incl. a CJK name) to exercise search here.
+    {
+      name: 'p_account', type: 'lookup', reference: 'showcase_account', label: 'Related account',
+      helpText: 'Inline lookup param — searchable record picker, no UUID typing.',
+    },
     { name: 'p_color', type: 'color', label: 'Accent color', defaultValue: '#7C3AED' },
     // Spec `autonumber` param → the AutoNumber widget (read-only, auto-assigned).
     { name: 'p_reference', type: 'autonumber', label: 'Reference #' },

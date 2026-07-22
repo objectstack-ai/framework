@@ -74,6 +74,40 @@ describe('ActionParamSchema', () => {
       expect(() => ActionParamSchema.parse({ name: 'p', label: 'P', type })).not.toThrow();
     }
   });
+
+  // #3405 — an inline record-picker param carries its own target object.
+  // Before this, `reference` was an unknown key: zod stripped it silently and
+  // the param dialog degraded to a "paste the record id (UUID)" text input,
+  // with no signal that the authored config had been dropped.
+  describe('inline lookup reference target (#3405)', () => {
+    it('keeps `reference` on an inline lookup param', () => {
+      const result = ActionParamSchema.parse({
+        name: 'inspector',
+        label: 'Inspector',
+        type: 'lookup' as const,
+        reference: 'sys_user',
+        required: true,
+      });
+      expect(result.reference).toBe('sys_user');
+    });
+
+    it('rejects an inline lookup/master_detail param with no reference target', () => {
+      for (const type of ['lookup', 'master_detail'] as const) {
+        const result = ActionParamSchema.safeParse({ name: 'owner', label: 'Owner', type });
+        expect(result.success).toBe(false);
+        expect(result.error?.issues[0]?.path).toEqual(['reference']);
+      }
+    });
+
+    it('allows a field-backed lookup param to omit it (inherited from the field at runtime)', () => {
+      expect(() => ActionParamSchema.parse({ field: 'inspector', type: 'lookup' as const })).not.toThrow();
+      expect(() => ActionParamSchema.parse({ field: 'inspector' })).not.toThrow();
+    });
+
+    it('leaves `reference` undefined for non-picker params', () => {
+      expect(ActionParamSchema.parse({ name: 'note', type: 'textarea' as const }).reference).toBeUndefined();
+    });
+  });
 });
 
 // #2874 P1 — declarative `requiresFeature` sugar, lowered at parse time into
@@ -368,6 +402,7 @@ describe('ActionSchema', () => {
             name: 'new_owner',
             label: 'New Owner',
             type: 'lookup',
+            reference: 'sys_user',
             required: true,
           },
           {
@@ -497,6 +532,7 @@ describe('ActionSchema', () => {
             name: 'new_owner',
             label: 'New Owner',
             type: 'lookup',
+            reference: 'sys_user',
             required: true,
           },
           {

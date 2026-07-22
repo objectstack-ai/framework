@@ -31,7 +31,15 @@ import { PUBLIC_AUTH_FEATURE_NAMES, lowerRequiresFeature } from '../kernel/publi
  *
  * 2. **Inline** (legacy / bespoke) — declare `name`, `label`, `type` etc.
  *    inline when no matching object field exists. Inline values may also be
- *    used alongside `field` to override individual properties.
+ *    used alongside `field` to override individual properties. A `lookup` /
+ *    `master_detail` param declared this way MUST name its target object via
+ *    `reference` — there is no field to inherit it from:
+ *
+ *    ```ts
+ *    params: [
+ *      { name: 'inspector', label: 'Inspector', type: 'lookup', reference: 'sys_user' },
+ *    ]
+ *    ```
  *
  * `name` is required unless `field` is provided (in which case it defaults
  * to the field name and is used as the request-body key).
@@ -77,6 +85,19 @@ export const ActionParamSchema = lazySchema(() => z.object({
   /** Max upload size in bytes for `file`/`image` params. */
   maxSize: z.number().int().positive().optional().describe('Max upload size in bytes for file/image params.'),
   /**
+   * Reference target for an inline `lookup` / `master_detail` param — the
+   * object whose records the picker searches. Field-backed params inherit it
+   * from the referenced field, so it is only needed inline.
+   *
+   * Without it the dialog cannot query anything and degrades to a plain text
+   * input asking for a raw record id, which is unusable for a human — hence
+   * the `.refine()` below rejects a targetless lookup param at parse time.
+   *
+   * Key name deliberately mirrors `FieldSchema.reference` so the same spelling
+   * works in both places.
+   */
+  reference: SnakeCaseIdentifierSchema.optional().describe('Reference target object for inline lookup/master_detail params; mirrors FieldSchema.reference.'),
+  /**
    * When true, the param's default value is pulled from the current row record
    * (key = the resolved field name) when the action runs from a list_item
    * context. Useful for edit dialogs that pre-fill from the selected row.
@@ -105,6 +126,16 @@ export const ActionParamSchema = lazySchema(() => z.object({
 }).refine(
   (p) => Boolean(p.name) || Boolean(p.field),
   { message: 'ActionParam requires either "name" or "field"' },
+).refine(
+  // An INLINE record-picker param must name its target object. Only inline
+  // params are checked: a field-backed one inherits the target from the
+  // referenced field's metadata, which is not visible at parse time.
+  (p) => !(!p.field && (p.type === 'lookup' || p.type === 'master_detail') && !p.reference),
+  {
+    path: ['reference'],
+    message:
+      'ActionParam with type "lookup"/"master_detail" requires "reference" (the target object) when declared inline — without it the param dialog degrades to a raw record-id text input. Set `reference: \'<object>\'`, or use a field-backed param (`{ field: \'<lookup_field>\' }`) to inherit it.',
+  },
 ).transform((p, ctx) => lowerRequiresFeature(p, ctx)));
 
 /**
