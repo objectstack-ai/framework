@@ -126,18 +126,16 @@ async function assignAdminPositions(
 }
 
 /** Provision a phone-based demo user (best-effort; renders the phone surfaces). */
-async function ensurePhoneDemoUser(ctx: ApprovalDemoContext, organizationId: string | null): Promise<void> {
+async function ensurePhoneDemoUser(ctx: ApprovalDemoContext): Promise<void> {
   const existing = await findOne(ctx, 'sys_user', { email: PHONE_DEMO_USER.email });
   if (existing) return;
   try {
-    await ctx.ql.insert(
-      'sys_user',
-      {
-        ...PHONE_DEMO_USER,
-        ...(organizationId ? { organization_id: organizationId } : {}),
-      },
-      { context: SYS },
-    );
+    // `sys_user` carries NO org column — org membership lives on `sys_member`
+    // (see the resolution in `run` below). An `organization_id` key here is not
+    // silently dropped: it reaches SQL as a real column and the insert dies with
+    // "table sys_user has no column named organization_id", so the demo user is
+    // never provisioned and the phone surfaces render empty.
+    await ctx.ql.insert('sys_user', { ...PHONE_DEMO_USER }, { context: SYS });
     ctx.logger?.info?.('[showcase] approval-demo phone user provisioned', { email: PHONE_DEMO_USER.email });
   } catch (err) {
     // Non-fatal: sign-in still needs a better-auth account; this row just makes
@@ -215,20 +213,18 @@ export function registerShowcaseApprovalDemo(ctx: ApprovalDemoContext): void {
       return;
     }
     const adminId = String(admin.id);
-    // The active org lives on the better-auth membership (`sys_member`), NOT on
-    // `sys_user.organization_id` (which is null for the dev admin). Both the
-    // position rows AND the requests must carry this org, or the org-scoped
-    // approver resolution (`sys_user_position` filtered by org) and `getRequest`
-    // (org-scoped read that the inbox drawer uses) silently return nothing.
-    let organizationId = (admin.organization_id as string | undefined) ?? null;
-    if (!organizationId) {
-      const ownerMember = await findOne(ctx, 'sys_member', { user_id: adminId, role: 'owner' });
-      const anyMember = ownerMember ?? (await findOne(ctx, 'sys_member', { user_id: adminId }));
-      organizationId = (anyMember?.organization_id as string | undefined) ?? null;
-    }
+    // The active org lives on the better-auth membership (`sys_member`).
+    // `sys_user` has no org column at all, so there is nothing to read off the
+    // admin row first. Both the position rows AND the requests must carry this
+    // org, or the org-scoped approver resolution (`sys_user_position` filtered
+    // by org) and `getRequest` (the org-scoped read behind the inbox drawer)
+    // silently return nothing.
+    const ownerMember = await findOne(ctx, 'sys_member', { user_id: adminId, role: 'owner' });
+    const anyMember = ownerMember ?? (await findOne(ctx, 'sys_member', { user_id: adminId }));
+    const organizationId = (anyMember?.organization_id as string | undefined) ?? null;
 
     await assignAdminPositions(ctx, adminId, organizationId);
-    await ensurePhoneDemoUser(ctx, organizationId);
+    await ensurePhoneDemoUser(ctx);
 
     let engine: AutomationEngineLike | undefined;
     try {
