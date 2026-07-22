@@ -1,5 +1,13 @@
 # @objectstack/plugin-webhooks
 
+## 16.2.0
+
+### Patch Changes
+
+- @objectstack/spec@16.2.0
+- @objectstack/core@16.2.0
+- @objectstack/service-messaging@16.2.0
+
 ## 16.1.0
 
 ### Patch Changes

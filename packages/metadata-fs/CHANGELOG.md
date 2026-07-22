@@ -1,5 +1,11 @@
 # @objectstack/metadata-fs
 
+## 16.2.0
+
+### Patch Changes
+
+- @objectstack/metadata-core@16.2.0
+
 ## 16.1.0
 
 ### Patch Changes

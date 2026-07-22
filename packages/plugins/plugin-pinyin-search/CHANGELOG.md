@@ -1,5 +1,14 @@
 # @objectstack/plugin-pinyin-search
 
+## 16.2.0
+
+### Patch Changes
+
+- Updated dependencies [54f479a]
+  - @objectstack/objectql@16.2.0
+  - @objectstack/core@16.2.0
+  - @objectstack/types@16.2.0
+
 ## 16.1.0
 
 ### Patch Changes
