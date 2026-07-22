@@ -48,11 +48,22 @@ const SKIP_FIELDS = new Set<string>([
 // backtracking (ReDoS) of the naive `[^\s@]+\.[^\s@]+` shape while still
 // requiring a local part, an '@', and a dotted domain.
 const EMAIL_RE = /^[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+$/;
-// Permissive URL pattern: accept any scheme:// + non-empty body so that
-// non-HTTP URIs used by drivers (libsql://, postgres://, mysql://, file://, s3://, …)
-// pass field-level validation. Stricter per-field checks can be enforced
-// via custom validators where needed.
-const URL_RE = /^[a-z][a-z0-9+.\-]*:\/\/[^\s]+$/i;
+// Permissive URL pattern for `url` fields. Four accepted shapes:
+//   1. `scheme://…`  — any scheme + non-empty body, so non-HTTP URIs used by
+//      drivers (libsql://, postgres://, mysql://, file://, s3://, …) pass.
+//   2. root-relative / protocol-relative refs (`/path`, `//host/path`) — the
+//      common same-origin asset form. This is what the platform's OWN storage
+//      service returns for an uploaded file: the console avatar uploader
+//      (@object-ui, createObjectStackUploadAdapter) PUTs the image to storage
+//      and then writes `sys_user.image` (a Field.url) = `/api/v1/storage/files/
+//      <id>`. Rejecting it made every avatar upload fail `invalid_url` and —
+//      on the better-auth `update-user` path — surface as a raw HTTP 500.
+//   3. `data:` URIs — base64-embedded images (the default object-URL upload
+//      client's inline form).
+//   4. `blob:` object-URLs.
+// A bare scheme-less string with no leading `/` (e.g. "notaurl") is still
+// rejected. Stricter per-field checks can be enforced via custom validators.
+const URL_RE = /^(?:[a-z][a-z0-9+.\-]*:\/\/[^\s]+|\/[^\s]*|data:[^\s]+|blob:[^\s]+)$/i;
 const PHONE_RE = /^[+()\-\s\d.]{5,}$/;
 
 export interface FieldValidationError {

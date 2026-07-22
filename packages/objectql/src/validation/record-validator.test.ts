@@ -288,3 +288,60 @@ describe('coerceBooleanFields — SQLite 0/1 → real booleans', () => {
     expect(coerceBooleanFields(schema, null as any)).toBe(null);
   });
 });
+
+/**
+ * `url` fields (e.g. `sys_user.image`, a Field.url) must accept relative and
+ * authority-less URLs, not just `scheme://`.
+ *
+ * The load-bearing case is the root-relative form the platform's OWN storage
+ * service returns for an uploaded file: the console avatar uploader writes
+ * `sys_user.image = /api/v1/storage/files/<id>`. Before the fix that failed
+ * `invalid_url` and, on the better-auth `update-user` path, surfaced as a raw
+ * HTTP 500 — the exact avatar-upload bug users hit. `data:`/`blob:` inline
+ * forms are accepted too.
+ */
+describe('validateRecord — url field accepts relative + inline URLs', () => {
+  const schema = { fields: { image: { type: 'url', required: false } } };
+
+  it('accepts a root-relative storage URL (the real avatar-upload value)', () => {
+    expect(() =>
+      validateRecord(
+        schema,
+        { image: '/api/v1/storage/files/cb02e85b-33f3-4bd1-88e4-b7b706ff856a' },
+        'update',
+      ),
+    ).not.toThrow();
+  });
+
+  it('accepts a protocol-relative URL', () => {
+    expect(() =>
+      validateRecord(schema, { image: '//cdn.example/a.png' }, 'update'),
+    ).not.toThrow();
+  });
+
+  it('accepts a base64 data: URI', () => {
+    expect(() =>
+      validateRecord(
+        schema,
+        { image: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB' },
+        'update',
+      ),
+    ).not.toThrow();
+  });
+
+  it('accepts a blob: object-URL', () => {
+    expect(() =>
+      validateRecord(schema, { image: 'blob:https://app.example/8f3c-1a2b' }, 'update'),
+    ).not.toThrow();
+  });
+
+  it('still accepts a normal scheme:// URL', () => {
+    expect(() =>
+      validateRecord(schema, { image: 'https://cdn.example/a.png' }, 'update'),
+    ).not.toThrow();
+  });
+
+  it('still rejects a bare non-URL string (no scheme, no leading slash)', () => {
+    expect(() => validateRecord(schema, { image: 'notaurl' }, 'update')).toThrow(/valid URL/i);
+  });
+});
