@@ -28,7 +28,10 @@ export const TEAM_MEMBER_OBJECT = 'sys_team_member';
 
 /**
  * Conventional owner/assignee field names tried, in order, for `owner_of:`
- * audience resolution. Mirrors the audit writer's `OWNER_FIELDS`.
+ * audience resolution. This is the sole home for the convention: the audit
+ * writer's kernel-side assignment notifier (which mirrored this list) was
+ * removed in framework#3403 — `owner_of:` is an explicit, caller-requested
+ * audience, not a field-name heuristic applied to every write.
  */
 const DEFAULT_OWNER_FIELDS = ['owner_id', 'assigned_to', 'assignee_id', 'owner', 'assignee'];
 

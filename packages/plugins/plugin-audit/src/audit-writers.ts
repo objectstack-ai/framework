@@ -612,35 +612,17 @@ export function installAuditWriters(
       const sys = api.sudo();
       await sys.object('sys_audit_log').create(auditRow);
       if (activitiesEnabled) await sys.object('sys_activity').create(activityRow);
-      // M10.8 / ADR-0030: notify the assignee. Best-effort; never throws into
-      // the user-facing CRUD path. Goes through the messaging single ingress
-      // (`emit`) — the inbox channel materializes the bell row — rather than
-      // writing `sys_notification` directly. If owner_id / assigned_to was
-      // newly set (or changed to a different user) on a non-system record, the
-      // recipient sees "Lead X was assigned to you" without polling.
+      // Assignment notifications are NOT emitted here (framework#3403). Deciding
+      // that an owner/assignee change warrants a bell is a business policy, not a
+      // platform default — the kernel version guessed "who is the assignee" from
+      // field names (`owner_id` et al.), which misfired on system records like
+      // `sys_file` (framework#3402). Applications now opt in per object with an
+      // automation flow (`record-after-update` + a `notify` node); see the
+      // `showcase_task_assigned_notify` flow for a ready-made example.
       //
-      // (Comment mentions are handled separately by the sys_comment hook below
-      //  since SKIP_OBJECTS excludes it from this writer.)
-      await writeAssignmentNotifications(getMessaging(), {
-        object: ctx.object,
-        recordId: recordId ?? null,
-        label,
-        action,
-        before,
-        after,
-        actorId: userId ?? null,
-        tenantId: tenantId ?? null,
-        // Localize the bell title to the RECIPIENT's locale (they read it),
-        // not the acting user's — same key shapes as the activity summaries.
-        makeTitle: async (recipientId) => {
-          const rTranslate = translateWith(await resolveWriteLocale(tenantId, recipientId));
-          const objectLabel = displayLabelFor(ctx.object, rTranslate);
-          return (
-            rTranslate('messages.assignedToYou', { object: objectLabel, label }) ??
-            `${objectLabel} "${label}" assigned to you`
-          );
-        },
-      });
+      // (Comment @mention notifications remain a platform behavior — they are
+      //  handled separately by the sys_comment hook below, since SKIP_OBJECTS
+      //  excludes it from this writer.)
     } catch (err) {
       // Log via engine logger if available, but never throw.
       try { (engine as any).logger?.warn?.('Audit write failed', { object: ctx.object, action, err: String((err as any)?.message ?? err) }); } catch {}
@@ -783,93 +765,6 @@ export function installAuditWriters(
     }
   };
   engine.registerHook('afterInsert', writeCommentMentions, { packageId });
-}
-
-/**
- * Identify the assignee/owner field of a record. We accept several
- * conventional names so this works across CRM-style objects (owner_id,
- * assigned_to) and platform objects (recipient_id is handled separately).
- */
-const OWNER_FIELDS = ['owner_id', 'assigned_to', 'assignee_id', 'owner', 'assignee'];
-
-function pickOwner(rec: any): string | null {
-  if (!rec || typeof rec !== 'object') return null;
-  for (const f of OWNER_FIELDS) {
-    const v = rec[f];
-    if (typeof v === 'string' && v.length > 0) return v;
-  }
-  return null;
-}
-
-async function writeAssignmentNotifications(
-  messaging: MessagingEmitSurface | undefined,
-  params: {
-    object: string;
-    recordId: string | null;
-    label: string;
-    action: 'create' | 'update' | 'delete';
-    before: any;
-    after: any;
-    actorId: string | null;
-    tenantId: string | null;
-    /**
-     * Build the (recipient-locale-localized) notification title. Optional —
-     * absent or throwing, the English literal below is used, with the raw
-     * object API name (pre-#3039 behavior).
-     */
-    makeTitle?: (recipientId: string) => Promise<string>;
-  },
-): Promise<void> {
-  if (!messaging) return; // no pipeline installed → no assignment notifications
-  if (params.action === 'delete') return;
-  if (!params.recordId) return;
-
-  const newOwner = pickOwner(params.after);
-  const oldOwner = pickOwner(params.before);
-  if (!newOwner) return;
-  if (params.action === 'update' && newOwner === oldOwner) return;
-  if (newOwner === params.actorId) return; // self-assignment is silent
-
-  let title = `${params.object} "${params.label}" assigned to you`;
-  if (params.makeTitle) {
-    try {
-      title = await params.makeTitle(newOwner);
-    } catch {
-      /* keep the English fallback */
-    }
-  }
-
-  try {
-    // ADR-0030 single ingress — emit() writes the L2 event and the inbox
-    // channel materializes the bell row + a delivered receipt. organizationId
-    // is propagated so the recipient (same tenant as the action) sees the
-    // materialized row through RLS.
-    // Dedup only a true double-fire of the SAME write: scope the key by the
-    // record's write-version (updated_at). Without a version component the key
-    // would be permanent and a legitimate re-assignment back to a prior owner
-    // would be silently suppressed. When no version field exists, omit the key
-    // (every assignment notifies — same as the pre-ADR-0030 direct-write path).
-    const writeVersion =
-      (params.after && typeof params.after === 'object'
-        ? params.after.updated_at ?? params.after.modified_at ?? params.after.updated_date
-        : null) ?? null;
-    await messaging.emit({
-      topic: 'collab.assignment',
-      audience: [newOwner],
-      severity: 'info',
-      source: { object: params.object, id: params.recordId },
-      actorId: params.actorId ?? undefined,
-      organizationId: params.tenantId ?? undefined,
-      dedupKey: writeVersion
-        ? `collab.assignment:${params.object}:${params.recordId}:${newOwner}:${writeVersion}`
-        : undefined,
-      payload: {
-        title,
-      },
-    });
-  } catch {
-    // best-effort; never throw into CRUD path
-  }
 }
 
 // Re-export for convenience.
