@@ -1,5 +1,26 @@
 # @objectstack/plugin-dev
 
+## 16.1.0
+
+### Patch Changes
+
+- Updated dependencies [9e45b63]
+- Updated dependencies [b20201f]
+- Updated dependencies [818e6a3]
+  - @objectstack/spec@16.1.0
+  - @objectstack/core@16.1.0
+  - @objectstack/rest@16.1.0
+  - @objectstack/plugin-hono-server@16.1.0
+  - @objectstack/runtime@16.1.0
+  - @objectstack/account@16.1.0
+  - @objectstack/setup@16.1.0
+  - @objectstack/plugin-auth@16.1.0
+  - @objectstack/plugin-security@16.1.0
+  - @objectstack/objectql@16.1.0
+  - @objectstack/driver-memory@16.1.0
+  - @objectstack/service-i18n@16.1.0
+  - @objectstack/types@16.1.0
+
 ## 16.0.0
 
 ### Patch Changes

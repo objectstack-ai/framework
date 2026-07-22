@@ -1,5 +1,44 @@
 # @objectstack/lint
 
+## 16.1.0
+
+### Minor Changes
+
+- fa006fb: Validate dashboard filter field-existence at build time (extend ADR-0021, #3365).
+
+  `validateWidgetBindings` now checks that every dashboard-level filter (`dateRange`
+
+  - each `globalFilters[]`) resolves to a real field on each bound widget's dataset
+    object. Since #2501 wired these filters into every widget's analytics query, a
+    filter field absent on a widget's object — e.g. a `dateRange` bound to
+    `close_date` inherited by an account/contact widget over a different object —
+    emitted invalid SQL (`no such column: close_date`) and crashed the widget at
+    render time. That build-decidable invariant previously escaped `os validate` /
+    `os build` and failed only when a user opened the dashboard.
+
+  It now fails the build (new rule `dashboard-filter-field-unknown`) with a message
+  naming the dashboard, widget, filter, field, and object, unless the widget opts
+  out via `filterBindings: { <name>: false }` or re-targets to an existing field —
+  mirroring the field-existence invariant ADR-0032 enforces for CEL references.
+  Effective-field resolution matches the runtime (`filterBindings` re-target /
+  opt-out, legacy `targetWidgets` allow-list, filter default). Registry-injected
+  system fields (e.g. `created_at`, the `dateRange` default) and objects outside
+  the validated stack never false-positive.
+
+- db160dd: Flag dead action/route references in dashboard header & widget actions (ADR-0049 for references, #3367).
+
+  `os validate` / `os build` now run a new `validateDashboardActionRefs` gate over every dashboard `header.actions[]` and widget `actionUrl`:
+
+  - `actionType: 'script' | 'modal'` — **error** unless `actionUrl` resolves to a defined action (`stack.actions` or an object's `actions`). `modal` also resolves via the runtime `<verb>_<object>` convention (`create_/new_/add_/edit_/update_` + a real object) and bare object names. A dangling target ships a button that renders and silently does nothing on click — a false affordance, exactly the "declared ≠ enforced" gap ADR-0049 closes, applied to references.
+  - `actionType: 'url'` — **warning** when a relative in-app path names a `objects/reports/dashboards/pages/views` route whose target does not exist in the stack. External URLs, interpolated (`${…}`) targets, and opaque routes are skipped to keep false positives near zero.
+
+### Patch Changes
+
+- Updated dependencies [9e45b63]
+  - @objectstack/spec@16.1.0
+  - @objectstack/formula@16.1.0
+  - @objectstack/sdui-parser@16.1.0
+
 ## 16.0.0
 
 ### Minor Changes

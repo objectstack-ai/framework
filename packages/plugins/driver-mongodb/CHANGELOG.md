@@ -1,5 +1,14 @@
 # @objectstack/driver-mongodb
 
+## 16.1.0
+
+### Patch Changes
+
+- Updated dependencies [9e45b63]
+- Updated dependencies [b20201f]
+  - @objectstack/spec@16.1.0
+  - @objectstack/core@16.1.0
+
 ## 16.0.0
 
 ### Patch Changes

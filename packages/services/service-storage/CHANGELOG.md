@@ -1,5 +1,19 @@
 # @objectstack/service-storage
 
+## 16.1.0
+
+### Patch Changes
+
+- Updated dependencies [212b66a]
+- Updated dependencies [d10c4dc]
+- Updated dependencies [9e45b63]
+- Updated dependencies [b20201f]
+- Updated dependencies [818e6a3]
+  - @objectstack/platform-objects@16.1.0
+  - @objectstack/spec@16.1.0
+  - @objectstack/core@16.1.0
+  - @objectstack/observability@16.1.0
+
 ## 16.0.0
 
 ### Patch Changes

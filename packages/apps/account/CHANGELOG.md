@@ -1,5 +1,15 @@
 # @objectstack/account
 
+## 16.1.0
+
+### Patch Changes
+
+- Updated dependencies [212b66a]
+- Updated dependencies [d10c4dc]
+- Updated dependencies [9e45b63]
+  - @objectstack/platform-objects@16.1.0
+  - @objectstack/spec@16.1.0
+
 ## 16.0.0
 
 ### Patch Changes

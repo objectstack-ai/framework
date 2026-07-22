@@ -1,5 +1,98 @@
 # @objectstack/cli
 
+## 16.1.0
+
+### Minor Changes
+
+- 9e45b63: feat(cli): preflight that every `requires` capability has an installable provider
+  in the current edition (#3366)
+
+  A capability listed in `requires: [...]` was only checked at `serve`/`start` time,
+  and a missing provider produced a generic "not installed — add it to your
+  dependencies" error even when the provider has **no installable version in the
+  current edition**. `os validate` (token-vocabulary only) and `os build` (never
+  resolved providers) both passed, so a `validate && build && test` CI script never
+  caught it — it surfaced only as an opaque boot crash. Seen upgrading an
+  open-edition app from `14.7` to `16` after `@objectstack/service-ai` went
+  cloud-only (ADR-0025).
+
+  - `@objectstack/spec/kernel` now exports `PLATFORM_CAPABILITY_PROVIDERS`
+    (token → provider package + edition) and a pure `classifyRequiredCapability()` —
+    one machine-readable source of truth for the provider/edition knowledge the
+    serve resolver previously encoded informally.
+  - `os build` and `os validate` gained a provider preflight. A `requires` entry
+    whose provider has **no installable version in the active edition** (e.g. `ai` →
+    `@objectstack/service-ai`, cloud-only) now fails fast with an edition-aware
+    message; an absent-but-installable provider is an advisory `pnpm add` hint, not
+    a hard error; a satisfied `requires` list passes unchanged.
+  - The `os serve` boot error now renders the same classification, so preflight and
+    boot read identically.
+
+- db160dd: Flag dead action/route references in dashboard header & widget actions (ADR-0049 for references, #3367).
+
+  `os validate` / `os build` now run a new `validateDashboardActionRefs` gate over every dashboard `header.actions[]` and widget `actionUrl`:
+
+  - `actionType: 'script' | 'modal'` — **error** unless `actionUrl` resolves to a defined action (`stack.actions` or an object's `actions`). `modal` also resolves via the runtime `<verb>_<object>` convention (`create_/new_/add_/edit_/update_` + a real object) and bare object names. A dangling target ships a button that renders and silently does nothing on click — a false affordance, exactly the "declared ≠ enforced" gap ADR-0049 closes, applied to references.
+  - `actionType: 'url'` — **warning** when a relative in-app path names a `objects/reports/dashboards/pages/views` route whose target does not exist in the stack. External URLs, interpolated (`${…}`) targets, and opaque routes are skipped to keep false positives near zero.
+
+### Patch Changes
+
+- Updated dependencies [212b66a]
+- Updated dependencies [d10c4dc]
+- Updated dependencies [9e45b63]
+- Updated dependencies [7b07417]
+- Updated dependencies [fa006fb]
+- Updated dependencies [db160dd]
+- Updated dependencies [b20201f]
+- Updated dependencies [818e6a3]
+  - @objectstack/platform-objects@16.1.0
+  - @objectstack/spec@16.1.0
+  - @objectstack/console@16.1.0
+  - @objectstack/lint@16.1.0
+  - @objectstack/core@16.1.0
+  - @objectstack/service-automation@16.1.0
+  - @objectstack/trigger-record-change@16.1.0
+  - @objectstack/observability@16.1.0
+  - @objectstack/rest@16.1.0
+  - @objectstack/plugin-hono-server@16.1.0
+  - @objectstack/runtime@16.1.0
+  - @objectstack/account@16.1.0
+  - @objectstack/setup@16.1.0
+  - @objectstack/metadata@16.1.0
+  - @objectstack/plugin-approvals@16.1.0
+  - @objectstack/plugin-audit@16.1.0
+  - @objectstack/plugin-auth@16.1.0
+  - @objectstack/plugin-email@16.1.0
+  - @objectstack/plugin-reports@16.1.0
+  - @objectstack/plugin-security@16.1.0
+  - @objectstack/plugin-sharing@16.1.0
+  - @objectstack/service-job@16.1.0
+  - @objectstack/service-queue@16.1.0
+  - @objectstack/service-realtime@16.1.0
+  - @objectstack/service-settings@16.1.0
+  - @objectstack/service-storage@16.1.0
+  - @objectstack/client@16.1.0
+  - @objectstack/cloud-connection@16.1.0
+  - @objectstack/formula@16.1.0
+  - @objectstack/mcp@16.1.0
+  - @objectstack/objectql@16.1.0
+  - @objectstack/driver-memory@16.1.0
+  - @objectstack/driver-mongodb@16.1.0
+  - @objectstack/driver-sql@16.1.0
+  - @objectstack/driver-sqlite-wasm@16.1.0
+  - @objectstack/plugin-webhooks@16.1.0
+  - @objectstack/service-analytics@16.1.0
+  - @objectstack/service-cache@16.1.0
+  - @objectstack/service-datasource@16.1.0
+  - @objectstack/service-messaging@16.1.0
+  - @objectstack/service-package@16.1.0
+  - @objectstack/service-sms@16.1.0
+  - @objectstack/trigger-api@16.1.0
+  - @objectstack/trigger-schedule@16.1.0
+  - @objectstack/types@16.1.0
+  - @objectstack/verify@16.1.0
+  - @objectstack/plugin-pinyin-search@16.1.0
+
 ## 16.0.0
 
 ### Minor Changes

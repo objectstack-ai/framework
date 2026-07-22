@@ -1,5 +1,12 @@
 # @objectstack/http-conformance
 
+## 0.0.5
+
+### Patch Changes
+
+- Updated dependencies [b20201f]
+  - @objectstack/core@16.1.0
+
 ## 0.0.4
 
 ### Patch Changes

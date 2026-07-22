@@ -1,5 +1,12 @@
 # @objectstack/formula
 
+## 16.1.0
+
+### Patch Changes
+
+- Updated dependencies [9e45b63]
+  - @objectstack/spec@16.1.0
+
 ## 16.0.0
 
 ### Minor Changes

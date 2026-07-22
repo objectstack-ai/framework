@@ -1,5 +1,24 @@
 # @objectstack/dogfood
 
+## 0.0.39
+
+### Patch Changes
+
+- Updated dependencies [9e45b63]
+  - @objectstack/spec@16.1.0
+  - @objectstack/plugin-audit@16.1.0
+  - @objectstack/plugin-auth@16.1.0
+  - @objectstack/plugin-security@16.1.0
+  - @objectstack/service-storage@16.1.0
+  - @objectstack/example-crm@4.0.91
+  - @objectstack/example-showcase@0.3.13
+  - @objectstack/connector-mcp@16.1.0
+  - @objectstack/connector-openapi@16.1.0
+  - @objectstack/connector-rest@16.1.0
+  - @objectstack/mcp@16.1.0
+  - @objectstack/objectql@16.1.0
+  - @objectstack/verify@16.1.0
+
 ## 0.0.38
 
 ### Patch Changes
