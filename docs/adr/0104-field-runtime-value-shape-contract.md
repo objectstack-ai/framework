@@ -292,6 +292,79 @@ Each phase is independently shippable and independently valuable:
   plausible-but-wrong bag, and ADR-0049 discipline says the check belongs at
   the enforcement point, not the courtesy surface.
 
+## Risks and migration hazards
+
+Named here so the phase PRs inherit them as acceptance items, not
+rediscoveries.
+
+- **R1 — validation from none to some strands legacy rows.** Types that were
+  "opaque payloads" get shape checks; a malformed value written under the lax
+  regime would block the *next* edit of its record on an unrelated field.
+  Phase 1 must validate **only fields present in the write** (the current
+  validator's posture, kept deliberately) and ship a stored-data audit report,
+  not retroactive rejection.
+- **R2 — the codified shape may be stricter than deployed reality.** The
+  field-zoo oracle covers the intended path, not every historical variant
+  (e.g. SQLite `datetime` columns mixing INTEGER epoch and TEXT ISO, repaired
+  only at read). For types gaining their first-ever check, phase 1 lands the
+  contract warn-first, flipped to error in the following minor once telemetry
+  is quiet.
+- **R3 — unknown-param-key rejection will hit real callers.** Dispatch itself
+  merges `recordId` / `objectName` into `params`
+  (`http-dispatcher.ts:3944`), and programmatic integrators send loose bags.
+  D2 needs a built-in-key allowlist and the same warn-then-error window;
+  "unknown key" errors must name the key and the declared param list.
+- **R4 — GC mis-deletion is irreversible data loss.** During the D3 migration
+  window (records still carrying inline blobs invisible to reference
+  counting), file reaping is **frozen**; the reap guard's delete-time
+  re-verification must count field-reference rows before any reap resumes.
+  Hard gate, not a nice-to-have.
+- **R5 — tightening anonymous URLs breaks live embeds.** Avatars in emails,
+  shared images, org logos rely on capability URLs today. The migration must
+  produce an explicit public-posture inventory (which existing files stay
+  `public_read`) as a reviewed deliverable; guessing defaults here is a
+  visible-outage generator.
+- **R6 — sub-key reads break silently.** Formulas, templates, hooks, and
+  flows reading `record.attachment.url` get an id string after D3. These
+  usages are metadata, so a best-effort static scan plus the migration report
+  must surface them; the changeset carries the FROM → TO rewrite.
+- **R7 — external-URL usage of file fields is retired.** Apps using
+  `Field.file` to hold links to externally-hosted files must migrate those to
+  `url` fields; legacy values stay read-only. Migration guide item, not a
+  silent drop (#3407 discipline).
+- **R8 — cross-repo sequencing.** Protocol major + objectui + console re-pin
+  is the #3340 / #2726 failure surface; the lockstep guard
+  (`protocol-version.test.ts`) covers the version bump, the ADR-0103 v16
+  sequencing pattern covers the rollout order.
+- **R9 — spec purity.** `valueSchemaFor` is derivation, and must stay pure
+  schema derivation (Prime Directive #2); runtime concerns (caching, driver
+  choices) live in consumers.
+
+## Performance budget
+
+Complexity-class estimates, to be confirmed by benchmarks that ship as phase
+acceptance criteria (wired to the #2408 Server-Timing surface where useful):
+
+- **D1/D2 are CPU-microsecond noise *if and only if* validators are cached.**
+  Zod `parse` on scalar values is ~µs; `z.object()` *construction* is an
+  order of magnitude worse. `valueSchemaFor` results are built at metadata
+  registration and cached per (object, field) / per action — a test guards
+  against per-write construction. Budgets: bulk import (10k rows × 20 fields)
+  validation overhead < 10% vs. baseline; action dispatch p95 + < 1 ms.
+  Hooks are unaffected (sandbox execution is ms-scale; nested engine writes
+  pay the same µs-scale validation).
+- **D3 is the only structural cost.** Write side: reference-row maintenance
+  adds 1–2 row writes per *changed* file value, same transaction, zero cost
+  when no file field changes; bulk imports of file-bearing rows see measurable
+  write amplification. Read side: resolving fileIds goes from 0 to exactly
+  **one batched IN query per request** — an N+1 regression test is mandatory;
+  `sys_file` rows are near-immutable after commit and cache well. Downloads:
+  authorization happens at URL issuance (attachments already pay this);
+  the 302 resolver and browser caching absorb repeat fetches. Budget: 100-row
+  list including file fields, p95 increase bounded by one batched query;
+  benchmark before/after in the phase-3 PR. Reference-row GC accounting runs
+  in the existing ADR-0057 sweep, off the request path.
+
 ## Consequences
 
 - The spec becomes the single answer to "what does this field's value look
