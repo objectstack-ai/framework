@@ -9,6 +9,7 @@
 
 import type { QueryAST, DriverOptions, SchemaMode } from '@objectstack/spec/data';
 import { parseAutonumberFormat, renderAutonumber, missingFieldValues, isTenancyDisabled, type AutonumberToken } from '@objectstack/spec/data';
+import { STRUCTURED_JSON_TYPES, FILE_REFERENCE_TYPES, MULTI_OPTION_TYPES, NUMERIC_VALUE_TYPES } from '@objectstack/spec/data';
 import type { IDataDriver } from '@objectstack/spec/contracts';
 import { StorageNameMapping } from '@objectstack/spec/system';
 import { ExternalSchemaModeViolationError } from '@objectstack/spec/shared';
@@ -57,10 +58,14 @@ const GLOBAL_TENANT = '__global__';
  * rest are arrays.
  */
 const JSON_COLUMN_TYPES = new Set<string>([
-  'json', 'object', 'array', 'record',
-  'image', 'file', 'avatar', 'video', 'audio',
-  'location', 'address', 'composite',
-  'multiselect', 'checkboxes', 'tags', 'repeater', 'vector',
+  // Spec value-shape classes (ADR-0104 D1): structured JSON payloads, the
+  // (pre-D3) inline file metadata objects, and the inherently-array option
+  // types. Membership is owned by @objectstack/spec — a type added there
+  // becomes a JSON column here without touching this file.
+  ...STRUCTURED_JSON_TYPES, ...FILE_REFERENCE_TYPES, ...MULTI_OPTION_TYPES,
+  // Driver-internal aliases (external/introspected columns) — not authorable
+  // FieldTypes, so they stay a local extra.
+  'object', 'array',
 ]);
 
 /**
@@ -79,9 +84,9 @@ const JSON_COLUMN_TYPES = new Set<string>([
  * gap for the numeric scalars.
  */
 const NUMERIC_SCALAR_TYPES = new Set<string>([
-  'integer', 'int',
-  'float', 'number', 'currency', 'percent', 'summary',
-  'rating', 'slider', 'progress',
+  // Spec numeric value class (ADR-0104 D1) + driver-internal SQL aliases.
+  ...NUMERIC_VALUE_TYPES,
+  'integer', 'int', 'float',
 ]);
 
 /**

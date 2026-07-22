@@ -1,0 +1,251 @@
+// Copyright (c) 2026 ObjectStack. Licensed under the Apache-2.0 license.
+
+/**
+ * Field runtime VALUE-shape contract (ADR-0104 D1).
+ *
+ * `FieldSchema` owns what a field *definition* looks like; this module owns
+ * what a field's runtime *value* looks like — the shape the write path
+ * accepts, drivers persist, and an unexpanded API read returns. Before this
+ * module the knowledge lived as private, hand-copied type sets in objectql's
+ * record-validator, rest's import-coerce, driver-sql, and verify; adding one
+ * multi-capable or JSON-shaped type meant updating four lists or silently
+ * corrupting data. Those consumers now derive from the classes below.
+ *
+ * Two canonical forms exist per field (ADR-0104 D1):
+ *  - `stored`   — the storage/wire form (e.g. lookup ⇒ record-id string,
+ *                 `date` ⇒ `YYYY-MM-DD`, select ⇒ option code).
+ *  - `expanded` — the enriched `$expand` read form (lookup ⇒ the related
+ *                 record object). For types without an expansion,
+ *                 expanded ≡ stored.
+ *
+ * "Reality wins": where the deployed stored shape is coherent, the contract
+ * adopts it — deployed data is a wire contract we don't get to rewrite by
+ * editing Zod. This is why `currency` is a bare number (not the never-consumed
+ * `CurrencyValueSchema` object) and `location` is `{lat, lng}` (what field-zoo
+ * stores), not the never-consumed `{latitude, longitude}` shape.
+ *
+ * Purity: schemas/constants/derivation only — no runtime logic, no caching
+ * (Prime Directive #2). Consumers cache `valueSchemaFor` results per field
+ * definition; building a Zod schema per write is the one performance trap
+ * this contract has (ADR-0104 performance budget).
+ */
+
+import { z } from 'zod';
+import { lazySchema } from '../shared/lazy-schema';
+import type { FieldType } from './field.zod';
+import { AddressSchema } from './field.zod';
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Semantic type classes
+ *
+ * Membership is over `FieldType` values only. Driver-internal aliases that are
+ * NOT authorable field types (`integer`, `int`, `float`, `object`, `array`,
+ * external `reference`) stay in their drivers, layered on top of these sets.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/** Value is a plain string (validated per-type: email/url/phone formats, lengths). */
+export const STRING_VALUE_TYPES: ReadonlySet<string> = new Set([
+  'text', 'textarea', 'email', 'url', 'phone', 'password', 'secret',
+  'markdown', 'html', 'richtext', 'code',
+  'color', 'signature', 'qrcode',
+] as const satisfies readonly FieldType[]);
+
+/** Value is a finite numeric scalar. `currency` IS a bare number (see header). */
+export const NUMERIC_VALUE_TYPES: ReadonlySet<string> = new Set([
+  'number', 'currency', 'percent', 'rating', 'slider', 'progress', 'summary',
+] as const satisfies readonly FieldType[]);
+
+/** Value is a JS boolean on the wire (driver read-coercion repairs SQL 0/1). */
+export const BOOLEAN_VALUE_TYPES: ReadonlySet<string> = new Set([
+  'boolean', 'toggle',
+] as const satisfies readonly FieldType[]);
+
+/** Naive calendar day, stored `YYYY-MM-DD` — NOT an instant (ADR-0053). */
+export const CALENDAR_DATE_TYPES: ReadonlySet<string> = new Set([
+  'date',
+] as const satisfies readonly FieldType[]);
+
+/** UTC instant, stored as ISO-8601 with explicit zone (ADR-0053). */
+export const INSTANT_TYPES: ReadonlySet<string> = new Set([
+  'datetime',
+] as const satisfies readonly FieldType[]);
+
+/** Wall-clock time of day, `HH:MM[:SS[.fff]]` (+ optional zone) — not `Date.parse`-able (#2004). */
+export const CLOCK_TIME_TYPES: ReadonlySet<string> = new Set([
+  'time',
+] as const satisfies readonly FieldType[]);
+
+/** Single-choice option types: value is one declared option code. */
+export const SINGLE_OPTION_TYPES: ReadonlySet<string> = new Set([
+  'select', 'radio',
+] as const satisfies readonly FieldType[]);
+
+/** Inherently-multi option types: value is an array of option codes (tags: free-form). */
+export const MULTI_OPTION_TYPES: ReadonlySet<string> = new Set([
+  'multiselect', 'checkboxes', 'tags',
+] as const satisfies readonly FieldType[]);
+
+/**
+ * Value points at another record: a record-id string in stored form, the
+ * related record object in expanded form (`$expand` overwrites in place).
+ */
+export const REFERENCE_VALUE_TYPES: ReadonlySet<string> = new Set([
+  'lookup', 'master_detail', 'user', 'tree',
+] as const satisfies readonly FieldType[]);
+
+/**
+ * Media/attachment types. Stored form TODAY is the legacy inline metadata
+ * object (`{url, name?, size?, ...}`) or an opaque file-id/url string;
+ * ADR-0104 D3 (file-as-reference) narrows this to a `sys_file` id. The stored
+ * schema below deliberately admits both until D3 lands.
+ */
+export const FILE_REFERENCE_TYPES: ReadonlySet<string> = new Set([
+  'image', 'file', 'avatar', 'video', 'audio',
+] as const satisfies readonly FieldType[]);
+
+/** Structured JSON payloads persisted in JSON columns. */
+export const STRUCTURED_JSON_TYPES: ReadonlySet<string> = new Set([
+  'json', 'composite', 'repeater', 'record', 'location', 'address', 'vector',
+] as const satisfies readonly FieldType[]);
+
+/** Server-computed types: never client-written; shape is producer-owned. */
+export const COMPUTED_VALUE_TYPES: ReadonlySet<string> = new Set([
+  'formula', 'summary', 'autonumber',
+] as const satisfies readonly FieldType[]);
+
+/**
+ * Single-value types that become an ARRAY when flagged `multiple: true`
+ * (`FieldSchema.multiple`: select/lookup/file/image; `radio` shares the select
+ * branch; `user` stores identically to `lookup`). Previously hand-copied in
+ * objectql record-validator AND rest import-coerce.
+ */
+export const MULTI_CAPABLE_TYPES: ReadonlySet<string> = new Set([
+  'select', 'radio', 'lookup', 'user', 'file', 'image',
+] as const satisfies readonly FieldType[]);
+
+/**
+ * The minimal slice of a field definition the value contract reads. Structural
+ * (not `Field`) so runtime callers with their own trimmed field-def interfaces
+ * (objectql's `FieldDef`, rest's `ExportFieldMeta`) can pass theirs verbatim.
+ */
+export interface ValueShapeFieldDef {
+  type: string;
+  multiple?: boolean;
+  options?: Array<{ value: string | number } | string | number>;
+}
+
+/**
+ * Whether a field's persisted value is an array — an inherently-multi option
+ * type, or a multi-capable type flagged `multiple: true`. THE shared
+ * definition (was duplicated verbatim in record-validator + import-coerce).
+ */
+export function isMultiValueField(def: ValueShapeFieldDef): boolean {
+  if (MULTI_OPTION_TYPES.has(def.type)) return true;
+  return MULTI_CAPABLE_TYPES.has(def.type) && def.multiple === true;
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Canonical value schemas
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/** `YYYY-MM-DD` — the calendar-day stored form (driver collapses Date → day). */
+export const CalendarDateValueSchema = lazySchema(() =>
+  z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'expected YYYY-MM-DD (calendar day, not an instant)'));
+
+/** ISO-8601 instant with explicit zone — the `datetime` stored form. */
+export const InstantValueSchema = lazySchema(() =>
+  z.string().refine((s) => !Number.isNaN(Date.parse(s)) && (/[Zz]$/.test(s) || /[+-]\d{2}:?\d{2}$/.test(s.slice(10))),
+    'expected an ISO-8601 instant with explicit zone (e.g. 2026-03-15T14:30:00.000Z)'));
+
+/** `HH:MM[:SS[.fff]]` with optional zone — the `time` stored form (#2004). */
+export const ClockTimeValueSchema = lazySchema(() =>
+  z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d(\.\d+)?)?(Z|[+-]([01]\d|2[0-3]):?[0-5]\d)?$/,
+    'expected HH:MM or HH:MM:SS (wall-clock time of day)'));
+
+/** GPS point — the shape field-zoo stores and renderers read. See header re: the retired `{latitude, longitude}` form. */
+export const LocationValueSchema = lazySchema(() => z.object({
+  lat: z.number().min(-90).max(90).describe('Latitude'),
+  lng: z.number().min(-180).max(180).describe('Longitude'),
+  altitude: z.number().optional().describe('Altitude in meters'),
+  accuracy: z.number().optional().describe('Accuracy in meters'),
+}));
+
+/** Structured address value — adopts the (previously unconsumed) `AddressSchema` as the enforced contract. */
+export const AddressValueSchema = AddressSchema;
+
+/**
+ * Media/attachment stored value — TRANSITIONAL (pre-D3): either an opaque
+ * file-id/url string, or the legacy inline metadata object. ADR-0104 D3
+ * narrows this to a `sys_file` id string; new writers should prefer the
+ * string form now.
+ */
+export const FileLikeValueSchema = lazySchema(() => z.union([
+  z.string().min(1),
+  z.looseObject({
+    url: z.string().optional(),
+    name: z.string().optional(),
+    size: z.number().optional(),
+    alt: z.string().optional(),
+    duration: z.number().optional(),
+  }).refine((o) => Object.keys(o).length > 0, 'empty file value'),
+]));
+
+/** Record-id string — the stored form of every reference type. */
+export const ReferenceIdValueSchema = lazySchema(() => z.string().min(1));
+
+function optionCodes(def: ValueShapeFieldDef): string[] {
+  if (!Array.isArray(def.options)) return [];
+  return def.options.map((o) => (typeof o === 'object' && o !== null ? String(o.value) : String(o)));
+}
+
+export type ValueForm = 'stored' | 'expanded';
+
+/**
+ * The runtime value schema for one field definition. Pure derivation — no
+ * caching here; runtime consumers MUST cache per field definition (building a
+ * `z.object` per write is an order of magnitude costlier than parsing).
+ *
+ * The schema describes a PRESENT value: null/undefined/required handling stays
+ * with the caller (insert vs PATCH semantics differ — see record-validator).
+ * Where the contract is deliberately open (`json`, `code` payloads, computed
+ * types), the schema is `z.unknown()` — openness is now an explicit decision,
+ * not an accident of nobody checking.
+ */
+export function valueSchemaFor(def: ValueShapeFieldDef, form: ValueForm = 'stored'): z.ZodType {
+  const t = def.type;
+
+  const element = ((): z.ZodType => {
+    if (STRING_VALUE_TYPES.has(t)) return z.string();
+    if (NUMERIC_VALUE_TYPES.has(t)) return z.number().finite();
+    if (BOOLEAN_VALUE_TYPES.has(t)) return z.boolean();
+    if (CALENDAR_DATE_TYPES.has(t)) return CalendarDateValueSchema;
+    if (INSTANT_TYPES.has(t)) return InstantValueSchema;
+    if (CLOCK_TIME_TYPES.has(t)) return ClockTimeValueSchema;
+    if (SINGLE_OPTION_TYPES.has(t) || MULTI_OPTION_TYPES.has(t)) {
+      // tags (and option types authored without options) are free-form strings.
+      const codes = optionCodes(def);
+      return codes.length > 0 ? z.enum(codes as [string, ...string[]]) : z.string();
+    }
+    if (REFERENCE_VALUE_TYPES.has(t)) {
+      // Expanded form: `$expand` replaces the id in place with the related
+      // record object (objectql engine `expandRelatedRecords`). The record's
+      // own shape is that object's contract, not this field's — hence open.
+      return form === 'expanded'
+        ? z.union([ReferenceIdValueSchema, z.record(z.string(), z.unknown())])
+        : ReferenceIdValueSchema;
+    }
+    if (FILE_REFERENCE_TYPES.has(t)) return FileLikeValueSchema;
+    if (t === 'location') return LocationValueSchema;
+    if (t === 'address') return AddressValueSchema;
+    if (t === 'composite') return z.record(z.string(), z.unknown());
+    if (t === 'record') return z.record(z.string(), z.unknown());
+    if (t === 'repeater') return z.array(z.record(z.string(), z.unknown()));
+    if (t === 'vector') return z.array(z.number());
+    // `json` payloads, computed outputs not covered by a shape class above
+    // (`formula` / `autonumber` — producer-owned), and any future type default
+    // to explicitly-open. Openness is a decision here, not an accident.
+    return z.unknown();
+  })();
+
+  return isMultiValueField(def) ? z.array(element) : element;
+}

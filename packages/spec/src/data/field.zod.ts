@@ -117,6 +117,12 @@ export const SelectOptionSchema = lazySchema(() => z.object({
 /**
  * Location Coordinates Schema
  * GPS coordinates for location field type
+ *
+ * @deprecated Never consumed by the runtime, and its key names contradict what
+ * the platform actually stores: a `location` value is `{lat, lng}` (see the
+ * field-zoo round-trip oracle), not `{latitude, longitude}`. Use
+ * `LocationValueSchema` / `valueSchemaFor` from `field-value.zod.ts`
+ * (ADR-0104 D1). Removal rides the next spec major.
  */
 export const LocationCoordinatesSchema = lazySchema(() => z.object({
   latitude: z.number().min(-90).max(90).describe('Latitude coordinate'),
@@ -144,9 +150,16 @@ export const CurrencyConfigSchema = lazySchema(() => z.object({
 /**
  * Currency Value Schema
  * Runtime value structure for currency fields
- * 
+ *
  * Note: Currency codes are validated by length only (3 characters) to support flexibility.
  * See CurrencyConfigSchema for details on currency code validation strategy.
+ *
+ * @deprecated This shape was never consumed and contradicts the actual runtime
+ * contract: a `currency` field's value is a BARE NUMBER everywhere (validator,
+ * SQL driver `float` column, import coercion, field-zoo oracle); the currency
+ * code lives in field config (`CurrencyConfigSchema`), not per value. Use
+ * `valueSchemaFor` from `field-value.zod.ts` (ADR-0104 D1). Removal rides the
+ * next spec major.
  */
 export const CurrencyValueSchema = lazySchema(() => z.object({
   value: z.number().describe('Monetary amount'),

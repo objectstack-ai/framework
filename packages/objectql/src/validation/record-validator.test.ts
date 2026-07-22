@@ -345,3 +345,63 @@ describe('validateRecord — url field accepts relative + inline URLs', () => {
     expect(() => validateRecord(schema, { image: 'notaurl' }, 'update')).toThrow(/valid URL/i);
   });
 });
+
+/**
+ * ADR-0104 D1 — value-shape contract for previously-opaque types.
+ *
+ * Warn-first rollout: a shape violation on reference/file/structured-JSON
+ * types logs (once per field) and passes; `OS_DATA_VALUE_SHAPE_STRICT_ENABLED=1`
+ * turns it into a normal invalid_type rejection.
+ */
+describe('validateRecord — ADR-0104 value shapes (warn-first / strict)', () => {
+  const schema = {
+    fields: {
+      account: { type: 'lookup', reference: 'accounts' },
+      geo: { type: 'location' },
+      doc: { type: 'file' },
+      dims: { type: 'vector' },
+    },
+  };
+
+  const withStrict = (fn: () => void) => {
+    process.env.OS_DATA_VALUE_SHAPE_STRICT_ENABLED = '1';
+    try { fn(); } finally { delete process.env.OS_DATA_VALUE_SHAPE_STRICT_ENABLED; }
+  };
+
+  it('accepts contract-conformant values in both modes', () => {
+    const data = {
+      account: 'acc_0001',
+      geo: { lat: 37.77, lng: -122.42 },
+      doc: { url: 'https://cdn/f.pdf', name: 'f.pdf', size: 1024 },
+      dims: [0.1, 0.2],
+    };
+    expect(() => validateRecord(schema, { ...data }, 'update')).not.toThrow();
+    withStrict(() => expect(() => validateRecord(schema, { ...data }, 'update')).not.toThrow());
+  });
+
+  it('warn-first: malformed shapes pass by default (legacy rows must not strand records)', () => {
+    expect(() => validateRecord(schema, { geo: { latitude: 1, longitude: 2 } }, 'update')).not.toThrow();
+    expect(() => validateRecord(schema, { account: { id: 'acc_1' } }, 'update')).not.toThrow();
+  });
+
+  it('strict: malformed shapes reject with invalid_type', () => {
+    withStrict(() => {
+      try {
+        validateRecord(schema, { geo: { latitude: 37.77, longitude: -122.42 } }, 'update');
+        expect.unreachable('expected ValidationError');
+      } catch (e) {
+        expect(e).toBeInstanceOf(ValidationError);
+        const err = e as ValidationError;
+        expect(err.fields[0]?.field).toBe('geo');
+        expect(err.fields[0]?.code).toBe('invalid_type');
+      }
+      // expanded-form object at a stored-form position (unexpanded write)
+      expect(() => validateRecord(schema, { account: { id: 'acc_1', name: 'Acme' } }, 'update')).toThrow(ValidationError);
+      // scalar at a vector
+      expect(() => validateRecord(schema, { dims: 'not-a-vector' }, 'update')).toThrow(ValidationError);
+      // file: id/url string AND inline object both remain legal pre-D3
+      expect(() => validateRecord(schema, { doc: 'file_01HXYZ' }, 'update')).not.toThrow();
+      expect(() => validateRecord(schema, { doc: 42 }, 'update')).toThrow(ValidationError);
+    });
+  });
+});

@@ -32,41 +32,31 @@
  */
 
 import type { ExportFieldMeta } from './export-format.js';
-
-/** Field types whose stored value points at another record (id). */
-const REFERENCE_TYPES = new Set(['lookup', 'master_detail', 'user', 'reference', 'tree']);
-/** Single-select option types (store one option value). */
-const OPTION_TYPES = new Set(['select', 'radio']);
-/** Multi-select option types (store an array of option values). */
-const MULTI_OPTION_TYPES = new Set(['multiselect', 'checkboxes', 'tags']);
-/** Numeric field types (store a finite number). */
-const NUMBER_TYPES = new Set(['number', 'currency', 'percent', 'rating', 'slider']);
-/** Boolean field types (store a real boolean). */
-const BOOL_TYPES = new Set(['boolean', 'toggle']);
-/** Attachment field types (store a file id / url, or an array when `multiple`). */
-const FILE_TYPES = new Set(['file', 'image']);
+import {
+  SINGLE_OPTION_TYPES as OPTION_TYPES,
+  MULTI_OPTION_TYPES,
+  NUMERIC_VALUE_TYPES as NUMBER_TYPES,
+  BOOLEAN_VALUE_TYPES as BOOL_TYPES,
+  FILE_REFERENCE_TYPES as FILE_TYPES,
+  REFERENCE_VALUE_TYPES,
+  isMultiValueField as specIsMultiValueField,
+} from '@objectstack/spec/data';
 
 /**
- * Single-value field types that become an ARRAY when flagged `multiple: true`.
- * Mirrors objectql `record-validator.ts` (`MULTI_CAPABLE_TYPES`): per the spec
- * (`field.zod.ts`), `multiple` applies to select / lookup / file / image;
- * `radio` shares the select branch and `user` is stored identically to `lookup`.
- * master_detail / reference / tree are NOT multi-capable, so a stray
- * `multiple: true` on them is ignored (they stay single — same as the engine).
+ * Field types whose stored value points at another record (id). The spec's
+ * reference class (ADR-0104 D1) plus `reference` — a legacy external-object
+ * alias that is not an authorable `FieldType` and so stays a local extra.
  */
-const MULTI_CAPABLE_TYPES = new Set(['select', 'radio', 'lookup', 'user', 'file', 'image']);
+const REFERENCE_TYPES = new Set([...REFERENCE_VALUE_TYPES, 'reference']);
 
 /**
- * Whether a field's stored value is an array — an inherently-multi type
- * (multiselect / checkboxes / tags) or a multi-capable type flagged
- * `multiple: true`. Kept in lock-step with the engine's `isMultiValueField`
- * so a coerced cell has the SAME shape the engine will accept on insert.
+ * Whether a field's stored value is an array. Delegates to the spec's
+ * `isMultiValueField` (ADR-0104 D1) — the shared definition the engine's
+ * record-validator uses — so a coerced cell has the SAME shape the engine
+ * will accept on insert.
  */
 function isMultiValueField(meta: ExportFieldMeta | undefined): boolean {
-  const t = meta?.type;
-  if (!t) return false;
-  if (MULTI_OPTION_TYPES.has(t)) return true;
-  return MULTI_CAPABLE_TYPES.has(t) && meta?.multiple === true;
+  return meta?.type ? specIsMultiValueField(meta as { type: string; multiple?: boolean }) : false;
 }
 
 /**
