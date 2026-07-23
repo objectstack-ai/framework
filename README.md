@@ -26,6 +26,11 @@ MCP. Rather **build & ask online** — in the browser, nothing to install?
 That's **[ObjectOS](https://github.com/objectstack-ai/objectos)**, the
 commercial runtime environment built on this stack.
 
+**Forward-deployed engineer?** This is the ontology-first toolkit you own:
+sit with the client, model their business as typed metadata with your coding
+agent, and hand over a governed app *and* its definition — ordinary files in
+their repo, an open Apache-2.0 format, no platform seat to sell them.
+
 <p align="center">
   <img src="docs/screenshots/architecture.png" width="940" alt="ObjectStack architecture: author typed Zod metadata (objects, flows, views, policies); the microkernel compiles it into a versioned JSON artifact and loads plugins, drivers, and services; it generates a REST API, client SDK, Console and Studio UI, and MCP tools used by developers and AI agents, governed by Auth, RBAC, RLS, FLS, and audit, over PostgreSQL, MySQL, SQLite, or MongoDB">
   <br><sub>One typed definition → database · REST API · client SDK · UI · MCP tools.</sub>
