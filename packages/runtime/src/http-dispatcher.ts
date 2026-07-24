@@ -10,6 +10,7 @@ import { CoreServiceName } from '@objectstack/spec/system';
 import { readServiceSelfInfo } from '@objectstack/spec/api';
 import { MCP_OAUTH_SCOPES } from '@objectstack/spec/ai';
 import { pluralToSingular, PLURAL_TO_SINGULAR } from '@objectstack/spec/shared';
+import { validateActionParams, type ResolvedActionParam } from '@objectstack/spec/ui';
 import type { ExecutionContext } from '@objectstack/spec/kernel';
 import { setPackageDisabled } from './package-state-store.js';
 import { checkApiExposure } from './api-exposure.js';
@@ -1002,6 +1003,79 @@ export class HttpDispatcher {
     }
 
     /**
+     * Resolve an action's declared `params[]` to their effective value-shape
+     * inputs (ADR-0104 D2). A field-backed param inherits type/multiple/
+     * options/required from the referenced object field; an inline param
+     * carries them directly (inline overrides win). `obj` is the action's
+     * parent object schema (holds `.fields`); pass `undefined` for a global
+     * action with only inline params.
+     */
+    private resolveDeclaredActionParams(action: any, obj: any): ResolvedActionParam[] {
+        const fields: Record<string, any> = obj?.fields ?? {};
+        const out: ResolvedActionParam[] = [];
+        for (const p of (Array.isArray(action?.params) ? action.params : [])) {
+            const fieldRef: string | undefined = p?.field;
+            const field = fieldRef ? fields[fieldRef] : undefined;
+            const name: string | undefined = p?.name ?? fieldRef;
+            if (!name) continue;
+            out.push({
+                name,
+                type: p?.type ?? field?.type,
+                multiple: p?.multiple ?? field?.multiple,
+                required: Boolean(p?.required ?? field?.required ?? false),
+                options: p?.options ?? field?.options,
+            });
+        }
+        return out;
+    }
+
+    /**
+     * Enforce an action's declared param contract against the request bag
+     * BEFORE the handler runs (ADR-0104 D2). Returns a `400`-worthy error
+     * message when the contract is violated AND strict mode is on
+     * (`OS_ACTION_PARAMS_STRICT_ENABLED=1`); otherwise returns `null`, logging
+     * a one-time warning per (object/action) so the drift is visible without
+     * breaking callers whose params were silently wrong before (warn-first, R3).
+     *
+     * Actions that declare no `params` keep today's pass-through — there is
+     * nothing to validate against, so existing param-less actions are untouched.
+     */
+    private enforceActionParams(
+        action: any,
+        obj: any,
+        bag: Record<string, unknown>,
+        where: { objectName?: string; actionName?: string },
+    ): string | null {
+        if (!Array.isArray(action?.params) || action.params.length === 0) return null;
+        const resolved = this.resolveDeclaredActionParams(action, obj);
+        const issues = validateActionParams(resolved, bag);
+        if (issues.length === 0) return null;
+        const summary = issues.map((i) => i.message).join('; ');
+        if (HttpDispatcher.actionParamsStrict()) {
+            return `Invalid action params: ${summary}`;
+        }
+        const key = `${where.objectName ?? 'global'}/${where.actionName ?? action?.name ?? 'action'}`;
+        HttpDispatcher.warnActionParamsOnce(
+            key,
+            `[action-params] ${key}: ${summary} — accepted for now (ADR-0104 D2 warn-first; ` +
+            `set OS_ACTION_PARAMS_STRICT_ENABLED=1 to reject with 400)`,
+        );
+        return null;
+    }
+
+    /** Strict action-param enforcement opt-in (ADR-0104 D2 warn-first rollout). */
+    private static actionParamsStrict(): boolean {
+        return typeof process !== 'undefined' && process.env?.OS_ACTION_PARAMS_STRICT_ENABLED === '1';
+    }
+
+    private static readonly _warnedActionParams = new Set<string>();
+    private static warnActionParamsOnce(key: string, message: string): void {
+        if (HttpDispatcher._warnedActionParams.has(key)) return;
+        HttpDispatcher._warnedActionParams.add(key);
+        console.warn(message);
+    }
+
+    /**
      * Slim engine facade matching the ActionContext.engine shape handlers expect.
      *
      * ⚠️ TRUSTED (SECURITY-DEFINER-like) BY DESIGN (#2849): these calls carry NO
@@ -1102,7 +1176,7 @@ export class HttpDispatcher {
                     : `Action '${name}' not found`,
             );
         }
-        const { action, objectName } = resolved;
+        const { action, objectName, obj } = resolved;
 
         // Fail-closed on system-object actions (mirrors the object-tool guard).
         if (isSystemObjectName(objectName)) {
@@ -1124,6 +1198,13 @@ export class HttpDispatcher {
         // ADR-0066 D4 capability gate — same declaration the REST route enforces.
         const gateError = this.actionPermissionError(action, ec, objectName);
         if (gateError) throw new Error(gateError);
+
+        // [ADR-0104 D2] Declared param contract — same enforcement as the REST
+        // route. AI/MCP is the caller most likely to send a plausible-but-wrong
+        // bag, so the check belongs here too. Warn-first unless
+        // OS_ACTION_PARAMS_STRICT_ENABLED=1 (then throws → surfaced as an error).
+        const paramError = this.enforceActionParams(action, obj, params, { objectName, actionName: name });
+        if (paramError) throw new Error(paramError);
 
         // Load the subject record under RLS when row-context (engages the same
         // permission path as get_record — an unseen record reads as not-found).
@@ -1229,11 +1310,11 @@ export class HttpDispatcher {
         meta: any,
         name: string,
         objectName?: string,
-    ): Promise<{ action: any; objectName: string } | null> {
+    ): Promise<{ action: any; objectName: string; obj: any } | null> {
         const decls = await this.collectActionDeclarations(meta);
         if (objectName) {
             const hit = decls.find((d) => d.objectName === objectName && d.action?.name === name);
-            return hit ? { action: hit.action, objectName } : null;
+            return hit ? { action: hit.action, objectName, obj: hit.obj } : null;
         }
         const matches = decls.filter((d) => d.action?.name === name);
         if (matches.length === 0) return null;
@@ -1241,7 +1322,7 @@ export class HttpDispatcher {
             const where = matches.map((m) => m.objectName).join(', ');
             throw new Error(`Action '${name}' exists on multiple objects (${where}); pass objectName to disambiguate`);
         }
-        return { action: matches[0].action, objectName: matches[0].objectName };
+        return { action: matches[0].action, objectName: matches[0].objectName, obj: matches[0].obj };
     }
 
     /**
@@ -3855,11 +3936,16 @@ export class HttpDispatcher {
         // server-closed (and the inverse footgun is removed). System/engine
         // self-invocation (isSystem) bypasses; an unauthenticated caller holds
         // no capabilities and is therefore denied for a gated action.
+        // Resolve the object schema + this action's declaration once — both the
+        // permission gate (ADR-0066 D4) and the param contract (ADR-0104 D2)
+        // read it.
+        let actionSchema: any;
+        let actionDef: any;
         try {
-            const actionSchema: any =
+            actionSchema =
                 (typeof ql.getSchema === 'function' ? ql.getSchema(objectName) : undefined) ??
                 ql.registry?.getObject?.(objectName);
-            const actionDef: any = Array.isArray(actionSchema?.actions)
+            actionDef = Array.isArray(actionSchema?.actions)
                 ? actionSchema.actions.find((a: any) => a?.name === actionName)
                 : undefined;
             const gateError = this.actionPermissionError(actionDef, _context?.executionContext, objectName);
@@ -3880,6 +3966,14 @@ export class HttpDispatcher {
         const reqBody = body && typeof body === 'object' ? body : {};
         const recordId = recordIdFromPath ?? reqBody.recordId;
         const reqParams = (reqBody.params && typeof reqBody.params === 'object') ? reqBody.params : {};
+
+        // [ADR-0104 D2] Enforce the declared param contract before the handler
+        // runs — required/option/multiple/reference-id shape + unknown keys.
+        // Warn-first unless OS_ACTION_PARAMS_STRICT_ENABLED=1 (then a 400).
+        const paramError = this.enforceActionParams(actionDef, actionSchema, reqParams, { objectName, actionName });
+        if (paramError) {
+            return { handled: true, response: this.error(paramError, 400) };
+        }
 
         // Load the record (best-effort) so handlers can rely on `ctx.record`.
         let record: Record<string, unknown> = {};

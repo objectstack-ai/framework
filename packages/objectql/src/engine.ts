@@ -674,7 +674,11 @@ export class ObjectQL implements IDataEngine {
    *
    * @param objectName Target object
    * @param actionName Unique action name within the object
-   * @param handler Handler function
+   * @param handler Handler function. Authoring sites should annotate it with
+   *   `ActionHandler` from `@objectstack/spec/ui` (ADR-0104 D2) rather than an
+   *   inline `(ctx: any)`; the params on `ctx` are validated against the
+   *   action's declared param contract at dispatch before the handler runs.
+   *   The seam itself stays untyped so existing untyped handlers keep working.
    * @param packageName Optional package owner (for cleanup)
    */
   registerAction(objectName: string, actionName: string, handler: (ctx: any) => Promise<any> | any, packageName?: string): void {
