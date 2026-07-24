@@ -6,6 +6,7 @@ import type { HookContext } from '@objectstack/spec/data';
 import {
     RecordChangeTrigger,
     triggerTypeToHookEvent,
+    triggerTypeToHookEvents,
     type FlowTriggerBinding,
     type RecordChangeDataEngine,
     type TriggerLogger,
@@ -90,6 +91,35 @@ describe('triggerTypeToHookEvent', () => {
         expect(triggerTypeToHookEvent('record-after-frobnicate')).toBeNull();
         expect(triggerTypeToHookEvent('on_update')).toBeNull();
     });
+
+    it('returns null for the multi-event write token (use triggerTypeToHookEvents)', () => {
+        // `write` maps to TWO events, which the singular mapper cannot express —
+        // it returns null rather than silently dropping one binding.
+        expect(triggerTypeToHookEvent('record-after-write')).toBeNull();
+        expect(triggerTypeToHookEvent('record-before-write')).toBeNull();
+    });
+});
+
+// ─── triggerTypeToHookEvents ────────────────────────────────────────
+
+describe('triggerTypeToHookEvents', () => {
+    it('maps single-lifecycle tokens to a one-element list', () => {
+        expect(triggerTypeToHookEvents('record-after-create')).toEqual(['afterInsert']);
+        expect(triggerTypeToHookEvents('record-after-update')).toEqual(['afterUpdate']);
+        expect(triggerTypeToHookEvents('record-before-delete')).toEqual(['beforeDelete']);
+        expect(triggerTypeToHookEvents('record-after-insert')).toEqual(['afterInsert']);
+    });
+
+    it('expands `write` into the create-OR-update union (#3427)', () => {
+        expect(triggerTypeToHookEvents('record-after-write')).toEqual(['afterInsert', 'afterUpdate']);
+        expect(triggerTypeToHookEvents('record-before-write')).toEqual(['beforeInsert', 'beforeUpdate']);
+    });
+
+    it('returns an empty list for unsupported / missing tokens', () => {
+        expect(triggerTypeToHookEvents(undefined)).toEqual([]);
+        expect(triggerTypeToHookEvents('schedule')).toEqual([]);
+        expect(triggerTypeToHookEvents('record-after-frobnicate')).toEqual([]);
+    });
 });
 
 // ─── RecordChangeTrigger ────────────────────────────────────────────
@@ -113,6 +143,52 @@ describe('RecordChangeTrigger', () => {
 
         trigger.start(binding({ event: 'schedule' }), async () => {});
 
+        expect(hooks).toHaveLength(0);
+    });
+
+    it('binds BOTH afterInsert and afterUpdate for record-after-write (create OR update, #3427)', () => {
+        const { engine, hooks } = fakeEngine();
+        const trigger = new RecordChangeTrigger(engine, silentLogger());
+
+        trigger.start(binding({ event: 'record-after-write' }), async () => {});
+
+        // One start node → both lifecycle hooks, same object, same packageId
+        // (so a single stop() tears both down).
+        expect(hooks).toHaveLength(2);
+        expect(hooks.map((h) => h.event).sort()).toEqual(['afterInsert', 'afterUpdate']);
+        expect(hooks.every((h) => h.object === 'showcase_task')).toBe(true);
+        expect(new Set(hooks.map((h) => h.packageId)).size).toBe(1);
+        expect(hooks[0].packageId).toBe('com.objectstack.trigger.record-change:task_assigned_notify');
+    });
+
+    it('a record-after-write flow fires on both the insert hook and the update hook', async () => {
+        const { engine, hooks } = fakeEngine();
+        const trigger = new RecordChangeTrigger(engine, silentLogger());
+        let fired = 0;
+
+        trigger.start(binding({ event: 'record-after-write' }), async () => {
+            fired += 1;
+        });
+
+        const insertHook = hooks.find((h) => h.event === 'afterInsert')!;
+        const updateHook = hooks.find((h) => h.event === 'afterUpdate')!;
+
+        // Insert: no previous row.
+        await insertHook.handler(hookCtx({ event: 'afterInsert', previous: undefined }));
+        // Update: previous row present.
+        await updateHook.handler(hookCtx({ event: 'afterUpdate' }));
+
+        expect(fired).toBe(2);
+    });
+
+    it('stop() tears down BOTH hooks of a record-after-write flow', () => {
+        const { engine, hooks } = fakeEngine();
+        const trigger = new RecordChangeTrigger(engine, silentLogger());
+
+        trigger.start(binding({ event: 'record-after-write' }), async () => {});
+        expect(hooks).toHaveLength(2);
+
+        trigger.stop('task_assigned_notify');
         expect(hooks).toHaveLength(0);
     });
 

@@ -83,18 +83,42 @@ export interface TriggerLogger {
 const TRIGGER_PREFIX = 'com.objectstack.trigger.record-change';
 
 /**
- * Map a flow start node's `triggerType` (e.g. `record-after-update`) to an
- * ObjectQL `HookEvent` (e.g. `afterUpdate`). Returns `null` for anything that
- * isn't a `record-(before|after)-(create|insert|update|delete)` token.
+ * Map a flow start node's `triggerType` (e.g. `record-after-update`) to the
+ * ObjectQL `HookEvent`(s) it binds. Returns a list because one token can bind
+ * more than one lifecycle event:
+ *
+ * - Single ops (`create`/`insert`/`update`/`delete`) → one event, e.g.
+ *   `record-after-update` → `['afterUpdate']`.
+ * - `write` is the **create-OR-update union** (#3427) — the two mutations that
+ *   persist field data (delete is deliberately excluded) — so
+ *   `record-after-write` → `['afterInsert', 'afterUpdate']`. This is what lets a
+ *   single flow react to "record created or updated" without duplicating the
+ *   whole definition, mirroring Salesforce's "created or updated" record-trigger
+ *   option and Rails' `after_save`.
+ *
+ * Returns `[]` for anything that isn't a
+ * `record-(before|after)-(create|insert|update|delete|write)` token.
+ */
+export function triggerTypeToHookEvents(triggerType: string | undefined): string[] {
+    if (!triggerType) return [];
+    const m = /^record-(before|after)-(create|insert|update|delete|write)$/.exec(triggerType.trim());
+    if (!m) return [];
+    const phase = m[1]; // 'before' | 'after'
+    const op = m[2]; // create|insert|update|delete|write
+    if (op === 'write') return [`${phase}Insert`, `${phase}Update`]; // create OR update
+    const verb = op === 'create' || op === 'insert' ? 'Insert' : op.charAt(0).toUpperCase() + op.slice(1);
+    return [`${phase}${verb}`]; // e.g. 'afterUpdate', 'beforeDelete'
+}
+
+/**
+ * Back-compat single-event mapper for a `triggerType` token. Returns the ONE
+ * hook event a single-lifecycle token binds, or `null` for an unknown token OR a
+ * multi-event token (`record-*-write` maps to two events — use
+ * {@link triggerTypeToHookEvents}, which the trigger itself calls).
  */
 export function triggerTypeToHookEvent(triggerType: string | undefined): string | null {
-    if (!triggerType) return null;
-    const m = /^record-(before|after)-(create|insert|update|delete)$/.exec(triggerType.trim());
-    if (!m) return null;
-    const phase = m[1]; // 'before' | 'after'
-    const op = m[2]; // create|insert|update|delete
-    const verb = op === 'create' || op === 'insert' ? 'Insert' : op.charAt(0).toUpperCase() + op.slice(1);
-    return `${phase}${verb}`; // e.g. 'afterUpdate', 'beforeDelete'
+    const events = triggerTypeToHookEvents(triggerType);
+    return events.length === 1 ? events[0] : null;
 }
 
 /**
@@ -125,8 +149,12 @@ export class RecordChangeTrigger implements FlowTrigger {
     }
 
     start(binding: FlowTriggerBinding, callback: (ctx: AutomationContext) => Promise<void>): void {
-        const hookEvent = triggerTypeToHookEvent(binding.event);
-        if (!hookEvent) {
+        // One token may bind more than one lifecycle event (`record-after-write`
+        // → afterInsert + afterUpdate). Exactly one of a `write` flow's two hooks
+        // fires per mutation (a write is an insert XOR an update), so this is not
+        // a double-dispatch.
+        const hookEvents = triggerTypeToHookEvents(binding.event);
+        if (hookEvents.length === 0) {
             this.logger.warn(
                 `[record-change] flow '${binding.flowName}' has unsupported trigger event '${binding.event ?? '(none)'}' — not bound`,
             );
@@ -184,13 +212,17 @@ export class RecordChangeTrigger implements FlowTrigger {
             }
         };
 
-        this.engine.registerHook(hookEvent, handler, {
-            object: binding.object,
-            packageId,
-        });
+        // Bind every mapped hook event under the SAME packageId so stop()'s single
+        // unregisterHooksByPackage tears all of them down together.
+        for (const hookEvent of hookEvents) {
+            this.engine.registerHook(hookEvent, handler, {
+                object: binding.object,
+                packageId,
+            });
+        }
         this.bound.set(binding.flowName, packageId);
         this.logger.info(
-            `[record-change] bound flow '${binding.flowName}' → ${hookEvent}${binding.object ? ` on '${binding.object}'` : ''}`,
+            `[record-change] bound flow '${binding.flowName}' → ${hookEvents.join(' + ')}${binding.object ? ` on '${binding.object}'` : ''}`,
         );
     }
 

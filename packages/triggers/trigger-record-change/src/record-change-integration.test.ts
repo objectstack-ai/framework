@@ -109,12 +109,37 @@ function stampFlow(name: string, object: string) {
   };
 }
 
+/**
+ * A `record-after-write` flow (create OR update, #3427) that mirrors the
+ * record's live `status` into `mirror` on every write. Its own update_record
+ * write-back also fires afterUpdate, so this doubles as coverage that the
+ * engine's re-entrancy guard suppresses the self-trigger loop a write flow now
+ * exposes (afterUpdate IS bound, unlike a create-only flow).
+ */
+function mirrorWriteFlow(name: string, object: string) {
+  return {
+    name,
+    label: name,
+    type: 'record_change',
+    nodes: [
+      { id: 'start', type: 'start', label: 'Start', config: { objectName: object, triggerType: 'record-after-write' } },
+      { id: 'mirror', type: 'update_record', label: 'Mirror', config: { objectName: object, filter: { id: '{record.id}' }, fields: { mirror: '{record.status}' } } },
+      { id: 'end', type: 'end', label: 'End' },
+    ],
+    edges: [
+      { id: 'e1', source: 'start', target: 'mirror' },
+      { id: 'e2', source: 'mirror', target: 'end' },
+    ],
+  };
+}
+
 const objectDef = (name: string) => ({
   name,
   label: name,
   fields: {
     status: { name: 'status', label: 'S', type: 'text' },
     stamp: { name: 'stamp', label: 'St', type: 'text' },
+    mirror: { name: 'mirror', label: 'M', type: 'text' },
   },
 });
 
@@ -191,5 +216,38 @@ describe('record-change trigger — end-to-end (#1491)', () => {
 
     const row = await data.findOne('wid2', { where: { id } });
     expect(row?.stamp).toBe('done');
+  }, 15000);
+
+  it('a single record-after-write flow fires on BOTH create and update (#3427)', async () => {
+    const kernel = new ObjectKernel({ logLevel: 'silent' });
+    await kernel.use(new ObjectQLPlugin());
+    await kernel.use(new AutomationServicePlugin());
+    await kernel.use(new RecordChangeTriggerPlugin());
+    await kernel.bootstrap();
+
+    const objectql = kernel.getService('objectql') as any;
+    const data = kernel.getService('data') as any;
+    const automation = kernel.getService<AutomationEngine>('automation');
+
+    objectql.registerDriver(makeMemoryDriver(), true);
+    objectql.registry.registerObject(objectDef('wid3'), 'test', 'test');
+    automation.registerFlow('mirror_write', mirrorWriteFlow('mirror_write', 'wid3') as any);
+
+    expect((automation as any).getActiveTriggerBindings()).toContainEqual({
+      flowName: 'mirror_write',
+      triggerType: 'record_change',
+    });
+
+    // Create — the afterInsert leg fires; the flow mirrors status → mirror.
+    const created = await data.insert('wid3', { status: 'a' });
+    const id = Array.isArray(created) ? created[0]?.id : created?.id ?? created;
+    await sleep(200);
+    expect((await data.findOne('wid3', { where: { id } }))?.mirror).toBe('a');
+
+    // Update — the afterUpdate leg of the SAME flow fires; mirror re-syncs. (The
+    // flow's own write-back does not loop: the re-entrancy guard suppresses it.)
+    await data.update('wid3', { id, status: 'b' });
+    await sleep(200);
+    expect((await data.findOne('wid3', { where: { id } }))?.mirror).toBe('b');
   }, 15000);
 });
