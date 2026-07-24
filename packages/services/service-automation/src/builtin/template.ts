@@ -119,9 +119,35 @@ function resolveToken(token: string, variables: VariableMap, context: Automation
 }
 
 /**
+ * Coerce a resolved token value to its string form for EMBEDDED substitution —
+ * a token inside a larger string, where the result is definitionally text.
+ *
+ * A bare `String(value)` renders an object/array as the useless `[object Object]`
+ * / comma-joined form. That is the #3450 trap: a fault handler whose message
+ * embeds the engine-set `$error` object (`{nodeId, message, ...}`) surfaced as
+ * `[object Object]` instead of a readable error. Objects/arrays are JSON-
+ * serialized so the text stays legible (and still carries the message); an
+ * author who wants only the message uses the dotted path (`{$error.message}`).
+ * `null`/`undefined` render as '' (an unresolved token contributes nothing).
+ */
+export function stringifyForTemplate(value: unknown): string {
+    if (value === null || value === undefined) return '';
+    if (typeof value === 'object') {
+        try {
+            return JSON.stringify(value);
+        } catch {
+            // Circular / non-serializable — fall back rather than throw mid-flow.
+            return String(value);
+        }
+    }
+    return String(value);
+}
+
+/**
  * Replace `{...}` tokens in a string with resolved values.
  * - When the entire string is a single token, returns the raw value (preserving type).
- * - Otherwise concatenates string substitutions, with `null`/`undefined` rendered as ''.
+ * - Otherwise concatenates string substitutions, with `null`/`undefined` rendered as ''
+ *   and objects/arrays JSON-serialized (never `[object Object]`, #3450).
  */
 export function interpolateString(
     input: string,
@@ -134,11 +160,9 @@ export function interpolateString(
         const value = resolveToken(single[1], variables, context);
         return value;
     }
-    return input.replace(/\{([^{}]+)\}/g, (_match, expr) => {
-        const value = resolveToken(expr, variables, context);
-        if (value === undefined || value === null) return '';
-        return String(value);
-    });
+    return input.replace(/\{([^{}]+)\}/g, (_match, expr) =>
+        stringifyForTemplate(resolveToken(expr, variables, context)),
+    );
 }
 
 /**

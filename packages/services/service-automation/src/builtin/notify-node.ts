@@ -4,7 +4,7 @@ import type { PluginContext } from '@objectstack/core';
 import type { AutomationContext } from '@objectstack/spec/contracts';
 import { defineActionDescriptor } from '@objectstack/spec/automation';
 import type { AutomationEngine } from '../engine.js';
-import { interpolate, type VariableMap } from './template.js';
+import { interpolate, stringifyForTemplate, type VariableMap } from './template.js';
 
 /**
  * Structural view of `@objectstack/service-messaging`'s service (ADR-0012),
@@ -141,8 +141,11 @@ export function registerNotifyNode(engine: AutomationEngine, ctx: PluginContext)
             const cfg = (node.config ?? {}) as Record<string, unknown>;
 
             const recipients = toStringList(interpolate(cfg.recipients ?? cfg.to ?? [], variables, context));
-            const title = String(interpolate(cfg.title ?? cfg.subject ?? '', variables, context) ?? '');
-            const body = String(interpolate(cfg.message ?? cfg.body ?? '', variables, context) ?? '');
+            // stringifyForTemplate (not String()): a sole-token `{$error}` resolves
+            // to the engine's error OBJECT, which String() would render as the
+            // useless `[object Object]` (#3450). Serialize it readably instead.
+            const title = stringifyForTemplate(interpolate(cfg.title ?? cfg.subject ?? '', variables, context));
+            const body = stringifyForTemplate(interpolate(cfg.message ?? cfg.body ?? '', variables, context));
             const channels = toStringList(cfg.channels);
             const topic = cfg.topic ? String(cfg.topic) : undefined;
             const severity = cfg.severity ? String(cfg.severity) : undefined;
