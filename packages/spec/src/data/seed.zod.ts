@@ -37,11 +37,23 @@ export const SeedSchema = lazySchema(() => z.object({
 
   /**
    * Idempotency Key (The "Upsert" Key)
-   * The field used to check if a record already exists.
+   * The field (or fields) used to check if a record already exists.
    * Best Practice: Use a natural key like 'code', 'slug', 'username' or 'external_id'.
    * Standard: 'id' is rarely used for portable seed data — prefer natural keys.
+   *
+   * A single field name matches on that one column. A **composite** natural key
+   * — a list of field names — is required for objects with no single-field
+   * natural key, most commonly a **join / junction table** keyed by both of its
+   * foreign keys (e.g. `externalId: ['team', 'project']`). Without it such a
+   * dataset can only run `mode: 'insert'`, which re-inserts every row on each
+   * replay boot and duplicates the table (framework#3434). The reference fields
+   * are matched by their RESOLVED ids, so a composite of foreign keys dedupes
+   * correctly across restarts.
    */
-  externalId: z.string().default('name').describe('Field match for uniqueness check'),
+  externalId: z
+    .union([z.string(), z.array(z.string()).min(1)])
+    .default('name')
+    .describe('Field (or composite list of fields) matched for the uniqueness check'),
 
   /**
    * Import Strategy

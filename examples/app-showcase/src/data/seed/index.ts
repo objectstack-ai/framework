@@ -257,8 +257,14 @@ const products = defineSeed(Product, {
   ],
 });
 
+// A junction row has no single natural key — the (team, project) PAIR is what's
+// unique — so `mode: 'insert'` re-inserted all three rows on every replay boot,
+// duplicating the table 3 → 6 → 9 (framework#3434). A COMPOSITE externalId over
+// the two foreign keys lets `ignore` mode dedupe on replay: team/project are
+// matched by their resolved ids, which stay stable across restarts.
 const memberships = defineSeed(ProjectMembership, {
-  mode: 'insert',
+  mode: 'ignore',
+  externalId: ['team', 'project'],
   records: [
     { team: 'Experience', project: 'Website Relaunch', engagement: 'owner', allocation_percent: 80 },
     { team: 'Platform', project: 'Data Platform', engagement: 'owner', allocation_percent: 100 },

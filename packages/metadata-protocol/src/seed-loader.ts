@@ -115,7 +115,7 @@ export class SeedLoaderService implements ISeedLoaderService {
     // the in-memory insertedRecords map (keyed by the dataset's externalId)
     // resolved everything, but on replay any per-record miss fell through to
     // the DB probe and silently failed. See the replay corruption fix below.
-    const externalIdByObject = new Map<string, string>(
+    const externalIdByObject = new Map<string, string | string[]>(
       request.seeds.map(d => [d.object, d.externalId || DEFAULT_EXTERNAL_ID_FIELD]),
     );
     const refMap = this.buildReferenceMap(graph, externalIdByObject);
@@ -289,7 +289,7 @@ export class SeedLoaderService implements ISeedLoaderService {
     // logical/validation failure. See framework#2678.
     const pendingInserts: Array<{ recordIndex: number; externalIdValue: string; record: Record<string, unknown> }> = [];
     const opts = SeedLoaderService.SEED_OPTIONS as any;
-    const extIdOf = (rec: Record<string, unknown>) => String(rec[externalId] ?? '');
+    const extIdOf = (rec: Record<string, unknown>) => this.externalIdKey(rec, externalId);
     // bulkWrite is at-least-once: a retry (or a mismatch-driven degradation)
     // may re-run a write whose prior attempt already committed. Guard against
     // duplicate seed rows by rechecking natural keys before re-inserting
@@ -533,7 +533,7 @@ export class SeedLoaderService implements ISeedLoaderService {
             delete record[ref.field];
             deferredUpdates.push({
               objectName,
-              recordExternalId: String(record[externalId] ?? ''),
+              recordExternalId: this.externalIdKey(record, externalId),
               field: ref.field,
               targetObject: ref.targetObject,
               targetField: ref.targetField,
@@ -601,7 +601,7 @@ export class SeedLoaderService implements ISeedLoaderService {
             else if (result.action === 'updated') updated++;
             else if (result.action === 'skipped') skipped++;
 
-            const externalIdValue = String(record[externalId] ?? '');
+            const externalIdValue = this.externalIdKey(record, externalId);
             const internalId = result.id;
             if (externalIdValue && internalId) {
               insertedRecords.get(objectName)!.set(externalIdValue, String(internalId));
@@ -611,8 +611,8 @@ export class SeedLoaderService implements ISeedLoaderService {
             // Same cascade guard as the batched update path: the row may
             // already exist (rejected update), so keep its natural-key
             // mapping alive for downstream reference resolution.
-            const existingId = this.extractId(existingRecords?.get(String(record[externalId] ?? '')));
-            const externalIdValue = String(record[externalId] ?? '');
+            const externalIdValue = this.externalIdKey(record, externalId);
+            const existingId = this.extractId(existingRecords?.get(externalIdValue));
             if (externalIdValue && existingId) {
               insertedRecords.get(objectName)!.set(externalIdValue, existingId);
             }
@@ -623,7 +623,7 @@ export class SeedLoaderService implements ISeedLoaderService {
           }
         } else {
           const decision = this.decideWriteAction(record, mode, externalId, existingRecords);
-          const externalIdValue = String(record[externalId] ?? '');
+          const externalIdValue = this.externalIdKey(record, externalId);
 
           if (decision.action === 'skip') {
             skipped++;
@@ -661,7 +661,7 @@ export class SeedLoaderService implements ISeedLoaderService {
         }
       } else {
         // Dry-run: simulate insert tracking
-        const externalIdValue = String(record[externalId] ?? '');
+        const externalIdValue = this.externalIdKey(record, externalId);
         if (externalIdValue) {
           insertedRecords.get(objectName)!.set(externalIdValue, `dry-run-id-${i}`);
         }
@@ -900,11 +900,10 @@ export class SeedLoaderService implements ISeedLoaderService {
     objectName: string,
     record: Record<string, unknown>,
     mode: string,
-    externalId: string,
+    externalId: string | string[],
     existingRecords?: Map<string, any>,
   ): Promise<{ action: 'inserted' | 'updated' | 'skipped'; id?: string }> {
-    const externalIdValue = record[externalId];
-    const existing = existingRecords?.get(String(externalIdValue ?? ''));
+    const existing = existingRecords?.get(this.externalIdKey(record, externalId));
     const opts = SeedLoaderService.SEED_OPTIONS as any;
 
     switch (mode) {
@@ -972,11 +971,10 @@ export class SeedLoaderService implements ISeedLoaderService {
   private decideWriteAction(
     record: Record<string, unknown>,
     mode: string,
-    externalId: string,
+    externalId: string | string[],
     existingRecords?: Map<string, any>,
   ): { action: 'insert' } | { action: 'update'; id: string } | { action: 'skip'; id?: string } {
-    const externalIdValue = record[externalId];
-    const existing = existingRecords?.get(String(externalIdValue ?? ''));
+    const existing = existingRecords?.get(this.externalIdKey(record, externalId));
 
     switch (mode) {
       case 'update':
@@ -1051,19 +1049,21 @@ export class SeedLoaderService implements ISeedLoaderService {
   private buildWriteError(
     objectName: string,
     record: Record<string, unknown>,
-    externalId: string,
+    externalId: string | string[],
     recordIndex: number,
     err: unknown,
   ): ReferenceResolutionError {
     const message = (err as { message?: unknown } | null)?.message ?? String(err);
+    const label = this.externalIdLabel(externalId);
+    const keyValue = this.externalIdKey(record, externalId);
     return {
       sourceObject: objectName,
       field: '(write)',
       targetObject: objectName,
-      targetField: externalId,
-      attemptedValue: record[externalId] ?? null,
+      targetField: label,
+      attemptedValue: keyValue || null,
       recordIndex,
-      message: `Failed to write ${objectName} record #${recordIndex} (${externalId}=${String(record[externalId] ?? '')}): ${message}`,
+      message: `Failed to write ${objectName} record #${recordIndex} (${label}=${keyValue}): ${message}`,
     };
   }
 
@@ -1201,7 +1201,7 @@ export class SeedLoaderService implements ISeedLoaderService {
 
   private buildReferenceMap(
     graph: ObjectDependencyGraph,
-    externalIdByObject?: Map<string, string>,
+    externalIdByObject?: Map<string, string | string[]>,
   ): Map<string, ReferenceResolution[]> {
     const map = new Map<string, ReferenceResolution[]>();
     for (const node of graph.nodes) {
@@ -1210,10 +1210,16 @@ export class SeedLoaderService implements ISeedLoaderService {
         // load carries one (copy-on-write — graph.nodes is part of the public
         // result and keeps the metadata-level 'name' default). Targets with
         // no dataset in this load (e.g. a user field → os_user) keep 'name'.
+        //
+        // Only a SINGLE-field externalId participates in reference resolution:
+        // a reference value is one natural-key string, so a composite-key
+        // target (a join table keyed by several fields) can't be matched by
+        // it — such targets keep the 'name' default (they're rarely, if ever,
+        // referenced by another object anyway).
         const references = externalIdByObject
           ? node.references.map(ref => {
               const datasetExternalId = externalIdByObject.get(ref.targetObject);
-              return datasetExternalId && datasetExternalId !== ref.targetField
+              return typeof datasetExternalId === 'string' && datasetExternalId !== ref.targetField
                 ? { ...ref, targetField: datasetExternalId }
                 : ref;
             })
@@ -1226,7 +1232,7 @@ export class SeedLoaderService implements ISeedLoaderService {
 
   private async loadExistingRecords(
     objectName: string,
-    externalId: string,
+    externalId: string | string[],
     organizationId?: string,
   ): Promise<Map<string, any>> {
     const map = new Map<string, any>();
@@ -1242,7 +1248,7 @@ export class SeedLoaderService implements ISeedLoaderService {
       if (organizationId) findArgs.where = { organization_id: organizationId };
       const records = await this.engine.find(objectName, findArgs as any);
       for (const record of records || []) {
-        const key = String(record[externalId] ?? '');
+        const key = this.externalIdKey(record, externalId);
         if (key) {
           map.set(key, record);
         }
@@ -1268,6 +1274,42 @@ export class SeedLoaderService implements ISeedLoaderService {
   private extractId(record: any): string | undefined {
     if (!record) return undefined;
     return String(record.id || record._id || '');
+  }
+
+  /**
+   * Build the natural-key string for a record given the dataset's externalId.
+   *
+   * A single field name keys on that one column (the historical behavior). A
+   * COMPOSITE externalId — a list of field names, for objects with no single
+   * natural key such as a join / junction table (`['team', 'project']`) —
+   * joins the per-field values with a separator (`\u0000`) that cannot occur
+   * in a natural-key value, so `('a', 'b')` and `('a\0b', '')` never collide.
+   *
+   * Composite key fields are usually the join table's foreign keys; by the
+   * time this runs they have been RESOLVED to the parent's internal id on the
+   * incoming record, and existing DB rows already store that same id, so the
+   * two keys match on replay and the row dedupes (framework#3434).
+   *
+   * Returns '' when ANY component is absent — a partial key is not a usable
+   * uniqueness key, so callers fall back to inserting (this mirrors the
+   * single-field miss, which also yields '').
+   */
+  private externalIdKey(record: Record<string, unknown>, externalId: string | string[]): string {
+    if (Array.isArray(externalId)) {
+      const parts: string[] = [];
+      for (const field of externalId) {
+        const value = record[field];
+        if (value === undefined || value === null || value === '') return '';
+        parts.push(String(value));
+      }
+      return parts.join('\u0000');
+    }
+    return String(record[externalId] ?? '');
+  }
+
+  /** Human-readable label for an externalId (single field, or `a+b` for a composite). */
+  private externalIdLabel(externalId: string | string[]): string {
+    return Array.isArray(externalId) ? externalId.join('+') : externalId;
   }
 
   private buildEmptyResult(config: SeedLoaderConfig, durationMs: number): SeedLoaderResult {
