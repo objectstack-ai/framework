@@ -63,6 +63,7 @@ const result = BatchConfig.parse(data);
 | **errors** | `{ code: string; message: string; category?: string; details?: any; … }[]` | optional | Array of errors if operation failed |
 | **data** | `Record<string, any>` | optional | Full record data (if returnRecords=true) |
 | **index** | `number` | optional | Index of the record in the request array |
+| **droppedFields** | `{ object: string; fields: string[]; reason: Enum<'readonly' \| 'readonly_when'> }[]` | optional | Write-observability (#3407/#3431/#3455): caller-supplied fields LEGALLY stripped from THIS row before it was written — static `readonly` (#2948) / TRUE `readonlyWhen` (#3042) on update, or the #3043 create-ingress strip. Per-row because a batch can drop different fields on different rows (`readonlyWhen` is record-state-dependent). Present ONLY when ≥1 field was dropped for this row; the row still succeeded (success unchanged). A single response header cannot express per-row drops, so this body field is the canonical bulk channel — REST does not emit `X-ObjectStack-Dropped-Fields` for batches. Optional — omit-when-empty keeps the shape backward-compatible. |
 
 
 ---
