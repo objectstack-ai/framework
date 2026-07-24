@@ -32,7 +32,7 @@ const result = Seed.parse(data);
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
 | **object** | `string` | ✅ | Target Object Name |
-| **externalId** | `string` | ✅ | Field match for uniqueness check |
+| **externalId** | `string \| string[]` | ✅ | Field (or composite list of fields) matched for the uniqueness check |
 | **mode** | `Enum<'insert' \| 'update' \| 'upsert' \| 'replace' \| 'ignore'>` | ✅ | Conflict resolution strategy |
 | **env** | `Enum<'prod' \| 'dev' \| 'test'>[]` | ✅ | Applicable environments |
 | **records** | `Record<string, any>[]` | ✅ | Data records |
