@@ -40,8 +40,20 @@ export interface FlowTriggerReadinessFinding {
 // Rule ids (registry entries).
 export const FLOW_TRIGGER_UNKNOWN_OBJECT = 'flow-trigger-unknown-object';
 export const FLOW_DRAFT_STATUS_AMBIGUOUS = 'flow-draft-status-ambiguous';
+export const FLOW_TRIGGER_UNKNOWN_EVENT = 'flow-trigger-unknown-event';
 
 type AnyRec = Record<string, unknown>;
+
+/**
+ * Recognized record-change lifecycle ops. A start node's `triggerType` fires only
+ * when it matches `record-(before|after)-<op>` with `op` in this set — the exact
+ * grammar the record-change trigger's `triggerTypeToHookEvents` maps to ObjectQL
+ * hooks. `insert` is a synonym for `create`; `write` is the create-OR-update union
+ * (#3427). Kept in sync with that trigger (one small, stable contract).
+ */
+const RECORD_TRIGGER_OPS = new Set(['create', 'insert', 'update', 'delete', 'write']);
+/** A record-lifecycle-SHAPED token: `record-before-…` / `record-after-…`. */
+const RECORD_EVENT_SHAPE = /^record-(?:before|after)-(.+)$/;
 
 /** Coerce an array-or-name-keyed-map collection to an array (name injected). */
 function asArray(v: unknown): AnyRec[] {
@@ -126,6 +138,31 @@ export function validateFlowTriggerReadiness(stack: AnyRec): FlowTriggerReadines
           hint:
             `Object names match exactly. Check config.timeRelative.object against the object's registered name. ` +
             `If the object comes from another installed package, this warning can be ignored.`,
+        });
+      }
+    }
+
+    // 1c. Record-lifecycle-SHAPED triggerType (`record-before|after-…`) whose op
+    //     is not one the trigger can map — a typo like `record-after-updated`. The
+    //     engine still routes any `record-` token to the record-change trigger,
+    //     which then maps it to NO hook and never fires (only a runtime warn). This
+    //     is a definite never-fire defect, so surface it at authoring time. (Bare
+    //     `record-<noun>` shapes without a before/after phase — e.g. `record-change`
+    //     — are a separate concern and not flagged here.)
+    if (start && triggerType) {
+      const shape = RECORD_EVENT_SHAPE.exec(triggerType);
+      if (shape && !RECORD_TRIGGER_OPS.has(shape[1])) {
+        findings.push({
+          severity: 'warning',
+          rule: FLOW_TRIGGER_UNKNOWN_EVENT,
+          where: `flow "${flowName}" › start node`,
+          path: `flows[${flowIndex}].nodes[${start.index}].config.triggerType`,
+          message:
+            `triggerType '${triggerType}' names an unrecognized lifecycle event '${shape[1]}' — the flow binds to ` +
+            `the record-change trigger but never fires (the runtime stays silent about it).`,
+          hint:
+            `Use record-{before,after}-{create,update,delete,write}. 'write' fires on create OR update in one ` +
+            `flow (#3427); create/insert are synonyms.`,
         });
       }
     }
