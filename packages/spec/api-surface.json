@@ -283,6 +283,8 @@
     "DriverOptions (type)",
     "DriverOptionsSchema (const)",
     "DriverType (const)",
+    "DroppedFieldsEvent (type)",
+    "DroppedFieldsEventSchema (const)",
     "ESignatureConfig (type)",
     "ESignatureConfigSchema (const)",
     "EngineAggregateOptions (type)",
@@ -3738,7 +3740,8 @@
     "ValidationResult (interface)",
     "WorkflowStatus (interface)",
     "WorkflowTransition (interface)",
-    "WorkflowTransitionResult (interface)"
+    "WorkflowTransitionResult (interface)",
+    "WriteObservabilityOptions (interface)"
   ],
   "./integration": [
     "AckMode (type)",
