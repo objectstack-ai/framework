@@ -1053,6 +1053,19 @@ describe('createHonoApp', () => {
       expect(exposed.toLowerCase()).toContain('set-auth-token');
     });
 
+    // [#3455] The single-write `X-ObjectStack-Dropped-Fields` warning header must
+    // be readable cross-origin; kept in lockstep with plugin-hono-server's default.
+    it('always exposes x-objectstack-dropped-fields by default', async () => {
+      const app = createHonoApp({ kernel: mockKernel, prefix: '/api/v1' });
+
+      const res = await app.request('/api/v1/meta', {
+        method: 'GET',
+        headers: { Origin: 'https://app.example.com' },
+      });
+      const exposed = (res.headers.get('access-control-expose-headers') || '').toLowerCase();
+      expect(exposed).toContain('x-objectstack-dropped-fields');
+    });
+
     it('merges user-supplied exposeHeaders with set-auth-token (does not replace)', async () => {
       const app = createHonoApp({
         kernel: mockKernel,
