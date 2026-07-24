@@ -190,7 +190,10 @@ beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'mil-seed-lookup-')); });
 afterEach(() => { rmSync(dir, { recursive: true, force: true }); vi.restoreAllMocks(); });
 
 describe('marketplace install — seed lookup resolution', () => {
-    it('writes target record ids (never raw externalId strings) for package objects unknown to the metadata service', async () => {
+    // Generous timeout: the install handler dynamically imports the real
+    // @objectstack/runtime (unmocked on purpose), and that cold import alone
+    // can eat several seconds on a fresh CI runner.
+    it('writes target record ids (never raw externalId strings) for package objects unknown to the metadata service', { timeout: 30_000 }, async () => {
         const { engine, store, registry } = makeEngine();
         const rawApp = makeRawApp();
         const { ctx, fire } = makeCtx(rawApp, {
