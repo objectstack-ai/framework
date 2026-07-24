@@ -111,6 +111,12 @@ export {
 export type { ApprovalApproverFinding, ApprovalApproverSeverity } from './validate-approval-approvers.js';
 
 export {
+  validateSeedReplaySafety,
+  SEED_INSERT_MODE_DUPLICATES_ON_REPLAY,
+} from './validate-seed-replay-safety.js';
+export type { SeedReplaySafetyFinding, SeedReplaySafetySeverity } from './validate-seed-replay-safety.js';
+
+export {
   validateSecurityPosture,
   SECURITY_OWD_UNSET,
   SECURITY_OWD_ALIAS,

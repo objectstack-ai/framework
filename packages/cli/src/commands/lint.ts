@@ -9,7 +9,7 @@ import { loadConfig, BUNDLE_REQUIRE_EXTERNALS } from '../utils/config.js';
 import { computeI18nCoverage, type CoverageIssue } from '../utils/i18n-coverage.js';
 import { lintDataModel } from '../lint/data-model-rules.js';
 import { validateWidgetBindings } from '@objectstack/lint';
-import { validateRecordTitle, validateSemanticRoles, validateCapabilityReferences, validateSecurityPosture, validateApprovalApprovers } from '@objectstack/lint';
+import { validateRecordTitle, validateSemanticRoles, validateCapabilityReferences, validateSecurityPosture, validateApprovalApprovers, validateSeedReplaySafety } from '@objectstack/lint';
 import { collectAndLintDocs } from '../utils/collect-docs.js';
 import { scoreMetadata } from '../lint/score.js';
 import { runMetadataEval } from '../lint/metadata-eval.js';
@@ -433,6 +433,21 @@ export function lintConfig(config: any): LintIssue[] {
   for (const t of validateApprovalApprovers(config)) {
     issues.push({
       severity: t.severity === 'info' ? 'suggestion' : t.severity,
+      rule: t.rule,
+      message: `${t.where}: ${t.message}`,
+      path: t.path,
+      fix: t.hint,
+    });
+  }
+
+  // ── Seed replay safety (framework#3434) ──
+  // Seeds are replayed on every boot / re-publish, so a `mode: 'insert'` dataset
+  // duplicates its table on every restart (the loader's insert path has no
+  // existing-row check). Advisory: the fix-it points at `ignore`/`upsert` + an
+  // `externalId` (single field, or a composite list for a join table).
+  for (const t of validateSeedReplaySafety(config)) {
+    issues.push({
+      severity: t.severity,
       rule: t.rule,
       message: `${t.where}: ${t.message}`,
       path: t.path,
