@@ -17,6 +17,7 @@ import type {
 import type { MetadataCacheRequest, MetadataCacheResponse, ServiceInfo, ApiRoutes, WellKnownCapabilities } from '@objectstack/spec/api';
 import { readServiceSelfInfo } from '@objectstack/spec/api';
 import { parseFilterAST, isFilterAST } from '@objectstack/spec/data';
+import type { DroppedFieldsEvent } from '@objectstack/spec/data';
 import { PLURAL_TO_SINGULAR, SINGULAR_TO_PLURAL } from '@objectstack/spec/shared';
 import { type FormView, isAggregatedViewContainer } from '@objectstack/spec/ui';
 import { METADATA_FORM_REGISTRY } from '@objectstack/spec/system';
@@ -2928,11 +2929,20 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         await this.assertVersionMatch(request.object, request.id, request.expectedVersion, request.context);
         const opts: any = { where: { id: request.id } };
         if (request.context !== undefined) opts.context = request.context;
+        // [#3431] Capture fields the data layer legally strips (static `readonly`
+        // #2948 / conditional `readonlyWhen` #3042) so the caller learns which of
+        // its writes didn't land. The PATCH response was previously `200 + record`
+        // with no signal a field was dropped — the same silent-strip gap #3407
+        // closed for the flow engine, one surface over. `success` is unchanged;
+        // the strip is legitimate semantics, surfaced not escalated.
+        const dropped: DroppedFieldsEvent[] = [];
+        opts.onFieldsDropped = (event: DroppedFieldsEvent) => { dropped.push(event); };
         const result = await this.engine.update(request.object, request.data, opts);
         return {
             object: request.object,
             id: request.id,
-            record: result
+            record: result,
+            ...(dropped.length > 0 ? { droppedFields: dropped } : {}),
         };
     }
 

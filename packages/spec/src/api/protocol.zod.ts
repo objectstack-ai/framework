@@ -6,6 +6,7 @@ import { DiscoverySchema } from './discovery.zod';
 import { BatchUpdateRequestSchema, BatchUpdateResponseSchema, BatchOptionsSchema } from './batch.zod';
 import { MetadataCacheRequestSchema, MetadataCacheResponseSchema } from './http-cache.zod';
 import { QuerySchema } from '../data/query.zod';
+import { DroppedFieldsEventSchema } from '../data/data-engine.zod';
 import { 
   AnalyticsQueryRequestSchema,  
   AnalyticsResultResponseSchema, 
@@ -426,6 +427,14 @@ export const UpdateDataResponseSchema = lazySchema(() => z.object({
   object: z.string().describe('Object name'),
   id: z.string().describe('Updated record ID'),
   record: z.record(z.string(), z.unknown()).describe('Updated record'),
+  droppedFields: z.array(DroppedFieldsEventSchema).optional().describe(
+    'Advisory: caller-supplied fields the data layer legally stripped before ' +
+    'persistence — static `readonly` (#2948) or a TRUE `readonlyWhen` predicate ' +
+    '(#3042). Present only when ≥1 field was dropped. The update still succeeds ' +
+    '(the strip is legitimate semantics), so this is the only signal that part ' +
+    'of the write did not land — the strip was previously silent on this ' +
+    'surface (#3431).'
+  ),
 }));
 
 /**

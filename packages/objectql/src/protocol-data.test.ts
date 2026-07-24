@@ -468,6 +468,64 @@ describe('ObjectStackProtocolImplementation - Data Operations', () => {
     });
 
     // ═══════════════════════════════════════════════════════════════
+    // Dropped-field observability (#3431) — updateData surfaces the
+    // fields the engine legally strips (readonly / readonlyWhen) on its
+    // response, so the PATCH caller learns a write didn't land instead
+    // of receiving a silent 200 + record.
+    // ═══════════════════════════════════════════════════════════════
+    describe('dropped-field observability (#3431)', () => {
+        beforeEach(() => {
+            mockEngine.update = vi.fn().mockResolvedValue({ id: 'r1', updated_at: '2026-05-22T07:14:33.000Z' });
+        });
+
+        it('passes an onFieldsDropped listener into the engine update options', async () => {
+            await protocol.updateData({ object: 'task', id: 'r1', data: { name: 'New' } });
+            const opts = mockEngine.update.mock.calls[0][2];
+            expect(typeof opts.onFieldsDropped).toBe('function');
+        });
+
+        it('surfaces engine-dropped fields on the response, keeping the record', async () => {
+            // The engine strips a readonly field and reports it via the listener.
+            mockEngine.update.mockImplementation(async (_obj: string, _data: any, opts: any) => {
+                opts?.onFieldsDropped?.({ object: 'crm_opportunity', fields: ['approval_status'], reason: 'readonly' });
+                return { id: 'r1', updated_at: '2026-05-22T07:14:33.000Z' };
+            });
+
+            const res: any = await protocol.updateData({
+                object: 'crm_opportunity',
+                id: 'r1',
+                data: { approval_status: 'approved', notes: 'ok' },
+            });
+
+            // The write still succeeds (record returned) AND the dropped field is
+            // reported structurally — no longer silent on this surface.
+            expect(res.record).toMatchObject({ id: 'r1' });
+            expect(res.droppedFields).toEqual([
+                { object: 'crm_opportunity', fields: ['approval_status'], reason: 'readonly' },
+            ]);
+        });
+
+        it('collects multiple strip passes (readonly + readonlyWhen)', async () => {
+            mockEngine.update.mockImplementation(async (_obj: string, _data: any, opts: any) => {
+                opts?.onFieldsDropped?.({ object: 'crm_case', fields: ['locked_at'], reason: 'readonly_when' });
+                opts?.onFieldsDropped?.({ object: 'crm_case', fields: ['created_by'], reason: 'readonly' });
+                return { id: 'r1' };
+            });
+
+            const res: any = await protocol.updateData({ object: 'crm_case', id: 'r1', data: {} });
+
+            expect(res.droppedFields).toHaveLength(2);
+            expect(res.droppedFields.map((e: any) => e.reason)).toEqual(['readonly_when', 'readonly']);
+        });
+
+        it('omits droppedFields entirely when nothing was stripped', async () => {
+            const res: any = await protocol.updateData({ object: 'task', id: 'r1', data: { name: 'New' } });
+            expect(res.record).toMatchObject({ id: 'r1' });
+            expect(res).not.toHaveProperty('droppedFields');
+        });
+    });
+
+    // ═══════════════════════════════════════════════════════════════
     // cloneData — duplicate a record, gated by enable.clone
     // ═══════════════════════════════════════════════════════════════
 
