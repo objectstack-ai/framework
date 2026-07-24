@@ -75,6 +75,17 @@ export interface ApprovalRequestRow {
    */
   pending_approver_names?: Record<string, string>;
   /**
+   * Group membership of each STILL-PENDING approver, for `per_group` (会签)
+   * requests only (objectui#2807). Maps an approver id in `pending_approvers`
+   * to the group key(s) it fills — e.g. `{ "u_devadmin": ["finance", "legal"] }`
+   * — so a client can label each "waiting on" chip with the group it represents
+   * instead of showing duplicate, context-free names. Resolved from the same
+   * open-time `__approverGroups` snapshot the `decision_progress` groups use, so
+   * the two never disagree. Absent for non-`per_group` behaviors and for slots
+   * whose group was synthetic (unnamed). Display-only.
+   */
+  pending_approver_groups?: Record<string, string[]>;
+  /**
    * Display values for lookup fields in `payload` (field key → referenced
    * record's display name), so inbox summaries never show foreign-key ids.
    */

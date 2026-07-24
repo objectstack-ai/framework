@@ -2352,6 +2352,21 @@ export class ApprovalService implements IApprovalService {
         });
         progress.got = progress.groups.filter((g: any) => g.satisfied).length;
         progress.need = progress.groups.length;
+
+        // Approver→group(s) for the STILL-PENDING slots (objectui#2807), so the
+        // console can label each "waiting on" chip with the group it represents
+        // rather than showing duplicate, context-free names. Only pending slots
+        // matter — a resolved approver has dropped out of `pending_approvers`.
+        // Synthetic (unnamed, `#N`) group keys are dropped: a `· #0` sub-tag is
+        // noise, and the client would have to filter it anyway.
+        const pendingGroups: Record<string, string[]> = {};
+        for (const a of (row.pending_approvers ?? [])) {
+          const named = (snapshot[a] ?? []).filter((g) => !/^#\d+$/.test(g));
+          if (named.length) pendingGroups[a] = named;
+        }
+        if (Object.keys(pendingGroups).length) {
+          (row as any).pending_approver_groups = pendingGroups;
+        }
       }
       (row as any).decision_progress = progress;
     } catch { /* display-only enrichment */ }
