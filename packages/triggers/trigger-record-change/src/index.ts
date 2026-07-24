@@ -4,6 +4,7 @@ export { RecordChangeTriggerPlugin } from './plugin.js';
 export {
     RecordChangeTrigger,
     triggerTypeToHookEvent,
+    triggerTypeToHookEvents,
 } from './record-change-trigger.js';
 export type {
     FlowTrigger,

@@ -816,10 +816,55 @@ flows: [
 ],
 ```
 
+### Create-or-update flow (`record-after-write`)
+
+A `record_change` start node binds to lifecycle events through `triggerType`.
+The single-event tokens map one-to-one:
+
+| `triggerType`          | Fires on                        |
+| :--------------------- | :------------------------------ |
+| `record-after-create`  | insert (after)                  |
+| `record-after-update`  | update (after)                  |
+| `record-after-delete`  | delete (after)                  |
+| `record-after-write`   | **insert *or* update (after)**  |
+| `record-before-create` | insert (before)                 |
+| `record-before-update` | update (before)                 |
+| `record-before-delete` | delete (before)                 |
+| `record-before-write`  | **insert *or* update (before)** |
+
+For a rule that must run on **both create and update** — "recompute the SLA
+whenever a case is created or its priority changes" — use `record-after-write`
+instead of duplicating the flow. `write` is the create-OR-update union (delete
+is excluded: a write persists field data, a delete removes the row). One `start`
+node binds both lifecycle events; exactly one fires per mutation, so it is not a
+double run.
+
+```typescript
+{
+  id: 'start',
+  type: 'start',
+  label: 'Start',
+  config: {
+    objectName: 'crm_case',
+    triggerType: 'record-after-write', // created OR updated
+  },
+}
+```
+
+To branch on **which** event fired, test `previous` — it is empty on create
+(there was no prior row) and populated on update:
+
+```typescript
+// Edge conditions are bare CEL (ADR-0032) — no {…} braces.
+{ id: 'e_created', source: 'start', target: 'on_create', condition: 'previous == null' },
+{ id: 'e_updated', source: 'start', target: 'on_update', condition: 'previous != null' },
+```
+
 ### Best practices
 
 ✅ **DO:**
 - Keep flows simple and focused
+- Prefer one `record-after-write` flow over two near-identical create/update copies
 - Document the business logic
 - Test recursion and retry behavior
 - Use scheduled flows for batch updates

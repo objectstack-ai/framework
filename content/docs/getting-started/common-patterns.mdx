@@ -242,7 +242,10 @@ export const crm = defineApp({
 Create an automation that fires when a record changes. The **start node's `config`
 binds the trigger**: `objectName` plus one lifecycle event in `triggerType`
 (`record-after-create`, `record-after-update`, `record-after-delete`, or the
-`record-before-*` forms) — without it the flow never fires.
+`record-before-*` forms) — without it the flow never fires. To fire on **create
+or update in one flow**, use `record-after-write` (the create-OR-update union)
+instead of duplicating the definition — see
+[Flows › Create-or-update flow](/docs/automation/flows#create-or-update-flow-record-after-write).
 
 ```typescript
 import { defineFlow } from '@objectstack/spec';

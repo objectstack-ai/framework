@@ -31,14 +31,43 @@ node gate) before running the flow, with `record` (the new row) and `previous`
 
 ### Trigger event → hook mapping
 
-| `triggerType`            | ObjectQL hook  |
-| ------------------------ | -------------- |
-| `record-after-create`    | `afterInsert`  |
-| `record-after-update`    | `afterUpdate`  |
-| `record-after-delete`    | `afterDelete`  |
-| `record-before-create`   | `beforeInsert` |
-| `record-before-update`   | `beforeUpdate` |
-| `record-before-delete`   | `beforeDelete` |
+| `triggerType`            | ObjectQL hook(s)              |
+| ------------------------ | ----------------------------- |
+| `record-after-create`    | `afterInsert`                 |
+| `record-after-update`    | `afterUpdate`                 |
+| `record-after-delete`    | `afterDelete`                 |
+| `record-after-write`     | `afterInsert` + `afterUpdate` |
+| `record-before-create`   | `beforeInsert`                |
+| `record-before-update`   | `beforeUpdate`                |
+| `record-before-delete`   | `beforeDelete`                |
+| `record-before-write`    | `beforeInsert` + `beforeUpdate` |
+
+`record-after-create` / `record-after-insert` are synonyms (both → `afterInsert`).
+
+### Create **or** update in one flow: `record-*-write`
+
+`record-after-write` (and its before-phase form) is the **create-OR-update
+union** — one `start` node that fires on both insert and update, so a
+"recompute whenever a record is created or changed" rule needs **one** flow, not
+two near-identical copies. It binds both lifecycle hooks under the same flow;
+exactly one fires per mutation (a write is an insert *xor* an update), so it is
+not a double-dispatch. `delete` is deliberately excluded — a write persists
+field data, a delete removes the row.
+
+```ts
+{
+  type: 'start',
+  config: {
+    objectName: 'crm_case',
+    triggerType: 'record-after-write', // created OR updated
+  },
+}
+```
+
+To branch on *which* happened inside the flow, test `previous`: it is empty on
+create (there was no prior row) and populated on update. For example, an edge
+condition `previous == null` selects the create path, `previous != null` the
+update path.
 
 ## Usage
 
