@@ -51,6 +51,20 @@ export interface RecordChangeDataEngine {
      * (2026-07-17 third-party eval).
      */
     getObject?(name: string): unknown;
+    /**
+     * Optional record re-read (the ObjectQL engine's `findOne`). When present,
+     * {@link RecordChangeTrigger} uses it to hydrate the seeded `record` with
+     * the read-time computed fields the raw lifecycle-hook row never carries —
+     * chiefly `formula` virtual fields, which are evaluated post-fetch on the
+     * READ path, not stored on the row. Without this, a flow's start condition
+     * and every `{record.<field>}` template that names a formula field resolve
+     * empty (#3426). Signature mirrors `IDataEngine.findOne`; typed structurally
+     * so this plugin keeps its zero build-time dependency on objectql.
+     */
+    findOne?(
+        object: string,
+        options: { where?: Record<string, unknown>; fields?: string[]; context?: unknown },
+    ): Promise<Record<string, unknown> | null | undefined>;
 }
 
 /** Minimal logger surface (matches core's `ctx.logger`). */
@@ -157,7 +171,7 @@ export class RecordChangeTrigger implements FlowTrigger {
                 if ((ctx.session as { skipTriggers?: boolean } | undefined)?.skipTriggers) {
                     return;
                 }
-                const automationCtx = this.buildContext(binding, ctx);
+                const automationCtx = await this.buildContext(binding, ctx);
                 await callback(automationCtx);
             } catch (err) {
                 // Error isolation: a flow failure must NEVER break the CRUD write
@@ -199,8 +213,11 @@ export class RecordChangeTrigger implements FlowTrigger {
      * record comes from `ctx.result` (after-hooks) or falls back to the
      * mutation input doc / previous row; the old record from `ctx.previous`
      * (with the `__previous` stash audit also uses as a fallback).
+     *
+     * Async because the seeded `record` is hydrated with read-time computed
+     * fields (see {@link hydrateComputedFields}) via a data-engine re-read.
      */
-    private buildContext(binding: FlowTriggerBinding, ctx: HookContext): AutomationContext {
+    private async buildContext(binding: FlowTriggerBinding, ctx: HookContext): Promise<AutomationContext> {
         // objectql lifecycle hooks carry the written row under `input.data` (insert /
         // update payload); `id` is on update. (`doc` kept only as a defensive alias.)
         const input = (ctx.input ?? {}) as { data?: Record<string, unknown>; doc?: Record<string, unknown>; id?: unknown };
@@ -227,10 +244,17 @@ export class RecordChangeTrigger implements FlowTrigger {
 
         const session = (ctx.session ?? {}) as { userId?: string; organizationId?: string };
 
+        const object = binding.object ?? ctx.object;
+
+        // Hydrate read-time computed fields (formula virtuals) onto the seeded
+        // record so the flow's start condition and every `{record.<field>}`
+        // template resolve them — the raw hook row never carries them (#3426).
+        const hydrated = await this.hydrateComputedFields(object, ctx.event, record);
+
         return {
-            record,
+            record: hydrated,
             previous,
-            object: binding.object ?? ctx.object,
+            object,
             event: binding.event,
             userId: session.userId,
             // Forward the writer's identity so a `runAs:'user'` flow enforces RLS
@@ -249,7 +273,64 @@ export class RecordChangeTrigger implements FlowTrigger {
             ...(session.organizationId ? { tenantId: session.organizationId } : {}),
             // Expose the record as params too, so flows with named `isInput`
             // variables matching record fields get them seeded.
-            params: record,
+            params: hydrated,
         };
+    }
+
+    /**
+     * Re-read the just-written record through the data engine so the seeded
+     * `record` carries the SAME read-time computed fields the data API returns —
+     * chiefly `formula` virtual fields, which lifecycle-hook rows never include
+     * because they are evaluated on the READ path, not stored on the row
+     * (#3426). Without this, `{record.full_name}` (a formula) in a notify
+     * template, or a start condition referencing one, silently renders blank.
+     *
+     * Deliberately conservative:
+     *  - Runs only for `afterInsert` / `afterUpdate`, where the row exists in
+     *    its post-write state. `before*` rows are not yet persisted and
+     *    `afterDelete` rows are gone; both keep the raw hook record untouched.
+     *  - Reads as an elevated SYSTEM principal so it can only ADD computed
+     *    fields, never let RLS/FLS on the re-read shrink the snapshot the flow
+     *    was already going to see from the raw (unmasked) write-path row.
+     *  - Raw hook fields WIN over the re-read on merge, preserving trigger-time
+     *    scalar values and the #1872 multi-lookup input overlay; the re-read
+     *    only fills in keys the raw row lacks (the formula virtuals).
+     *  - Lookup TRAVERSAL (`{record.account.name}`) is intentionally NOT
+     *    hydrated: a default data-API read does not expand relations either, and
+     *    expanding would turn `record.account` from its scalar FK id into an
+     *    object, breaking templates/conditions that use the bare id (e.g.
+     *    #1872's `{record.target_channels.0}`). Tracked separately on #3426.
+     *
+     * Any failure (no read surface, no id, a throw, an empty read) falls back to
+     * the raw record — hydration must never break the flow it feeds.
+     */
+    private async hydrateComputedFields(
+        object: string | undefined,
+        hookEvent: string | undefined,
+        record: Record<string, unknown>,
+    ): Promise<Record<string, unknown>> {
+        if (typeof this.engine.findOne !== 'function') return record;
+        if (hookEvent !== 'afterInsert' && hookEvent !== 'afterUpdate') return record;
+        if (!object) return record;
+        const id = (record as { id?: unknown }).id;
+        if (id == null || id === '') return record;
+        try {
+            const full = await this.engine.findOne(object, {
+                where: { id },
+                // Elevated read: adds computed fields without RLS/FLS masking the
+                // ones the raw row already carried.
+                context: { isSystem: true, positions: [], permissions: [] },
+            });
+            if (full && typeof full === 'object') {
+                // Raw hook fields win; the re-read only contributes keys the raw
+                // row lacks (the formula virtuals + any other read-time field).
+                return { ...(full as Record<string, unknown>), ...record };
+            }
+        } catch (err) {
+            this.logger.debug?.(
+                `[record-change] computed-field hydration skipped for '${object}': ${(err as Error)?.message ?? String(err)}`,
+            );
+        }
+        return record;
     }
 }
