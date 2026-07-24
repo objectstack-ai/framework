@@ -28,10 +28,12 @@ export interface HonoCorsOptions {
     /**
      * Response headers exposed to JS (`Access-Control-Expose-Headers`).
      *
-     * Defaults to `['set-auth-token']` so that better-auth's `bearer()` plugin
-     * can hand rotated session tokens to cross-origin clients. User-supplied
-     * values are merged with this default — `set-auth-token` is always
-     * exposed unless CORS is disabled entirely.
+     * Defaults to `['set-auth-token', 'x-objectstack-dropped-fields']` so that
+     * better-auth's `bearer()` plugin can hand rotated session tokens to
+     * cross-origin clients, and a browser can read the single-write
+     * `X-ObjectStack-Dropped-Fields` warning header (#3431/#3455). User-supplied
+     * values are merged with these defaults — they are always exposed unless CORS
+     * is disabled entirely.
      */
     exposeHeaders?: string[];
     credentials?: boolean;

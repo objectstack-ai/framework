@@ -617,6 +617,31 @@ function diffDroppedFields(
 }
 
 /**
+ * [#3455] Collapse a batch's per-row `DroppedFieldsEvent`s into one event per
+ * `(object, reason)` with the UNION of dropped field names.
+ *
+ * Used by the bulk-create surface (`createManyData`), whose `{ object, records,
+ * count }` response has no per-row slot to hang a `droppedFields` on. The
+ * insert-ingress strip (#3043) is static-`readonly` only — schema-uniform, so
+ * every row drops the same set — which makes an aggregated view faithful rather
+ * than lossy. Returns `[]` when nothing was dropped so callers can spread
+ * `...(x.length ? { droppedFields: x } : {})` and keep the omit-when-empty shape.
+ * The per-row `insertMany`/`batch` paths keep row precision instead (they have a
+ * per-row result to carry it).
+ */
+function mergeDroppedFieldEvents(events: DroppedFieldsEvent[]): DroppedFieldsEvent[] {
+    if (events.length === 0) return [];
+    const byKey = new Map<string, { object: string; reason: DroppedFieldsEvent['reason']; fields: Set<string> }>();
+    for (const ev of events) {
+        const key = `${ev.object}|${ev.reason}`;
+        let bucket = byKey.get(key);
+        if (!bucket) { bucket = { object: ev.object, reason: ev.reason, fields: new Set() }; byKey.set(key, bucket); }
+        for (const f of ev.fields) bucket.fields.add(f);
+    }
+    return Array.from(byKey.values()).map((b) => ({ object: b.object, fields: Array.from(b.fields), reason: b.reason }));
+}
+
+/**
  * Service Configuration for Discovery
  * Maps service names to their routes and plugin providers.
  *
@@ -3290,30 +3315,46 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
     // Batch Operations
     // ==========================================
 
-    async batchData(request: { object: string, request: BatchUpdateRequest }): Promise<BatchUpdateResponse> {
-        const { object, request: batchReq } = request;
+    async batchData(request: { object: string, request: BatchUpdateRequest, context?: any }): Promise<BatchUpdateResponse> {
+        const { object, request: batchReq, context } = request;
         const { operation, records, options } = batchReq;
-        const results: Array<{ id?: string; success: boolean; error?: string; record?: any }> = [];
+        const results: Array<{ id?: string; success: boolean; error?: string; record?: any; droppedFields?: DroppedFieldsEvent[] }> = [];
         let succeeded = 0;
         let failed = 0;
 
-        // [#3043] The batch endpoint is an external ingress and threads no
-        // context, so its creates are non-system: strip forged read-only columns.
+        // [#3043] The batch endpoint is an external ingress: strip forged
+        // read-only columns on create. [#3455] It DOES resolve an execution
+        // context (threaded by REST); thread it to every engine call so RLS/FLS
+        // and `readonlyWhen` run under the caller, and pass it to the strip so a
+        // system caller is correctly exempt (the pre-#3455 code hard-coded the
+        // strip context to `undefined`, treating every batch create as non-system).
         const batchSchema = this.engine.registry?.getObject(object);
+        // Spread form for options objects that already carry `where`/`onFieldsDropped`
+        // (`{}` spread is a safe no-op); arg form for `insert`, whose whole options
+        // arg is `undefined` when there is no context — exact parity with createData.
+        const ctxOpt = context !== undefined ? { context } : {};
+        const insertCtx = context !== undefined ? { context } : undefined;
 
         for (const record of records) {
             try {
                 switch (operation) {
                     case 'create': {
-                        const created = await this.engine.insert(object, stripReadonlyForInsert(batchSchema, record.data || record, undefined));
-                        results.push({ id: created.id, success: true, record: created });
+                        // [#3455] Diff the supplied row against the stripped one so a
+                        // batch-create caller sees the same `droppedFields` a
+                        // single-write create surfaces (#3431).
+                        const stripped = stripReadonlyForInsert(batchSchema, record.data || record, context);
+                        const ev = diffDroppedFields(object, record.data || record, stripped, 'readonly');
+                        const created = await this.engine.insert(object, stripped, insertCtx as any);
+                        results.push({ id: created.id, success: true, record: created, ...(ev ? { droppedFields: [ev] } : {}) });
                         succeeded++;
                         break;
                     }
                     case 'update': {
                         if (!record.id) throw new Error('Record id is required for update');
-                        const updated = await this.engine.update(object, record.data || {}, { where: { id: record.id } });
-                        results.push({ id: record.id, success: true, record: updated });
+                        // [#3455] Collect the engine's LEGAL write strips per row.
+                        const dropped: DroppedFieldsEvent[] = [];
+                        const updated = await this.engine.update(object, record.data || {}, { where: { id: record.id }, onFieldsDropped: (e: DroppedFieldsEvent) => { dropped.push(e); }, ...ctxOpt } as any);
+                        results.push({ id: record.id, success: true, record: updated, ...(dropped.length > 0 ? { droppedFields: dropped } : {}) });
                         succeeded++;
                         break;
                     }
@@ -3321,20 +3362,21 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                         // Try update first, then create if not found
                         if (record.id) {
                             try {
-                                const existing = await this.engine.findOne(object, { where: { id: record.id } });
+                                const existing = await this.engine.findOne(object, { where: { id: record.id }, ...ctxOpt } as any);
                                 if (existing) {
-                                    const updated = await this.engine.update(object, record.data || {}, { where: { id: record.id } });
-                                    results.push({ id: record.id, success: true, record: updated });
+                                    const dropped: DroppedFieldsEvent[] = [];
+                                    const updated = await this.engine.update(object, record.data || {}, { where: { id: record.id }, onFieldsDropped: (e: DroppedFieldsEvent) => { dropped.push(e); }, ...ctxOpt } as any);
+                                    results.push({ id: record.id, success: true, record: updated, ...(dropped.length > 0 ? { droppedFields: dropped } : {}) });
                                 } else {
-                                    const created = await this.engine.insert(object, { id: record.id, ...(record.data || {}) });
+                                    const created = await this.engine.insert(object, { id: record.id, ...(record.data || {}) }, insertCtx as any);
                                     results.push({ id: created.id, success: true, record: created });
                                 }
                             } catch {
-                                const created = await this.engine.insert(object, { id: record.id, ...(record.data || {}) });
+                                const created = await this.engine.insert(object, { id: record.id, ...(record.data || {}) }, insertCtx as any);
                                 results.push({ id: created.id, success: true, record: created });
                             }
                         } else {
-                            const created = await this.engine.insert(object, record.data || record);
+                            const created = await this.engine.insert(object, record.data || record, insertCtx as any);
                             results.push({ id: created.id, success: true, record: created });
                         }
                         succeeded++;
@@ -3342,7 +3384,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                     }
                     case 'delete': {
                         if (!record.id) throw new Error('Record id is required for delete');
-                        await this.engine.delete(object, { where: { id: record.id } });
+                        await this.engine.delete(object, { where: { id: record.id }, ...ctxOpt } as any);
                         results.push({ id: record.id, success: true });
                         succeeded++;
                         break;
@@ -3370,7 +3412,10 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             total: records.length,
             succeeded,
             failed,
-            results: options?.returnRecords !== false ? results : results.map(r => ({ id: r.id, success: r.success, error: r.error })),
+            // [#3455] `returnRecords: false` drops the record payload but KEEPS
+            // `droppedFields` — it is a small write-observability warning, not the
+            // record data the flag suppresses.
+            results: options?.returnRecords !== false ? results : results.map(r => ({ id: r.id, success: r.success, error: r.error, ...(r.droppedFields ? { droppedFields: r.droppedFields } : {}) })),
         } as BatchUpdateResponse;
     }
     
@@ -3382,6 +3427,19 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             request.records,
             request.context,
         );
+        // [#3455] Surface the #3043 ingress strip, symmetric with single-write
+        // createData. Diff each supplied row against its stripped form, then
+        // AGGREGATE — the `{ records, count }` response has no per-row slot, and
+        // the insert-time strip is static-`readonly` only (schema-uniform), so a
+        // union view is faithful rather than lossy.
+        const dropped: DroppedFieldsEvent[] = [];
+        if (Array.isArray(request.records)) {
+            for (let i = 0; i < request.records.length; i++) {
+                const ev = diffDroppedFields(request.object, request.records[i], Array.isArray(rows) ? rows[i] : rows, 'readonly');
+                if (ev) dropped.push(ev);
+            }
+        }
+        const merged = mergeDroppedFieldEvents(dropped);
         const records = await this.engine.insert(
             request.object,
             rows,
@@ -3390,7 +3448,8 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         return {
             object: request.object,
             records,
-            count: records.length
+            count: records.length,
+            ...(merged.length > 0 ? { droppedFields: merged } : {}),
         };
     }
 
@@ -3402,7 +3461,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
      * engine with `insertMany` (ObjectQL has it); absent that, callers should
      * fall back to createManyData.
      */
-    async insertManyData(request: { object: string, records: any[], context?: any }): Promise<{ object: string; outcomes: Array<{ ok: boolean; record?: any; error?: unknown }> }> {
+    async insertManyData(request: { object: string, records: any[], context?: any }): Promise<{ object: string; outcomes: Array<{ ok: boolean; record?: any; error?: unknown; droppedFields?: DroppedFieldsEvent[] }> }> {
         const engineInsertMany = (this.engine as any)?.insertMany;
         if (typeof engineInsertMany !== 'function') {
             throw new Error('insertManyData requires an engine with insertMany (framework#3172)');
@@ -3413,25 +3472,51 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             request.records,
             request.context,
         );
-        const outcomes = await engineInsertMany.call(
+        // [#3455] Per-row #3043 ingress-strip observability. Unlike createManyData,
+        // this partial-success path HAS a per-row slot (`outcomes[i]`), so keep
+        // row precision: `stripReadonlyForInsert` maps 1:1 in order, so the i-th
+        // supplied row diffs against the i-th stripped row and rides the i-th
+        // outcome. Computed BEFORE the insert so a per-row engine failure never
+        // hides which fields the ingress had already dropped.
+        const rowsArr = Array.isArray(rows) ? rows : [rows];
+        const perRowDropped: Array<DroppedFieldsEvent | null> = Array.isArray(request.records)
+            ? request.records.map((rec, i) => diffDroppedFields(request.object, rec, rowsArr[i], 'readonly'))
+            : [];
+        const outcomes: Array<{ ok: boolean; record?: any; error?: unknown; droppedFields?: DroppedFieldsEvent[] }> = await engineInsertMany.call(
             this.engine,
             request.object,
             rows,
             request.context !== undefined ? { context: request.context } as any : undefined,
         );
+        if (Array.isArray(outcomes)) {
+            for (let i = 0; i < outcomes.length; i++) {
+                const ev = perRowDropped[i];
+                if (ev && outcomes[i]) outcomes[i].droppedFields = [ev];
+            }
+        }
         return { object: request.object, outcomes };
     }
     
-    async updateManyData(request: UpdateManyDataRequest): Promise<BatchUpdateResponse> {
-        const { object, records, options } = request;
-        const results: Array<{ id?: string; success: boolean; error?: string; record?: any }> = [];
+    async updateManyData(request: UpdateManyDataRequest & { context?: any }): Promise<BatchUpdateResponse> {
+        const { object, records, options, context } = request;
+        const results: Array<{ id?: string; success: boolean; error?: string; record?: any; droppedFields?: DroppedFieldsEvent[] }> = [];
         let succeeded = 0;
         let failed = 0;
 
         for (const record of records) {
             try {
-                const updated = await this.engine.update(object, record.data, { where: { id: record.id } });
-                results.push({ id: record.id, success: true, record: updated });
+                // [#3455] Two gaps the pre-#3455 loop had, both fixed per row:
+                //  1. `context` was never threaded — bulk updates ran the engine
+                //     context-less, so RLS/FLS and `readonlyWhen` evaluated without
+                //     the caller's principal. Thread it like single-write updateData.
+                //  2. `onFieldsDropped` was never wired — the same static `readonly`
+                //     (#2948) / `readonlyWhen` (#3042) strips that single-write now
+                //     surfaces (#3431) happened silently here. Collect per row.
+                const dropped: DroppedFieldsEvent[] = [];
+                const opts: any = { where: { id: record.id }, onFieldsDropped: (e: DroppedFieldsEvent) => { dropped.push(e); } };
+                if (context !== undefined) opts.context = context;
+                const updated = await this.engine.update(object, record.data, opts);
+                results.push({ id: record.id, success: true, record: updated, ...(dropped.length > 0 ? { droppedFields: dropped } : {}) });
                 succeeded++;
             } catch (err: any) {
                 results.push({ id: record.id, success: false, error: err.message });

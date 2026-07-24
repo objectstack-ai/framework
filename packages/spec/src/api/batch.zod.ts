@@ -2,6 +2,7 @@
 
 import { z } from 'zod';
 import { ApiErrorSchema, BaseResponseSchema, RecordDataSchema } from './contract.zod';
+import { DroppedFieldsEventSchema } from '../data/data-engine.zod';
 
 /**
  * Batch Operations API
@@ -126,6 +127,16 @@ export const BatchOperationResultSchema = lazySchema(() => z.object({
   errors: z.array(ApiErrorSchema).optional().describe('Array of errors if operation failed'),
   data: RecordDataSchema.optional().describe('Full record data (if returnRecords=true)'),
   index: z.number().optional().describe('Index of the record in the request array'),
+  droppedFields: z.array(DroppedFieldsEventSchema).optional().describe(
+    'Write-observability (#3407/#3431/#3455): caller-supplied fields LEGALLY stripped from ' +
+    'THIS row before it was written — static `readonly` (#2948) / TRUE `readonlyWhen` ' +
+    '(#3042) on update, or the #3043 create-ingress strip. Per-row because a batch can drop ' +
+    'different fields on different rows (`readonlyWhen` is record-state-dependent). Present ' +
+    'ONLY when ≥1 field was dropped for this row; the row still succeeded (success unchanged). ' +
+    'A single response header cannot express per-row drops, so this body field is the ' +
+    'canonical bulk channel — REST does not emit `X-ObjectStack-Dropped-Fields` for batches. ' +
+    'Optional — omit-when-empty keeps the shape backward-compatible.'
+  ),
 }));
 
 export type BatchOperationResult = z.infer<typeof BatchOperationResultSchema>;

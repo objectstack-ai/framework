@@ -449,7 +449,11 @@ export class HonoServerPlugin implements Plugin {
                 // the browser with "Failed to fetch" (objectui#2572 dogfood find;
                 // same split-origin class as the #2548 Bearer fixes).
                 const defaultAllowHeaders = ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Tenant-ID', 'X-Environment-Id', 'If-Match'];
-                const defaultExposeHeaders = ['set-auth-token'];
+                // `x-objectstack-dropped-fields` (#3455): expose the single-write
+                // drop header (#3431) to cross-origin JS. Kept in lockstep with the
+                // `@objectstack/hono` adapter's default. The body `droppedFields`
+                // channel remains the primary, cross-origin-safe surface.
+                const defaultExposeHeaders = ['set-auth-token', 'x-objectstack-dropped-fields'];
                 const allowHeaders = corsOpts.allowHeaders ?? defaultAllowHeaders;
                 const exposeHeaders = Array.from(new Set([
                     ...defaultExposeHeaders,

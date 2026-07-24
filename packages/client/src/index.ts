@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import { QueryAST, SortNode, AggregationNode, isFilterAST } from '@objectstack/spec/data';
+import { QueryAST, SortNode, AggregationNode, isFilterAST, type DroppedFieldsEvent } from '@objectstack/spec/data';
 import {
   BatchUpdateRequest,
   BatchUpdateResponse,
@@ -218,6 +218,14 @@ export interface CreateDataResult<T = any> {
   object: string;
   id: string;
   record: T;
+  /**
+   * [#3431/#3455] Caller-supplied fields the server LEGALLY stripped before the
+   * record was written — e.g. a non-system create cannot seed a static `readonly`
+   * column (#3043), so those keys are dropped and the field re-derives its default.
+   * Present only when ≥1 field was dropped; the create still succeeded. REST also
+   * mirrors this in the `X-ObjectStack-Dropped-Fields` response header.
+   */
+  droppedFields?: DroppedFieldsEvent[];
 }
 
 /** Spec: UpdateDataResponseSchema */
@@ -225,6 +233,13 @@ export interface UpdateDataResult<T = any> {
   object: string;
   id: string;
   record: T;
+  /**
+   * [#3431/#3455] Caller-supplied fields the server LEGALLY stripped from the
+   * write before persisting — static `readonly` (#2948) or a TRUE `readonlyWhen`
+   * predicate (#3042). Present only when ≥1 field was dropped; the update still
+   * succeeded. REST also mirrors this in the `X-ObjectStack-Dropped-Fields` header.
+   */
+  droppedFields?: DroppedFieldsEvent[];
 }
 
 /** Spec: DeleteDataResponseSchema */

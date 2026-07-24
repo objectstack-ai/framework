@@ -177,7 +177,10 @@ export function createHonoApp(options: ObjectStackHonoOptions): Hono {
       //
       // This mirrors `plugin-hono-server`'s CORS wiring — all three
       // Hono-based CORS sites must stay in lockstep on this default.
-      const defaultExposeHeaders = ['set-auth-token'];
+      // `x-objectstack-dropped-fields` (#3455) lets a cross-origin browser read
+      // the single-write drop header (#3431); the body `droppedFields` channel is
+      // the primary, cross-origin-safe surface, so this is a convenience mirror.
+      const defaultExposeHeaders = ['set-auth-token', 'x-objectstack-dropped-fields'];
       const exposeHeaders = Array.from(new Set([
         ...defaultExposeHeaders,
         ...(corsOpts.exposeHeaders ?? []),
