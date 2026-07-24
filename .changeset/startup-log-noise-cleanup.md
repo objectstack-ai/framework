@@ -21,4 +21,6 @@ with zero example-side changes — training users to ignore warnings.
   false positive (printed twice); silencing it removes both.
 - **objectql** — route the Registry's re-register / package-overwrite lines
   (normal rebuild / HMR / seed-replay paths) through a new debug-only
-  `SchemaRegistry.debug()` so they stay out of the default `info` boot log.
+  `SchemaRegistry.debug()` so they stay out of the default `info` boot log. Adds
+  a `logLevel` construction option (and matching `OS_REGISTRY_LOG` env var) so
+  the debug-gated housekeeping is discoverable for troubleshooting.
