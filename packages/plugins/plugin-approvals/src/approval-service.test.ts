@@ -1451,6 +1451,33 @@ describe('ApprovalService — decision_progress & deep links (#2678 P1.5)', () =
     expect(row.decision_progress.groups.find((g: any) => g.group === 'finance')).toMatchObject({ got: 0, satisfied: false });
   });
 
+  it('per_group: pending_approver_groups maps each pending approver to its group (objectui#2807)', async () => {
+    const req = await svc.openNodeRequest(cfg([U('l1', 'legal'), U('f1', 'finance')], 'per_group'), CTX);
+    let row: any = await svc.getRequest(req.id, SYS);
+    // Every pending slot is labeled with the group it fills.
+    expect(row.pending_approver_groups).toEqual({ l1: ['legal'], f1: ['finance'] });
+    // Once legal signs off, l1 drops out of pending — and out of the map.
+    await svc.decideNode(req.id, { decision: 'approve', actorId: 'l1' }, SYS);
+    row = await svc.getRequest(req.id, SYS);
+    expect(row.pending_approver_groups).toEqual({ f1: ['finance'] });
+  });
+
+  it('per_group with unnamed groups omits synthetic keys; non-per_group omits the map (objectui#2807)', async () => {
+    // Distinct (record, run) so the two opens aren't a duplicate-pending clash.
+    const mk = (approvers: any[], behavior: string, recordId: string, runId: string, extra: Record<string, any> = {}) => ({
+      ...openInput([], { recordId, runId }),
+      config: { approvers, behavior, lockRecord: true, ...extra },
+    });
+    // Unnamed approvers → synthetic `#N` group keys, which are not surfaced.
+    const unnamed = await svc.openNodeRequest(mk([U('u1'), U('u2')], 'per_group', 'opp_u', 'run_u'), CTX);
+    const uRow: any = await svc.getRequest(unnamed.id, SYS);
+    expect(uRow.pending_approver_groups).toBeUndefined();
+    // Quorum aggregates approvals, not groups — no approver→group map.
+    const q = await svc.openNodeRequest(mk([U('a1'), U('a2')], 'quorum', 'opp_q', 'run_q', { minApprovals: 2 }), CTX);
+    const qRow: any = await svc.getRequest(q.id, SYS);
+    expect(qRow.pending_approver_groups).toBeUndefined();
+  });
+
   it('quorum: progress reports approvals against the clamped threshold', async () => {
     const req = await svc.openNodeRequest(cfg([U('u1'), U('u2'), U('u3')], 'quorum', { minApprovals: 2 }), CTX);
     await svc.decideNode(req.id, { decision: 'approve', actorId: 'u1' }, SYS);
