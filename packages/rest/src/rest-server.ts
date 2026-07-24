@@ -10,6 +10,7 @@ import { RouteManager } from './route-manager.js';
 import { RestServerConfig, RestApiConfig, CrudEndpointsConfig, MetadataEndpointsConfig, BatchEndpointsConfig, RouteGenerationConfig } from '@objectstack/spec/api';
 import { DataProtocol, MetadataProtocol } from '@objectstack/spec/api';
 import { PUBLIC_FORM_SERVER_MANAGED_FIELDS } from '@objectstack/spec/security';
+import type { DroppedFieldsEvent } from '@objectstack/spec/data';
 
 /**
  * The protocol slice the REST layer actually consumes (ADR-0076 D9 / #2462
@@ -411,6 +412,41 @@ function sendError(res: any, error: any, object?: string): void {
  */
 function isExpectedDataStatus(status: number): boolean {
     return status === 403 || status === 404 || status === 409 || status === 502 || status === 503;
+}
+
+/**
+ * [#3431] `X-ObjectStack-Dropped-Fields` — surface the engine's LEGAL write
+ * strips (static `readonly` #2948 / TRUE `readonlyWhen` #3042 / #3043 create
+ * ingress) on the REST write response so an API caller isn't left to diff the
+ * returned row to discover a field never landed (same silent-success class as
+ * flow-side #3407). The strip is legitimate — the write still succeeded — so the
+ * STATUS CODE is unchanged (200/201); this is a warning header, not a failure.
+ *
+ * Format: one `field;reason=<reason>` token per dropped field, comma-space
+ * joined — e.g. `approval_status;reason=readonly` or
+ * `owner;reason=readonly, locked_at;reason=readonly_when`. Field API names are
+ * identifiers, so they never contain the `;`/`,`/`=` delimiters. Returns '' when
+ * nothing was dropped. The same events also ride the response body's
+ * `droppedFields` (the structured/cross-origin-safe channel).
+ */
+function droppedFieldsHeaderValue(events: DroppedFieldsEvent[] | undefined): string {
+    if (!events?.length) return '';
+    return events
+        .flatMap((e) => e.fields.map((f) => `${f};reason=${e.reason}`))
+        .join(', ');
+}
+
+/**
+ * Set the `X-ObjectStack-Dropped-Fields` header from a data-write protocol
+ * result, tolerating both the Hono-style `res.header(name, value)` used
+ * elsewhere in this file and the node/Express-style `res.setHeader`. No-ops when
+ * the result carried no drops (or the response object supports neither method).
+ */
+function applyDroppedFieldsHeader(res: any, result: unknown): void {
+    const header = droppedFieldsHeaderValue((result as { droppedFields?: DroppedFieldsEvent[] } | null)?.droppedFields);
+    if (!header) return;
+    if (typeof res?.header === 'function') res.header('X-ObjectStack-Dropped-Fields', header);
+    else if (typeof res?.setHeader === 'function') res.setHeader('X-ObjectStack-Dropped-Fields', header);
 }
 
 /**
@@ -3436,6 +3472,10 @@ export class RestServer {
                             ...(environmentId ? { environmentId } : {}),
                             ...(context ? { context } : {}),
                         } as any);
+                        // [#3431] Advertise fields the #3043 create ingress strip
+                        // dropped via the response header (body also carries
+                        // `droppedFields`). Status stays 201.
+                        applyDroppedFieldsHeader(res, result);
                         res.status(201).json(result);
                     } catch (error: any) {
                         const mapped = mapDataError(error, req.params?.object);
@@ -3523,6 +3563,10 @@ export class RestServer {
                             ...(environmentId ? { environmentId } : {}),
                             ...(context ? { context } : {}),
                         } as any);
+                        // [#3431] Advertise any LEGALLY-stripped write fields via
+                        // the response header before serialising (the body also
+                        // carries `droppedFields`). Status stays 200.
+                        applyDroppedFieldsHeader(res, result);
                         res.json(result);
                     } catch (error: any) {
                         const mapped = mapDataError(error, req.params?.object);

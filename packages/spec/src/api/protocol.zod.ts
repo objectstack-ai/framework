@@ -6,6 +6,7 @@ import { DiscoverySchema } from './discovery.zod';
 import { BatchUpdateRequestSchema, BatchUpdateResponseSchema, BatchOptionsSchema } from './batch.zod';
 import { MetadataCacheRequestSchema, MetadataCacheResponseSchema } from './http-cache.zod';
 import { QuerySchema } from '../data/query.zod';
+import { DroppedFieldsEventSchema } from '../data/data-engine.zod';
 import { 
   AnalyticsQueryRequestSchema,  
   AnalyticsResultResponseSchema, 
@@ -392,6 +393,15 @@ export const CreateDataResponseSchema = lazySchema(() => z.object({
   object: z.string().describe('The object name.'),
   id: z.string().describe('The ID of the newly created record.'),
   record: z.record(z.string(), z.unknown()).describe('The created record, including server-generated fields (created_at, owner).'),
+  droppedFields: z.array(DroppedFieldsEventSchema).optional().describe(
+    'Write-observability (#3407/#3431): caller-supplied fields that were LEGALLY stripped ' +
+    'before the record was written — a non-system create cannot seed a static `readonly` ' +
+    'column (#3043 ingress strip), so those keys are dropped and the field re-derives its ' +
+    'default. Present ONLY when ≥1 field was dropped; the create still succeeded without ' +
+    'them (status/success semantics unchanged). REST additionally surfaces this as the ' +
+    '`X-ObjectStack-Dropped-Fields` response header. Optional — omit-when-empty keeps the ' +
+    'shape backward-compatible for existing clients.'
+  ),
 }));
 
 /**
@@ -426,6 +436,15 @@ export const UpdateDataResponseSchema = lazySchema(() => z.object({
   object: z.string().describe('Object name'),
   id: z.string().describe('Updated record ID'),
   record: z.record(z.string(), z.unknown()).describe('Updated record'),
+  droppedFields: z.array(DroppedFieldsEventSchema).optional().describe(
+    'Write-observability (#3407/#3431): caller-supplied fields the engine LEGALLY stripped ' +
+    'from the write before persisting — static `readonly` (#2948) or a TRUE `readonlyWhen` ' +
+    'predicate (#3042). Present ONLY when ≥1 field was dropped; the update still succeeded ' +
+    'without them (status/success semantics unchanged — stripping is legitimate, not an ' +
+    'error). REST additionally surfaces this as the `X-ObjectStack-Dropped-Fields` response ' +
+    'header. Optional — omit-when-empty keeps the shape backward-compatible for existing ' +
+    'clients that only read `record`.'
+  ),
 }));
 
 /**
