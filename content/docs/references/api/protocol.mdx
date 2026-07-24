@@ -219,6 +219,7 @@ const result = AiInsightsRequest.parse(data);
 | **object** | `string` | ✅ | The object name. |
 | **id** | `string` | ✅ | The ID of the newly created record. |
 | **record** | `Record<string, any>` | ✅ | The created record, including server-generated fields (created_at, owner). |
+| **droppedFields** | `{ object: string; fields: string[]; reason: Enum<'readonly' \| 'readonly_when'> }[]` | optional | Write-observability (#3407/#3431): caller-supplied fields that were LEGALLY stripped before the record was written — a non-system create cannot seed a static `readonly` column (#3043 ingress strip), so those keys are dropped and the field re-derives its default. Present ONLY when ≥1 field was dropped; the create still succeeded without them (status/success semantics unchanged). REST additionally surfaces this as the `X-ObjectStack-Dropped-Fields` response header. Optional — omit-when-empty keeps the shape backward-compatible for existing clients. |
 
 
 ---
@@ -1179,6 +1180,7 @@ const result = AiInsightsRequest.parse(data);
 | **object** | `string` | ✅ | Object name |
 | **id** | `string` | ✅ | Updated record ID |
 | **record** | `Record<string, any>` | ✅ | Updated record |
+| **droppedFields** | `{ object: string; fields: string[]; reason: Enum<'readonly' \| 'readonly_when'> }[]` | optional | Write-observability (#3407/#3431): caller-supplied fields the engine LEGALLY stripped from the write before persisting — static `readonly` (#2948) or a TRUE `readonlyWhen` predicate (#3042). Present ONLY when ≥1 field was dropped; the update still succeeded without them (status/success semantics unchanged — stripping is legitimate, not an error). REST additionally surfaces this as the `X-ObjectStack-Dropped-Fields` response header. Optional — omit-when-empty keeps the shape backward-compatible for existing clients that only read `record`. |
 
 
 ---
