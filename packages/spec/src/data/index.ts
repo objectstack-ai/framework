@@ -5,6 +5,8 @@ export * from './filter.zod';
 export * from './date-macros.zod';
 export * from './object.zod';
 export * from './field.zod';
+// Field runtime value-shape contract (ADR-0104 D1)
+export * from './field-value.zod';
 export * from './autonumber-format';
 export * from './validation.zod';
 export * from './hook.zod';
