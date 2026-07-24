@@ -258,6 +258,148 @@ describe('RecordChangeTrigger', () => {
     });
 });
 
+// ─── computed-field hydration (#3426) ───────────────────────────────
+
+describe('RecordChangeTrigger computed-field hydration (#3426)', () => {
+    interface FindOneCall {
+        object: string;
+        options: { where?: Record<string, unknown>; fields?: string[]; context?: unknown };
+    }
+
+    /** fakeEngine + a `findOne` that records its calls and returns `row`. */
+    function fakeEngineWithRead(row: Record<string, unknown> | null | undefined) {
+        const base = fakeEngine();
+        const calls: FindOneCall[] = [];
+        const engine: RecordChangeDataEngine = {
+            ...base.engine,
+            async findOne(object, options) {
+                calls.push({ object, options });
+                return row;
+            },
+        };
+        return { engine, hooks: base.hooks, calls };
+    }
+
+    it('hydrates a formula field the raw hook row lacks (after-create)', async () => {
+        // The re-read returns the formula virtual `full_name` (absent from the
+        // written row) plus a field only the read path carries. After the merge
+        // the flow sees the formula, and raw scalars still win.
+        const { engine, hooks, calls } = fakeEngineWithRead({
+            id: 'r1',
+            first_name: 'Ada',
+            last_name: 'Lovelace',
+            full_name: 'Ada Lovelace',
+            company: 'Analytical Engines',
+        });
+        const trigger = new RecordChangeTrigger(engine, silentLogger());
+        let captured: AutomationContext | undefined;
+
+        trigger.start(
+            binding({ object: 'crm_lead', event: 'record-after-create' }),
+            async (ctx) => { captured = ctx; },
+        );
+        await hooks[0].handler(
+            hookCtx({ event: 'afterInsert', result: { id: 'r1', first_name: 'Ada', last_name: 'Lovelace' } }),
+        );
+
+        // Formula virtual is now resolvable on the seeded record…
+        expect((captured?.record as Record<string, unknown>).full_name).toBe('Ada Lovelace');
+        expect((captured?.record as Record<string, unknown>).company).toBe('Analytical Engines');
+        // …and params mirrors the same hydrated record.
+        expect((captured?.params as Record<string, unknown>)?.full_name).toBe('Ada Lovelace');
+        // Re-read was a system-elevated findOne scoped to the written row.
+        expect(calls).toHaveLength(1);
+        expect(calls[0].object).toBe('crm_lead');
+        expect(calls[0].options.where).toEqual({ id: 'r1' });
+        expect((calls[0].options.context as { isSystem?: boolean }).isSystem).toBe(true);
+    });
+
+    it('lets raw hook fields win over the re-read (trigger-time fidelity + #1872)', async () => {
+        // A concurrent read could observe a newer scalar or drop a multi-lookup
+        // array the driver echoed into the raw row; the raw value must survive.
+        const { engine, hooks } = fakeEngineWithRead({
+            id: 'r1',
+            status: 'stale',
+            target_channels: undefined,
+            full_name: 'Ada Lovelace',
+        });
+        const trigger = new RecordChangeTrigger(engine, silentLogger());
+        let captured: AutomationContext | undefined;
+
+        trigger.start(binding({ object: 'crm_lead', event: 'record-after-update' }), async (ctx) => { captured = ctx; });
+        await hooks[0].handler(
+            hookCtx({ event: 'afterUpdate', result: { id: 'r1', status: 'fresh', target_channels: ['ch_1'] } }),
+        );
+
+        const rec = captured?.record as Record<string, unknown>;
+        expect(rec.status).toBe('fresh'); // raw wins
+        expect(rec.target_channels).toEqual(['ch_1']); // #1872 array preserved
+        expect(rec.full_name).toBe('Ada Lovelace'); // formula added
+    });
+
+    it('does not re-read for before-* events (row not yet persisted)', async () => {
+        const { engine, hooks, calls } = fakeEngineWithRead({ id: 'r1', full_name: 'x' });
+        const trigger = new RecordChangeTrigger(engine, silentLogger());
+
+        trigger.start(binding({ object: 'crm_lead', event: 'record-before-update' }), async () => {});
+        await hooks[0].handler(hookCtx({ event: 'beforeUpdate', result: { id: 'r1' } }));
+
+        expect(calls).toHaveLength(0);
+    });
+
+    it('does not re-read for after-delete (row is gone)', async () => {
+        const { engine, hooks, calls } = fakeEngineWithRead({ id: 'r1', full_name: 'x' });
+        const trigger = new RecordChangeTrigger(engine, silentLogger());
+
+        trigger.start(binding({ object: 'crm_lead', event: 'record-after-delete' }), async () => {});
+        await hooks[0].handler(hookCtx({ event: 'afterDelete', result: { id: 'r1' } }));
+
+        expect(calls).toHaveLength(0);
+    });
+
+    it('does not re-read when the record has no id', async () => {
+        const { engine, hooks, calls } = fakeEngineWithRead({ id: 'r1', full_name: 'x' });
+        const trigger = new RecordChangeTrigger(engine, silentLogger());
+        let captured: AutomationContext | undefined;
+
+        trigger.start(binding({ object: 'crm_lead', event: 'record-after-create' }), async (ctx) => { captured = ctx; });
+        await hooks[0].handler(hookCtx({ event: 'afterInsert', result: { first_name: 'Ada' } }));
+
+        expect(calls).toHaveLength(0);
+        expect((captured?.record as Record<string, unknown>).first_name).toBe('Ada');
+    });
+
+    it('falls back to the raw record when the re-read throws', async () => {
+        const base = fakeEngine();
+        const engine: RecordChangeDataEngine = {
+            ...base.engine,
+            async findOne() { throw new Error('db down'); },
+        };
+        const debug = vi.fn();
+        const trigger = new RecordChangeTrigger(engine, { info: () => {}, warn: () => {}, debug });
+        let captured: AutomationContext | undefined;
+
+        trigger.start(binding({ object: 'crm_lead', event: 'record-after-create' }), async (ctx) => { captured = ctx; });
+        await base.hooks[0].handler(hookCtx({ event: 'afterInsert', result: { id: 'r1', first_name: 'Ada' } }));
+
+        // Flow still runs with the raw record; the failure is a debug note only.
+        expect((captured?.record as Record<string, unknown>).first_name).toBe('Ada');
+        expect((captured?.record as Record<string, unknown>).full_name).toBeUndefined();
+        expect(debug).toHaveBeenCalled();
+    });
+
+    it('is a no-op on engines with no findOne surface (older cores)', async () => {
+        const { engine, hooks } = fakeEngine(); // no findOne
+        const trigger = new RecordChangeTrigger(engine, silentLogger());
+        let captured: AutomationContext | undefined;
+
+        trigger.start(binding({ object: 'crm_lead', event: 'record-after-create' }), async (ctx) => { captured = ctx; });
+        await hooks[0].handler(hookCtx({ event: 'afterInsert', result: { id: 'r1', first_name: 'Ada' } }));
+
+        expect((captured?.record as Record<string, unknown>).first_name).toBe('Ada');
+    });
+});
+
 // ─── RecordChangeTriggerPlugin ──────────────────────────────────────
 
 describe('RecordChangeTriggerPlugin', () => {
