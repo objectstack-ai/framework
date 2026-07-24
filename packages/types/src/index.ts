@@ -2,6 +2,7 @@
 
 export * from './env.js';
 export * from './module-not-found.js';
+export * from './seed-summary.js';
 
 // Placeholder for Kernel interface to avoid circular dependency
 // The actual Kernel implementation will satisfy this interface.

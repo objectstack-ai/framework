@@ -42,7 +42,7 @@
  */
 
 import type { Plugin, PluginContext } from '@objectstack/core';
-import { resolveMultiOrgEnabled } from '@objectstack/types';
+import { resolveMultiOrgEnabled, accumulateSeedSummary } from '@objectstack/types';
 import { resolveCloudUrl } from './cloud-url.js';
 import { resolveMarketplacePublicBaseUrl } from './marketplace-public-url.js';
 import { LocalManifestSource, type InstalledManifestEntry } from './local-manifest-source.js';
@@ -253,11 +253,22 @@ export class MarketplaceInstallLocalPlugin implements Plugin {
                 entry.sampleDataPurged = false;
                 try { this.ledger.write(entry); } catch { /* non-fatal */ }
                 ctx.logger?.info?.(`[MarketplaceInstallLocal] healed sample data for ${entry.manifestId}: inserted=${summary.inserted} updated=${summary.updated} errors=${summary.errors}`);
+                // #3430 follow-up: fold the heal into the boot banner's Seeds
+                // line (the shared `seed-summary` counter #3435 added for the
+                // config seed) so a marketplace package's healed rows are
+                // visible too.
+                accumulateSeedSummary(ctx as any, { inserted: summary.inserted, updated: summary.updated, skipped: summary.skipped, rejected: summary.errors });
             } else {
                 ctx.logger?.warn?.(`[MarketplaceInstallLocal] sample-data heal for ${entry.manifestId} landed no rows${summary.errorSample ? ` — first error: ${summary.errorSample}` : ''}`);
+                // The "installed but 0 rows" state — the exact thing the banner
+                // Seeds line exists to catch. Force a non-zero `rejected` so it
+                // escalates to the yellow warning even when the loader reported
+                // its failures as skips rather than hard errors.
+                accumulateSeedSummary(ctx as any, { skipped: summary.skipped, rejected: Math.max(summary.errors, 1) });
             }
         } catch (err: any) {
             ctx.logger?.warn?.(`[MarketplaceInstallLocal] sample-data heal failed for ${entry.manifestId}: ${err?.message ?? err}`);
+            accumulateSeedSummary(ctx as any, { rejected: 1 });
         }
     };
 

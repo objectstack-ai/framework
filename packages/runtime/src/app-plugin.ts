@@ -2,7 +2,7 @@
 
 import { Plugin, PluginContext, wireAuthoredTranslationSync } from '@objectstack/core';
 import { assertProtocolCompat } from '@objectstack/metadata-core';
-import { resolveMultiOrgEnabled } from '@objectstack/types';
+import { resolveMultiOrgEnabled, accumulateSeedSummary } from '@objectstack/types';
 import { SeedLoaderService } from './seed-loader.js';
 import { loadDisabledPackageIds } from './package-state-store.js';
 import type { IMetadataService, II18nService } from '@objectstack/spec/contracts';
@@ -847,21 +847,15 @@ export class AppPlugin implements Plugin {
                       // reach `os dev` output — info is under the default warn
                       // level, and the serve boot-quiet window swallows stdout
                       // — so without this a fixture can lose most of its rows
-                      // with no signal at all. Accumulates across apps.
-                      try {
-                          const kernelRef: any = (ctx as any).kernel;
-                          const prev = (() => {
-                              try { return kernelRef?.getService?.('seed-summary') as any; } catch { return undefined; }
-                          })();
-                          const summary = {
-                              inserted: (prev?.inserted ?? 0) + totalInserted,
-                              updated: (prev?.updated ?? 0) + totalUpdated,
-                              skipped: (prev?.skipped ?? 0) + totalSkipped,
-                              rejected: (prev?.rejected ?? 0) + totalErrored,
-                          };
-                          if (kernelRef?.registerService) kernelRef.registerService('seed-summary', summary);
-                          else if (typeof (ctx as any).registerService === 'function') (ctx as any).registerService('seed-summary', summary);
-                      } catch { /* banner summary is best-effort */ }
+                      // with no signal at all. Accumulates across every seed
+                      // source (config apps AND the marketplace rehydrate heal,
+                      // #3430) via the shared register-once-then-mutate counter.
+                      accumulateSeedSummary(ctx as any, {
+                          inserted: totalInserted,
+                          updated: totalUpdated,
+                          skipped: totalSkipped,
+                          rejected: totalErrored,
+                      });
                       if (result.success) {
                           ctx.logger.info('[Seeder] Seed loading complete', {
                               inserted: totalInserted,

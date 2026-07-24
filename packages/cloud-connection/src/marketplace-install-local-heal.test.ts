@@ -53,17 +53,28 @@ function makeRawApp() {
 
 function makeCtx(rawApp: any, services: Record<string, any>) {
     const hooks = new Map<string, any>();
+    // Dynamically-registered services (e.g. the `seed-summary` counter the boot
+    // banner reads, #3435). Faithful to the real kernel: getService THROWS when
+    // absent, registerService THROWS on a duplicate — the exact behaviours
+    // accumulateSeedSummary's register-once-then-mutate design has to survive.
+    const registered = new Map<string, any>();
     return {
         ctx: {
             hook: (e: string, h: any) => hooks.set(e, h),
             getService: (name: string) => {
                 if (name === 'http-server') return { getRawApp: () => rawApp };
+                if (registered.has(name)) return registered.get(name);
                 const svc = services[name];
                 if (svc === undefined) throw new Error(`no ${name}`);
                 return svc;
             },
+            registerService: (name: string, value: any) => {
+                if (registered.has(name)) throw new Error(`Service '${name}' already registered`);
+                registered.set(name, value);
+            },
             logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
         },
+        seedSummary: () => registered.get('seed-summary'),
         fire: async () => { await hooks.get('kernel:ready')?.(); },
     };
 }
@@ -134,11 +145,11 @@ async function rehydrateWith(entryOverrides: Record<string, any>, findRows: Reco
     });
     const rawApp = makeRawApp();
     const services = makeServices(findRows);
-    const { ctx, fire } = makeCtx(rawApp, services);
+    const { ctx, fire, seedSummary } = makeCtx(rawApp, services);
     const plugin = new MarketplaceInstallLocalPlugin({ controlPlaneUrl: 'off', storageDir: dir });
     await plugin.start(ctx as any);
     await fire();
-    return { rawApp, services, ctx };
+    return { rawApp, services, ctx, seedSummary };
 }
 
 describe('rehydrate sample-data healing', () => {
@@ -232,5 +243,62 @@ describe('rehydrate sample-data healing', () => {
         );
         expect(installRes.payload?.success).toBe(true);
         expect(new LocalManifestSource(dir).read(MANIFEST.id)?.withSampleData).toBe(true);
+    });
+});
+
+// The boot banner's `Seeds:` line (#3435) is fed by a `seed-summary` kernel
+// counter that AppPlugin populates for the config-app seed. The marketplace
+// rehydrate heal runs in the same boot-quiet window but wrote nothing to it, so
+// a marketplace package's healed rows — or, critically, its EMPTY state (the
+// original "installed but 0 rows" bug) — were absent from the banner. These pin
+// the fold-in.
+describe('rehydrate heal feeds the boot-banner seed-summary (#3430 follow-up)', () => {
+    it('adds healed rows to the seed-summary counter', async () => {
+        seedResult = { summary: { totalInserted: 3, totalUpdated: 1, totalSkipped: 2 }, errors: [] };
+        const { seedSummary } = await rehydrateWith({}, { crm_x: [], crm_y: [] });
+        expect(seedSummary()).toMatchObject({ inserted: 3, updated: 1, skipped: 2, rejected: 0 });
+    });
+
+    it('escalates an empty heal (0 rows) to a non-zero rejected — the "installed but 0 rows" signal', async () => {
+        // Empty DB, heal runs, loader lands nothing and reports its failures as
+        // skips (0 hard errors). The banner must still flag it, so rejected is
+        // forced to at least 1.
+        seedResult = { summary: { totalInserted: 0, totalUpdated: 0, totalSkipped: 0 }, errors: [] };
+        const { seedSummary } = await rehydrateWith({}, { crm_x: [], crm_y: [] });
+        expect(seedSummary().rejected).toBeGreaterThanOrEqual(1);
+        expect(seedSummary().inserted).toBe(0);
+    });
+
+    it('surfaces the loader\'s own error count as rejected when a heal errors', async () => {
+        seedResult = { summary: { totalInserted: 0, totalUpdated: 0, totalSkipped: 0 }, errors: [{ message: 'locked' }, { message: 'locked' }] };
+        const { seedSummary } = await rehydrateWith({}, { crm_x: [], crm_y: [] });
+        expect(seedSummary().rejected).toBe(2);
+    });
+
+    it('does NOT touch the counter when heal is skipped (data already present)', async () => {
+        const { seedSummary } = await rehydrateWith({}, { crm_x: [{ id: 'a' }], crm_y: [] });
+        expect(seedSummary()).toBeUndefined();
+    });
+
+    it('does NOT touch the counter for a purged package', async () => {
+        const { seedSummary } = await rehydrateWith({ sampleDataPurged: true }, { crm_x: [], crm_y: [] });
+        expect(seedSummary()).toBeUndefined();
+    });
+
+    it('accumulates on top of a config-app seed-summary already on the kernel', async () => {
+        // Simulate AppPlugin having seeded first: pre-load the counter, then let
+        // the marketplace heal add to it (the banner shows one combined line).
+        seedResult = { summary: { totalInserted: 5, totalUpdated: 0, totalSkipped: 0 }, errors: [] };
+        new LocalManifestSource(dir).write({
+            packageId: 'pkg_1', versionId: 'pkgv_1', manifestId: MANIFEST.id, version: MANIFEST.version,
+            manifest: MANIFEST, installedAt: '2026-01-01T00:00:00.000Z', installedBy: 'admin', withSampleData: false,
+        });
+        const rawApp = makeRawApp();
+        const { ctx, fire, seedSummary } = makeCtx(rawApp, makeServices({ crm_x: [], crm_y: [] }));
+        (ctx as any).registerService('seed-summary', { inserted: 130, updated: 6, skipped: 0, rejected: 0 });
+        const plugin = new MarketplaceInstallLocalPlugin({ controlPlaneUrl: 'off', storageDir: dir });
+        await plugin.start(ctx as any);
+        await fire();
+        expect(seedSummary()).toMatchObject({ inserted: 135, updated: 6 });
     });
 });
