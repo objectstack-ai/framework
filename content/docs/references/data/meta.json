@@ -25,6 +25,8 @@
     "document",
     "feed",
     "seed",
-    "seed-loader"
+    "seed-loader",
+    "---More---",
+    "field-value"
   ]
 }

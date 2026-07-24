@@ -1,0 +1,141 @@
+---
+title: Field Value
+description: Field Value protocol schemas
+---
+
+{/* ⚠️  AUTO-GENERATED — DO NOT EDIT. Run build-docs.ts to regenerate. Hand-written docs live in the module folders under content/docs/. */}
+
+Field runtime VALUE-shape contract (ADR-0104 D1).
+
+`FieldSchema` owns what a field *definition* looks like; this module owns
+
+what a field's runtime *value* looks like — the shape the write path
+
+accepts, drivers persist, and an unexpanded API read returns. Before this
+
+module the knowledge lived as private, hand-copied type sets in objectql's
+
+record-validator, rest's import-coerce, driver-sql, and verify; adding one
+
+multi-capable or JSON-shaped type meant updating four lists or silently
+
+corrupting data. Those consumers now derive from the classes below.
+
+Two canonical forms exist per field (ADR-0104 D1):
+
+- `stored`   — the storage/wire form (e.g. lookup ⇒ record-id string,
+
+`date` ⇒ `YYYY-MM-DD`, select ⇒ option code).
+
+- `expanded` — the enriched `$expand` read form (lookup ⇒ the related
+
+record object). For types without an expansion,
+
+expanded ≡ stored.
+
+"Reality wins": where the deployed stored shape is coherent, the contract
+
+adopts it — deployed data is a wire contract we don't get to rewrite by
+
+editing Zod. This is why `currency` is a bare number (not the never-consumed
+
+`CurrencyValueSchema` object) and `location` is `\{lat, lng\}` (what field-zoo
+
+stores), not the never-consumed `\{latitude, longitude\}` shape.
+
+Purity: schemas/constants/derivation only — no runtime logic, no caching
+
+(Prime Directive #2). Consumers cache `valueSchemaFor` results per field
+
+definition; building a Zod schema per write is the one performance trap
+
+this contract has (ADR-0104 performance budget).
+
+<Callout type="info">
+**Source:** `packages/spec/src/data/field-value.zod.ts`
+</Callout>
+
+## TypeScript Usage
+
+```typescript
+import { AddressValue, CalendarDateValue, ClockTimeValue, FileLikeValue, InstantValue, LocationValue, ReferenceIdValue } from '@objectstack/spec/data';
+import type { AddressValue, CalendarDateValue, ClockTimeValue, FileLikeValue, InstantValue, LocationValue, ReferenceIdValue } from '@objectstack/spec/data';
+
+// Validate data
+const result = AddressValue.parse(data);
+```
+
+---
+
+## AddressValue
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **street** | `string` | optional | Street address |
+| **city** | `string` | optional | City name |
+| **state** | `string` | optional | State/Province |
+| **postalCode** | `string` | optional | Postal/ZIP code |
+| **country** | `string` | optional | Country name or code |
+| **countryCode** | `string` | optional | ISO country code (e.g., US, GB) |
+| **formatted** | `string` | optional | Formatted address string |
+
+
+---
+
+
+---
+
+
+---
+
+## FileLikeValue
+
+### Union Options
+
+This schema accepts one of the following structures:
+
+#### Option 1
+
+Type: `string`
+
+---
+
+#### Option 2
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **url** | `string` | optional |  |
+| **name** | `string` | optional |  |
+| **size** | `number` | optional |  |
+| **alt** | `string` | optional |  |
+| **duration** | `number` | optional |  |
+
+---
+
+
+---
+
+
+---
+
+## LocationValue
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **lat** | `number` | ✅ | Latitude |
+| **lng** | `number` | ✅ | Longitude |
+| **altitude** | `number` | optional | Altitude in meters |
+| **accuracy** | `number` | optional | Accuracy in meters |
+
+
+---
+
+
+---
+
