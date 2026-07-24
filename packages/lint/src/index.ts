@@ -39,6 +39,16 @@ export type {
   FlowTriggerReadinessSeverity,
 } from './validate-flow-trigger-readiness.js';
 
+export {
+  validateReadonlyFlowWrites,
+  FLOW_UPDATE_READONLY_FIELD,
+  FLOW_UPDATE_READONLY_WHEN_FIELD,
+} from './validate-readonly-flow-writes.js';
+export type {
+  ReadonlyFlowWriteFinding,
+  ReadonlyFlowWriteSeverity,
+} from './validate-readonly-flow-writes.js';
+
 export { validateViewContainers, VIEW_CONTAINER_SHAPE } from './validate-view-containers.js';
 export type { ViewContainerFinding, ViewContainerSeverity } from './validate-view-containers.js';
 
