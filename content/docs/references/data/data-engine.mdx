@@ -24,8 +24,8 @@ The Data Engine acts as the "Driver" layer in the Hexagonal Architecture.
 ## TypeScript Usage
 
 ```typescript
-import { BaseEngineOptions, DataEngineAggregateOptions, DataEngineAggregateRequest, DataEngineBatchRequest, DataEngineCountOptions, DataEngineCountRequest, DataEngineDeleteOptions, DataEngineDeleteRequest, DataEngineExecuteRequest, DataEngineFilter, DataEngineFindOneRequest, DataEngineFindRequest, DataEngineInsertOptions, DataEngineInsertRequest, DataEngineQueryOptions, DataEngineRequest, DataEngineSort, DataEngineUpdateOptions, DataEngineUpdateRequest, DataEngineVectorFindRequest, EngineAggregateOptions, EngineCountOptions, EngineDeleteOptions, EngineQueryOptions, EngineUpdateOptions } from '@objectstack/spec/data';
-import type { BaseEngineOptions, DataEngineAggregateOptions, DataEngineAggregateRequest, DataEngineBatchRequest, DataEngineCountOptions, DataEngineCountRequest, DataEngineDeleteOptions, DataEngineDeleteRequest, DataEngineExecuteRequest, DataEngineFilter, DataEngineFindOneRequest, DataEngineFindRequest, DataEngineInsertOptions, DataEngineInsertRequest, DataEngineQueryOptions, DataEngineRequest, DataEngineSort, DataEngineUpdateOptions, DataEngineUpdateRequest, DataEngineVectorFindRequest, EngineAggregateOptions, EngineCountOptions, EngineDeleteOptions, EngineQueryOptions, EngineUpdateOptions } from '@objectstack/spec/data';
+import { BaseEngineOptions, DataEngineAggregateOptions, DataEngineAggregateRequest, DataEngineBatchRequest, DataEngineCountOptions, DataEngineCountRequest, DataEngineDeleteOptions, DataEngineDeleteRequest, DataEngineExecuteRequest, DataEngineFilter, DataEngineFindOneRequest, DataEngineFindRequest, DataEngineInsertOptions, DataEngineInsertRequest, DataEngineQueryOptions, DataEngineRequest, DataEngineSort, DataEngineUpdateOptions, DataEngineUpdateRequest, DataEngineVectorFindRequest, DroppedFieldsEvent, EngineAggregateOptions, EngineCountOptions, EngineDeleteOptions, EngineQueryOptions, EngineUpdateOptions } from '@objectstack/spec/data';
+import type { BaseEngineOptions, DataEngineAggregateOptions, DataEngineAggregateRequest, DataEngineBatchRequest, DataEngineCountOptions, DataEngineCountRequest, DataEngineDeleteOptions, DataEngineDeleteRequest, DataEngineExecuteRequest, DataEngineFilter, DataEngineFindOneRequest, DataEngineFindRequest, DataEngineInsertOptions, DataEngineInsertRequest, DataEngineQueryOptions, DataEngineRequest, DataEngineSort, DataEngineUpdateOptions, DataEngineUpdateRequest, DataEngineVectorFindRequest, DroppedFieldsEvent, EngineAggregateOptions, EngineCountOptions, EngineDeleteOptions, EngineQueryOptions, EngineUpdateOptions } from '@objectstack/spec/data';
 
 // Validate data
 const result = BaseEngineOptions.parse(data);
@@ -465,6 +465,21 @@ Options for DataEngine.update operations
 | **fields** | `string[]` | optional |  |
 | **limit** | `integer` | optional |  |
 | **threshold** | `number` | optional |  |
+
+
+---
+
+## DroppedFieldsEvent
+
+A write-path strip event: caller-supplied fields legally dropped from the payload (#3407)
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **object** | `string` | ✅ | Object the write targeted (resolved object name) |
+| **fields** | `string[]` | ✅ | Caller-supplied field names the engine removed from the write payload |
+| **reason** | `Enum<'readonly' \| 'readonly_when'>` | ✅ | Why the fields were dropped: static readonly (#2948) or a TRUE readonlyWhen predicate (#3042) |
 
 
 ---
