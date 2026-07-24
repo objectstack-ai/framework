@@ -121,6 +121,11 @@ function mergeObjectDefinitions(base: ServiceObject, extension: Partial<ServiceO
  */
 export type RegistryLogLevel = 'debug' | 'info' | 'warn' | 'error' | 'silent';
 
+/** All valid {@link RegistryLogLevel} values — used to validate `OS_REGISTRY_LOG`. */
+export const REGISTRY_LOG_LEVELS: readonly RegistryLogLevel[] = [
+  'debug', 'info', 'warn', 'error', 'silent',
+];
+
 /**
  * Construction options for {@link SchemaRegistry}.
  */
@@ -172,6 +177,19 @@ export interface SchemaRegistryOptions {
    * package ids are always disambiguable by package-scoped resolution.)
    */
   collisionPolicy?: 'error' | 'warn';
+
+  /**
+   * Verbosity of the registry's own `[Registry] …` log lines. Sourced from the
+   * `OS_REGISTRY_LOG` env var when not set explicitly (default `'info'`).
+   *
+   * The point of the env seam is discoverability (#3420): expected-but-noisy
+   * housekeeping — re-registering an owned object / overwriting a package
+   * manifest on a rebuild/HMR/seed-replay — is emitted at `'debug'`, so it stays
+   * out of a stock `info` boot log but a developer chasing a registration issue
+   * can surface it with `OS_REGISTRY_LOG=debug`. An unrecognized value falls
+   * back to `'info'`.
+   */
+  logLevel?: RegistryLogLevel;
 }
 
 /**
@@ -529,6 +547,16 @@ export class SchemaRegistry {
     this.collisionPolicy =
       options.collisionPolicy ??
       ((process.env.OS_METADATA_COLLISION ?? '').toLowerCase() === 'warn' ? 'warn' : 'error');
+
+    // #3420 — env-driven verbosity so debug-level registry housekeeping
+    // (re-register / package overwrite) is discoverable without a code change.
+    // Unrecognized OS_REGISTRY_LOG values fall back to the 'info' default.
+    const envLevel = (process.env.OS_REGISTRY_LOG ?? '').toLowerCase();
+    this._logLevel =
+      options.logLevel ??
+      (REGISTRY_LOG_LEVELS.includes(envLevel as RegistryLogLevel)
+        ? (envLevel as RegistryLogLevel)
+        : this._logLevel);
   }
 
   get logLevel(): RegistryLogLevel { return this._logLevel; }
