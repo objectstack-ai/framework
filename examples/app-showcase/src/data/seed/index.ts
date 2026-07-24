@@ -100,15 +100,53 @@ const contacts = defineSeed(Contact, {
   ],
 });
 
+/**
+ * Projects seed in THREE phases because `project_status_flow` (#3165) gates
+ * inserts to `initialStates: ['planned']` and seeds deliberately run
+ * validation. Writing the target status directly rejected 4 of 5 projects on
+ * every boot — and their master-detail tasks/memberships with them (#3415).
+ *
+ * Phase 1 inserts every project as `planned` — explicitly, because seed
+ * inserts do NOT apply select defaults (see the Accounts note above) — using
+ * `mode: 'ignore'` so replays leave already-walked rows completely untouched.
+ * Phases 2-3 then walk the records along LEGAL transitions, doubling as a
+ * live demo of the state machine the seed used to violate:
+ *   planned → active                       (phase 2)
+ *   active  → on_hold / completed          (phase 3)
+ * Same-object datasets run in declaration order (stable topological sort).
+ * On replay, phase 1 skips wholesale (ignore), single-hop rows no-op skip,
+ * and the two 2-hop rows re-walk `active → terminal` — legal on both edges
+ * thanks to the `completed → active` reopen transition. Zero rejections.
+ */
 const projects = defineSeed(Project, {
+  mode: 'ignore',
+  externalId: 'name',
+  records: [
+    { name: 'Website Relaunch', account: 'Northwind', status: 'planned', health: 'green', budget: 150_000, spent: 60_000, owner: 'ada@example.com', start_date: cel`daysAgo(30)`, end_date: cel`daysFromNow(60)` },
+    { name: 'Data Platform', account: 'Contoso', status: 'planned', health: 'yellow', budget: 600_000, spent: 420_000, owner: 'linus@example.com', start_date: cel`daysAgo(90)`, end_date: cel`daysFromNow(120)` },
+    { name: 'Compliance Audit', account: 'Fabrikam', status: 'planned', health: 'red', budget: 90_000, spent: 88_000, owner: 'grace@example.com', start_date: cel`daysAgo(15)`, end_date: cel`daysFromNow(30)` },
+    { name: 'Mobile App', account: 'Contoso', status: 'planned', health: 'green', budget: 200_000, spent: 0, owner: 'ada@example.com', start_date: cel`daysFromNow(14)`, end_date: cel`daysFromNow(140)` },
+    { name: 'Legacy Sunset', account: 'Northwind', status: 'planned', health: 'green', budget: 50_000, spent: 48_000, owner: 'linus@example.com', start_date: cel`daysAgo(180)`, end_date: cel`daysAgo(20)` },
+  ],
+});
+
+const projectsActivate = defineSeed(Project, {
   mode: 'upsert',
   externalId: 'name',
   records: [
-    { name: 'Website Relaunch', account: 'Northwind', status: 'active', health: 'green', budget: 150_000, spent: 60_000, owner: 'ada@example.com', start_date: cel`daysAgo(30)`, end_date: cel`daysFromNow(60)` },
-    { name: 'Data Platform', account: 'Contoso', status: 'active', health: 'yellow', budget: 600_000, spent: 420_000, owner: 'linus@example.com', start_date: cel`daysAgo(90)`, end_date: cel`daysFromNow(120)` },
-    { name: 'Compliance Audit', account: 'Fabrikam', status: 'on_hold', health: 'red', budget: 90_000, spent: 88_000, owner: 'grace@example.com', start_date: cel`daysAgo(15)`, end_date: cel`daysFromNow(30)` },
-    { name: 'Mobile App', account: 'Contoso', status: 'planned', health: 'green', budget: 200_000, spent: 0, owner: 'ada@example.com', start_date: cel`daysFromNow(14)`, end_date: cel`daysFromNow(140)` },
-    { name: 'Legacy Sunset', account: 'Northwind', status: 'completed', health: 'green', budget: 50_000, spent: 48_000, owner: 'linus@example.com', start_date: cel`daysAgo(180)`, end_date: cel`daysAgo(20)` },
+    { name: 'Website Relaunch', status: 'active' },
+    { name: 'Data Platform', status: 'active' },
+    { name: 'Compliance Audit', status: 'active' },
+    { name: 'Legacy Sunset', status: 'active' },
+  ],
+});
+
+const projectsSettle = defineSeed(Project, {
+  mode: 'upsert',
+  externalId: 'name',
+  records: [
+    { name: 'Compliance Audit', status: 'on_hold' },
+    { name: 'Legacy Sunset', status: 'completed' },
   ],
 });
 
@@ -395,4 +433,4 @@ const announcements = defineSeed(Announcement, {
   ],
 });
 
-export const ShowcaseSeedData = [accounts, contacts, inquiries, products, projects, tasks, categories, businessUnits, orgUnits, teams, memberships, fieldZoo, invoices, invoiceLines, expenseReports, expenseLines, preferences, announcements];
+export const ShowcaseSeedData = [accounts, contacts, inquiries, products, projects, projectsActivate, projectsSettle, tasks, categories, businessUnits, orgUnits, teams, memberships, fieldZoo, invoices, invoiceLines, expenseReports, expenseLines, preferences, announcements];

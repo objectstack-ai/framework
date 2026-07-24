@@ -204,6 +204,14 @@ export interface ServerReadyOptions {
    */
   automation?: AutomationReadySummary;
   /**
+   * Seed outcome for this boot (#3415). Seeds run inside the boot-quiet
+   * stdout window and SeedLoader's own logs sit under the default warn
+   * level, so without this line a fixture can silently lose most of its
+   * rows (the showcase shipped 1 of 5 projects for weeks). Rejections are
+   * loud; a clean seed prints one dim line.
+   */
+  seeds?: SeedReadySummary;
+  /**
    * Whether the MCP server surface (`/api/v1/mcp`) is on (#3167). Default-on
    * core capability, but nothing in the dev loop surfaces it — an AI client
    * (Claude Code, Cursor, …) can operate the running app the instant a
@@ -211,6 +219,14 @@ export interface ServerReadyOptions {
    * print the URL + the SKILL.md pointer when it's live.
    */
   mcpEnabled?: boolean;
+}
+
+export interface SeedReadySummary {
+  inserted: number;
+  updated: number;
+  skipped: number;
+  /** Records dropped by validation/reference errors — the silent-loss case. */
+  rejected: number;
 }
 
 export interface AutomationReadySummary {
@@ -268,6 +284,7 @@ export function printServerReady(opts: ServerReadyOptions) {
     console.log(chalk.dim(`           ${opts.pluginNames.join(', ')}`));
   }
   if (opts.automation) printAutomationSummary(opts.automation);
+  if (opts.seeds) printSeedSummary(opts.seeds);
   console.log('');
   console.log(chalk.dim('  Press Ctrl+C to stop'));
   console.log('');
@@ -310,6 +327,29 @@ function printAutomationSummary(a: AutomationReadySummary) {
       ),
     );
   }
+}
+
+/**
+ * One-glance answer to "did my seed rows actually land?" (#3415). Follows
+ * printAutomationSummary's contract: quiet when everything is fine, yellow
+ * with a count when rows were dropped — a fixture contradiction (e.g. seed
+ * status vs a state_machine's initialStates) must not pass silently again.
+ */
+function printSeedSummary(s: SeedReadySummary) {
+  const total = s.inserted + s.updated + s.skipped + s.rejected;
+  if (total === 0) return;
+  const parts = [`${s.inserted} inserted`];
+  if (s.updated > 0) parts.push(`${s.updated} updated`);
+  if (s.skipped > 0) parts.push(`${s.skipped} skipped`);
+  if (s.rejected > 0) {
+    console.log(
+      chalk.yellow(
+        `  ⚠ Seeds:   ${parts.join(' · ')} · ${s.rejected} REJECTED — run with OS_LOG_LEVEL=info to see each reason`,
+      ),
+    );
+    return;
+  }
+  console.log(chalk.dim(`  Seeds:   ${parts.join(' · ')}`));
 }
 
 export function printMetadataStats(stats: MetadataStats) {
