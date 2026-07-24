@@ -1,6 +1,8 @@
 # ADR-0104: Field runtime value-shape as a first-class contract — spec-owned value schemas, typed action handlers, file-as-reference
 
-- **Status**: Accepted (2026-07-22) — implementation staged per D4; phase 1 (D1) tracked on its own PR
+- **Status**: Accepted (2026-07-22) — staged per D4. D1 landed (#3429), D2
+  landed (#3432); D3 refined into two waves by the 2026-07-24 addendum below.
+  Strict-default flip of D1/D2 tracked in #3438.
 - **Date**: 2026-07-22
 - **Issue**: design follow-up generalizing #3405 / #3406 (inline lookup param
   silently stripped); relates #3407 (silently dropped writes), #1878 / #1891
@@ -385,3 +387,106 @@ acceptance criteria (wired to the #2408 Server-Timing surface where useful):
 - The three dead value-schema exports stop lying to readers — deleted or made
   true. Per the ADR-0078 discipline, "exported by the spec" once again implies
   "enforced somewhere".
+
+## Addendum (2026-07-24) — D3 refined into two waves; the enforcement-point principle
+
+D1 (#3429) and D2 (#3432) landed as single-repo, non-breaking (or
+breaking-only-for-already-broken) PRs under this ADR's umbrella. D3
+(file-as-reference) is different in kind — breaking, cross-repo, protocol-major,
+and the only phase carrying **irreversible** risk (R4, GC deleting file bytes).
+A review of D3 against the platform's actual trajectory — an enterprise,
+Salesforce-shaped metadata platform whose **authoring surface is increasingly
+driven by AI**, where the governing goal is *keep the AI author from silently
+producing wrong metadata* — sharpened two things: D3's **value went up** (it
+closes the last authoring surface where an AI can write a silently-wrong value
+and get a success envelope — the ADR-0078 asymmetry, at the file layer), while
+its **irreversible-migration risk is unchanged**. So D3 is not deferred, but
+**decomposed** and **re-sequenced by what serves authoring correctness first**.
+
+### The enforcement-point principle (applies to D1, D2, and D3)
+
+For an AI author, the check that prevents a mistake is the one that fires at
+**build/validate time** (`os validate` / `os build` rejects, the way #3406
+rejects a targetless inline lookup param) — a build failure the AI must fix, not
+a runtime warning it never sees. The runtime **warn-first** posture (D1's
+`OS_DATA_VALUE_SHAPE_STRICT_ENABLED`, D2's `OS_ACTION_PARAMS_STRICT_ENABLED`)
+exists only to protect **already-deployed data** from stranding — it is not the
+authoring gate.
+
+Therefore the target end-state is **two enforcement points, each with one job**:
+
+- **Build/validate time → hard reject.** Net-new metadata (the AI's output)
+  must fail loudly at authoring. This is the primary defence against AI error.
+- **Runtime → warn-first, then flip.** Deployed data keeps working through the
+  warn window; the flip to strict-by-default (tracked in #3438) closes it once
+  telemetry is quiet.
+
+This refines D2 (today runtime-only) and reshapes the #3438 flip: the priority
+is adding the **build-time** rejection for value shapes and action params, not
+just flipping the runtime default.
+
+### The class this covers — the whole media family, not just `file`
+
+`file` is shorthand throughout D3 for the entire `FILE_REFERENCE_TYPES` class
+D1 already defined — **`file`, `image`, `avatar`, `video`, `audio`**. All five
+store the same inline blob today, all five bypass `sys_file`, and all five move
+to the reference model together. There is no separate story for `image`; the
+contract is one class.
+
+### D3 wave 1 — the value-shape contract (low-risk, no migration)
+
+Directly serves "keep the AI author correct." Ships independently of the
+protocol major, single-repo, no irreversible risk:
+
+- Give the media class a **declared `FileValueSchema`** — the inline form the
+  platform stores today (`{ url, name?, size?, mimeType?, alt?, duration? }`,
+  `url` required) — replacing D1's loose transitional union. `valueSchemaFor`
+  for the class returns the transitional union of *this declared object* and
+  the opaque id/url string (still accepted for import-compat), so a malformed
+  file value (a number, an empty object, garbage) is now caught instead of
+  waved through. Exported so wave 2 and `objectui` consume the one shape.
+- Per the enforcement-point principle, this shape should reject at
+  **build/validate time** for net-new (AI-authored) metadata while staying
+  warn-first at runtime for deployed data — the same posture D1 established for
+  every other value type.
+
+Wave 1 is effectively a "D2.5": no `sys_file` rewiring, no migration, no
+protocol bump. Note what wave 1 deliberately does **not** do: it does not add
+`accept` / `maxSize` to `FieldSchema`. Those govern an actual upload, so
+enforcing them authoritatively needs the server to know the real bytes — i.e.
+the `sys_file` model. Adding them before that would ship exactly the inert knob
+ADR-0078 forbids, so they belong to wave 2.
+
+### D3 wave 2 — the storage-model migration (protocol major, full safeguards)
+
+The reference model + governance, sequenced after wave 1 and carrying the
+irreversible risk. Ride a planned breaking window (as ADR-0103's enum split
+rode v16/v17) to amortise the migration cost:
+
+- File field value becomes an opaque `sys_file` id; the expanded read form is
+  the spec-owned `FileValueSchema` (`url` derived via `/files/:fileId`, never
+  stored) — D1/D2 §D3 as written.
+- Field references join the ADR-0057 tombstone/reap GC (leak + GDPR-erasure
+  fix); governed download reuses the attachments `authorizeFileRead`, with the
+  anonymous capability URL demoted to an **opt-in** `acl: 'public_read'`.
+- `accept` / `maxSize` land on `FieldSchema` here — not in wave 1 — because now
+  the server owns the file (`sys_file` metadata), so it can enforce declared
+  MIME/size at upload admission and re-check at record write authoritatively,
+  rather than trusting a client-supplied blob.
+- Non-negotiable acceptance gates (from Risks): **R4** GC frozen during the
+  migration window until reference-row counting is verified; **R5** a reviewed
+  public-posture inventory; **R6** a static scan for sub-key reads
+  (`record.file.url` in formulas/templates/hooks/flows).
+- External-URL usage of `type: 'file'` is retired toward a `url` field (R7) —
+  under AI authoring this is *desirable*: it disambiguates "managed file" from
+  "external link" so the AI cannot conflate them.
+
+### Why this stays inside ADR-0104 rather than a new ADR
+
+D3 is already this ADR's third phase; the two-wave split and the
+enforcement-point principle are a **refinement of the D4 rollout**, not a new
+decision, so they live here. Wave 2's migration mechanics (dual-read window,
+`os migrate` backfill, the R4/R5/R6 gates) are specified in §D3 above and need
+no separate record. Should wave 2's implementation surface a genuinely new
+decision (e.g. the reference-table shape, or a chunked-migration protocol), that
+specific choice — not file-as-reference as a whole — would earn its own ADR.

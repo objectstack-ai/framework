@@ -154,13 +154,24 @@ describe('valueSchemaFor — stored form (field-zoo reality)', () => {
     ok({ type: 'lookup' }, 'acc_1', 'expanded'); // unresolvable ids stay ids
   });
 
-  it('file-likes admit the transitional inline object OR an opaque id/url string (pre-D3)', () => {
+  it('file-likes admit the transitional inline object OR an opaque id/url string (pre-D3-wave-2)', () => {
     ok({ type: 'file' }, { url: 'https://cdn/f.pdf', name: 'f.pdf', size: 1024 });
     ok({ type: 'image' }, { url: 'https://cdn/i.png', alt: 'i' });
+    ok({ type: 'file' }, { url: 'https://cdn/f.pdf', mimeType: 'application/pdf' });
     ok({ type: 'file' }, 'file_01HXYZ');
     ok({ type: 'image', multiple: true }, ['a.png', 'b.png']);
     bad({ type: 'file' }, 42);
     bad({ type: 'file' }, {});
+  });
+
+  it('D3 wave 1: the media object form requires a url — a url-less fragment is no longer waved through', () => {
+    // The whole FILE_REFERENCE_TYPES class shares the one contract.
+    for (const type of ['file', 'image', 'avatar', 'video', 'audio']) {
+      ok({ type }, { url: 'https://cdn/x' });
+      bad({ type }, { name: 'x' });        // object without url — the tightening
+      bad({ type }, { size: 10 });         // ditto
+    }
+    ok({ type: 'video' }, { url: 'https://cdn/v.mp4', duration: 12 });
   });
 
   it('structured JSON types', () => {

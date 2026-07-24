@@ -761,6 +761,7 @@
     "data/FieldReference",
     "data/FieldType",
     "data/FileLikeValue",
+    "data/FileValue",
     "data/FilterCondition",
     "data/FormatValidation",
     "data/FullTextSearch",
