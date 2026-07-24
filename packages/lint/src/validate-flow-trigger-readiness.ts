@@ -45,15 +45,15 @@ export const FLOW_TRIGGER_UNKNOWN_EVENT = 'flow-trigger-unknown-event';
 type AnyRec = Record<string, unknown>;
 
 /**
- * Recognized record-change lifecycle ops. A start node's `triggerType` fires only
- * when it matches `record-(before|after)-<op>` with `op` in this set — the exact
- * grammar the record-change trigger's `triggerTypeToHookEvents` maps to ObjectQL
- * hooks. `insert` is a synonym for `create`; `write` is the create-OR-update union
- * (#3427). Kept in sync with that trigger (one small, stable contract).
+ * The record-change trigger fires only for a `triggerType` matching this exact
+ * grammar — the same set its `triggerTypeToHookEvents` maps to ObjectQL hooks.
+ * `insert` is a synonym for `create`; `write` is the create-OR-update union
+ * (#3427). Any OTHER `record-`-prefixed token — a typo (`record-after-updated`),
+ * a phase-less bare noun (`record-change`), or a bad phase (`record-during-update`)
+ * — binds to the trigger but maps to NO hook and never fires. Kept in sync with
+ * that trigger (one small, stable contract).
  */
-const RECORD_TRIGGER_OPS = new Set(['create', 'insert', 'update', 'delete', 'write']);
-/** A record-lifecycle-SHAPED token: `record-before-…` / `record-after-…`. */
-const RECORD_EVENT_SHAPE = /^record-(?:before|after)-(.+)$/;
+const VALID_RECORD_TRIGGER = /^record-(?:before|after)-(?:create|insert|update|delete|write)$/;
 
 /** Coerce an array-or-name-keyed-map collection to an array (name injected). */
 function asArray(v: unknown): AnyRec[] {
@@ -142,29 +142,25 @@ export function validateFlowTriggerReadiness(stack: AnyRec): FlowTriggerReadines
       }
     }
 
-    // 1c. Record-lifecycle-SHAPED triggerType (`record-before|after-…`) whose op
-    //     is not one the trigger can map — a typo like `record-after-updated`. The
-    //     engine still routes any `record-` token to the record-change trigger,
-    //     which then maps it to NO hook and never fires (only a runtime warn). This
-    //     is a definite never-fire defect, so surface it at authoring time. (Bare
-    //     `record-<noun>` shapes without a before/after phase — e.g. `record-change`
-    //     — are a separate concern and not flagged here.)
-    if (start && triggerType) {
-      const shape = RECORD_EVENT_SHAPE.exec(triggerType);
-      if (shape && !RECORD_TRIGGER_OPS.has(shape[1])) {
-        findings.push({
-          severity: 'warning',
-          rule: FLOW_TRIGGER_UNKNOWN_EVENT,
-          where: `flow "${flowName}" › start node`,
-          path: `flows[${flowIndex}].nodes[${start.index}].config.triggerType`,
-          message:
-            `triggerType '${triggerType}' names an unrecognized lifecycle event '${shape[1]}' — the flow binds to ` +
-            `the record-change trigger but never fires (the runtime stays silent about it).`,
-          hint:
-            `Use record-{before,after}-{create,update,delete,write}. 'write' fires on create OR update in one ` +
-            `flow (#3427); create/insert are synonyms.`,
-        });
-      }
+    // 1c. A `record-`-prefixed triggerType the trigger cannot map to any hook —
+    //     a typo (`record-after-updated`), a phase-less bare noun (`record-change`,
+    //     which the Studio picker once offered as "Record changed (any)"), or a bad
+    //     phase (`record-during-update`). The engine routes any `record-` token to
+    //     the record-change trigger, which then binds to NO hook and never fires
+    //     (only a runtime warn). Surface the never-fire defect at authoring time.
+    if (start && isRecordTriggered && !VALID_RECORD_TRIGGER.test((triggerType ?? '').trim())) {
+      findings.push({
+        severity: 'warning',
+        rule: FLOW_TRIGGER_UNKNOWN_EVENT,
+        where: `flow "${flowName}" › start node`,
+        path: `flows[${flowIndex}].nodes[${start.index}].config.triggerType`,
+        message:
+          `triggerType '${triggerType}' is not a recognized record trigger — the flow binds to the ` +
+          `record-change trigger but never fires (the runtime stays silent about it).`,
+        hint:
+          `Use record-{before,after}-{create,update,delete,write}. 'write' fires on create OR update in one ` +
+          `flow (#3427); create/insert are synonyms. There is no "any change" token — pick the specific event(s).`,
+      });
     }
 
     // 2. Auto-triggered flow whose status is 'draft' — authored or defaulted

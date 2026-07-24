@@ -190,7 +190,7 @@ describe('validateFlowTriggerReadiness', () => {
     expect(findings).toHaveLength(1);
     expect(findings[0].rule).toBe(FLOW_TRIGGER_UNKNOWN_EVENT);
     expect(findings[0].severity).toBe('warning');
-    expect(findings[0].message).toContain("'updated'");
+    expect(findings[0].message).toContain("'record-after-updated'");
     expect(findings[0].message).toMatch(/never fires/i);
     expect(findings[0].path).toBe('flows[0].nodes[0].config.triggerType');
   });
@@ -222,13 +222,21 @@ describe('validateFlowTriggerReadiness', () => {
     }
   });
 
-  it('does not flag bare record-<noun> shapes (e.g. record-change) with this rule', () => {
-    // `record-change` lacks a before/after phase, so it is out of this rule's
-    // scope (a separate concern); the UNKNOWN_EVENT rule must stay silent on it.
+  it('flags the phase-less `record-change` bare noun — it never fires', () => {
+    // `record-change` (once offered by the Studio picker as "Record changed
+    // (any)") has no before/after phase, so it maps to no hook and never fires.
     const flow = recordFlow({ status: 'active' });
     (flow.nodes[0] as { config: Record<string, unknown> }).config.triggerType = 'record-change';
     const findings = validateFlowTriggerReadiness({ objects: [candidateObject], flows: [flow] });
-    expect(findings.some((f) => f.rule === FLOW_TRIGGER_UNKNOWN_EVENT)).toBe(false);
+    expect(findings.map((f) => f.rule)).toEqual([FLOW_TRIGGER_UNKNOWN_EVENT]);
+    expect(findings[0].message).toContain("'record-change'");
+  });
+
+  it('flags a bad-phase token (record-during-update)', () => {
+    const flow = recordFlow({ status: 'active' });
+    (flow.nodes[0] as { config: Record<string, unknown> }).config.triggerType = 'record-during-update';
+    const findings = validateFlowTriggerReadiness({ objects: [candidateObject], flows: [flow] });
+    expect(findings.map((f) => f.rule)).toEqual([FLOW_TRIGGER_UNKNOWN_EVENT]);
   });
 
   it('does not flag non-record triggerTypes (schedule/api/manual)', () => {
