@@ -253,12 +253,71 @@ export class MarketplaceInstallLocalPlugin implements Plugin {
                 entry.sampleDataPurged = false;
                 try { this.ledger.write(entry); } catch { /* non-fatal */ }
                 ctx.logger?.info?.(`[MarketplaceInstallLocal] healed sample data for ${entry.manifestId}: inserted=${summary.inserted} updated=${summary.updated} errors=${summary.errors}`);
+                // #3430: surface the fresh-DB self-heal in the boot banner — the
+                // info line above is swallowed by the default warn level, so this
+                // was previously only confirmable by querying the database.
+                await this.recordSeedSummary(ctx, {
+                    source: entry.manifestId,
+                    marketplace: true,
+                    inserted: summary.inserted ?? 0,
+                    updated: summary.updated ?? 0,
+                    skipped: summary.skipped ?? 0,
+                    rejected: summary.errors ?? 0,
+                    healed: true,
+                });
             } else {
                 ctx.logger?.warn?.(`[MarketplaceInstallLocal] sample-data heal for ${entry.manifestId} landed no rows${summary.errorSample ? ` — first error: ${summary.errorSample}` : ''}`);
+                // Installed package, seed datasets declared, yet 0 rows landed —
+                // the "app in the switcher, every KPI 0" case. Escalate it in the
+                // banner (emptyInstall ⇒ ⚠) rather than let it pass silently.
+                await this.recordSeedSummary(ctx, {
+                    source: entry.manifestId,
+                    marketplace: true,
+                    inserted: 0,
+                    updated: 0,
+                    skipped: 0,
+                    rejected: summary.errors ?? 0,
+                    emptyInstall: true,
+                });
             }
         } catch (err: any) {
             ctx.logger?.warn?.(`[MarketplaceInstallLocal] sample-data heal failed for ${entry.manifestId}: ${err?.message ?? err}`);
+            await this.recordSeedSummary(ctx, {
+                source: entry.manifestId,
+                marketplace: true,
+                inserted: 0,
+                updated: 0,
+                skipped: 0,
+                rejected: 0,
+                emptyInstall: true,
+            });
         }
+    };
+
+    /**
+     * Append a per-source outcome onto the kernel's `seed-summary` service so
+     * the CLI boot banner can print it (#3430). Resolved lazily through the
+     * runtime's shared writer contract; guarded so a runtime that predates the
+     * helper — or a test that mocks `@objectstack/runtime` without it — simply
+     * skips the banner line instead of crashing the heal path.
+     */
+    private recordSeedSummary = async (
+        ctx: PluginContext,
+        outcome: {
+            source: string;
+            marketplace?: boolean;
+            inserted: number;
+            updated: number;
+            skipped: number;
+            rejected: number;
+            healed?: boolean;
+            emptyInstall?: boolean;
+        },
+    ): Promise<void> => {
+        try {
+            const mod: any = await import('@objectstack/runtime');
+            if (typeof mod?.recordSeedOutcome === 'function') mod.recordSeedOutcome(ctx, outcome);
+        } catch { /* banner summary is best-effort — never break the heal */ }
     };
 
     private handleInstall = async (c: any, ctx: PluginContext): Promise<Response> => {

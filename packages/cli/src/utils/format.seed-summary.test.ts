@@ -1,15 +1,16 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { printServerReady, type ServerReadyOptions } from './format.js';
+import { printServerReady, type ServerReadyOptions, type SeedSourceSummary } from './format.js';
 
 /**
- * #3415 — the boot banner is the ONE place a developer reliably sees seed
- * outcomes (SeedLoader's own logs are level-filtered and swallowed by the
- * serve boot-quiet window). Assert the Seeds line prints, screams on
- * rejections, and stays silent when nothing was seeded.
+ * #3415/#3430 — the boot banner is the ONE place a developer reliably sees seed
+ * outcomes (SeedLoader's own logs are level-filtered and swallowed by the serve
+ * boot-quiet window). Assert the Seeds line prints per source, screams on
+ * rejections AND empty marketplace installs, marks fresh-DB heals, and stays
+ * silent when nothing was seeded.
  */
-describe('printServerReady seed summary (#3415)', () => {
+describe('printServerReady seed summary (#3415/#3430)', () => {
   const base: ServerReadyOptions = {
     port: 3000,
     configFile: 'objectstack.config.ts',
@@ -28,25 +29,60 @@ describe('printServerReady seed summary (#3415)', () => {
   afterEach(() => spy.mockRestore());
 
   const seedLines = () => lines.filter((l) => l.includes('Seeds:'));
-
-  it('prints a quiet one-liner for a clean seed', () => {
-    printServerReady({ ...base, seeds: { inserted: 42, updated: 6, skipped: 3, rejected: 0 } });
-    expect(seedLines()).toHaveLength(1);
-    expect(seedLines()[0]).toContain('42 inserted');
-    expect(seedLines()[0]).toContain('6 updated');
-    expect(seedLines()[0]).not.toContain('REJECTED');
+  const s = (o: Partial<SeedSourceSummary> & { source: string }): SeedSourceSummary => ({
+    inserted: 0, updated: 0, skipped: 0, rejected: 0, ...o,
   });
 
-  it('screams when records were rejected', () => {
-    printServerReady({ ...base, seeds: { inserted: 24, updated: 0, skipped: 0, rejected: 14 } });
+  it('prints a quiet one-liner for a clean config-app seed', () => {
+    printServerReady({ ...base, seeds: [s({ source: 'showcase', inserted: 42, updated: 6, skipped: 3 })] });
     expect(seedLines()).toHaveLength(1);
-    expect(seedLines()[0]).toContain('14 REJECTED');
-    expect(seedLines()[0]).toContain('OS_LOG_LEVEL=info');
+    expect(seedLines()[0]).toContain('showcase 51 rows');
+    expect(seedLines()[0]).not.toContain('⚠');
+  });
+
+  it('screams when records were rejected, naming the source', () => {
+    printServerReady({ ...base, seeds: [s({ source: 'showcase', inserted: 24, rejected: 14 })] });
+    expect(seedLines()).toHaveLength(1);
+    expect(seedLines()[0]).toContain('showcase 24 ok / 14 errors ⚠');
+    expect(lines.some((l) => l.includes('OS_LOG_LEVEL=info'))).toBe(true);
+  });
+
+  it('labels a marketplace package and marks a fresh-DB heal', () => {
+    printServerReady({
+      ...base,
+      seeds: [s({ source: 'hotcrm', marketplace: true, inserted: 157, healed: true })],
+    });
+    expect(seedLines()).toHaveLength(1);
+    expect(seedLines()[0]).toContain('hotcrm(marketplace) 157 rows (healed on fresh db)');
+    expect(seedLines()[0]).not.toContain('⚠');
+  });
+
+  it('escalates an installed-but-empty marketplace package', () => {
+    printServerReady({
+      ...base,
+      seeds: [s({ source: 'hotcrm', marketplace: true, emptyInstall: true })],
+    });
+    expect(seedLines()).toHaveLength(1);
+    expect(seedLines()[0]).toContain('hotcrm(marketplace) installed but 0 rows ⚠');
+  });
+
+  it('combines multiple sources on one line', () => {
+    printServerReady({
+      ...base,
+      seeds: [
+        s({ source: 'showcase', inserted: 162 }),
+        s({ source: 'hotcrm', marketplace: true, inserted: 157, rejected: 5 }),
+      ],
+    });
+    expect(seedLines()).toHaveLength(1);
+    expect(seedLines()[0]).toContain('showcase 162 rows');
+    expect(seedLines()[0]).toContain('hotcrm(marketplace) 157 ok / 5 errors ⚠');
   });
 
   it('stays silent when no summary was collected or nothing ran', () => {
     printServerReady({ ...base });
-    printServerReady({ ...base, seeds: { inserted: 0, updated: 0, skipped: 0, rejected: 0 } });
+    printServerReady({ ...base, seeds: [] });
+    printServerReady({ ...base, seeds: [s({ source: 'showcase' })] });
     expect(seedLines()).toHaveLength(0);
   });
 });
