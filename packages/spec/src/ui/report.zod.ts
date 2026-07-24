@@ -22,6 +22,12 @@ export const ReportType = z.enum([
 
 /**
  * Report Column Schema
+ *
+ * @deprecated Unreferenced by the single-form (ADR-0021) report shape — a
+ * dataset-bound report selects `values` (measure names) and `rows`/`columns`
+ * (dimension names) as `z.array(z.string())`, not `ReportColumn` objects. Kept
+ * only as a public type export (objectui re-exports it as `SpecReportColumn`);
+ * slated for removal in a future governed prune (liveness #1878/#1890).
  */
 export const ReportColumnSchema = lazySchema(() => z.object({
   field: z.string().describe('Field name'),
@@ -33,6 +39,11 @@ export const ReportColumnSchema = lazySchema(() => z.object({
 
 /**
  * Report Grouping Schema
+ *
+ * @deprecated Unreferenced by the single-form (ADR-0021) report shape —
+ * grouping is expressed by dataset dimension names in `rows`/`columns`. Kept
+ * only as a public type export (objectui re-exports it as `SpecReportGrouping`);
+ * slated for removal in a future governed prune (liveness #1878/#1890).
  */
 export const ReportGroupingSchema = lazySchema(() => z.object({
   field: z.string().describe('Field to group by'),
@@ -42,13 +53,24 @@ export const ReportGroupingSchema = lazySchema(() => z.object({
 
 /**
  * Report Chart Schema
- * Embedded visualization configuration using unified chart taxonomy.
+ *
+ * A dataset-bound report chart (ADR-0021): `xAxis`/`yAxis` name the report's
+ * bound-dataset **dimension** and **measure** (NOT raw object fields) — the
+ * Studio inspector picks them from the dataset's dimension/measure catalogs
+ * and objectui's `DatasetReportRenderer` plots them via `useDatasetRows`.
  */
 export const ReportChartSchema = lazySchema(() => ChartConfigSchema.extend({
-  /** Report-specific chart configuration */
-  xAxis: z.string().describe('Grouping field for X-Axis'),
-  yAxis: z.string().describe('Summary field for Y-Axis'),
-  groupBy: z.string().optional().describe('Additional grouping field'),
+  /** Dataset **dimension** name for the X-axis (from the report's bound dataset). */
+  xAxis: z.string().describe('Dataset dimension name for the X-axis (bound-dataset dimension, not a raw field)'),
+  /** Dataset **measure** name for the Y-axis (from the report's bound dataset). */
+  yAxis: z.string().describe('Dataset measure name for the Y-axis (bound-dataset measure, not a raw field)'),
+  /**
+   * ⚠️ EXPERIMENTAL — NOT ENFORCED (liveness #1878/#1890). An additional
+   * series-split grouping. The dataset-bound `DatasetReportRenderer` plots a
+   * single `xAxis`×`yAxis` series and does not read this; only the legacy
+   * `ReportViewer` fallback consumed a top-level `groupBy`.
+   */
+  groupBy: z.string().optional().describe('[EXPERIMENTAL — not enforced] Additional series-split grouping; not read by the dataset-bound report renderer (liveness #1878/#1890)'),
 }));
 
 /**
