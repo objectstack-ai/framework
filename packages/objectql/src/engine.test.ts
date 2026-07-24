@@ -858,6 +858,71 @@ describe('ObjectQL Engine', () => {
         });
     });
 
+    describe('seed writes bypass state_machine validation (#3433)', () => {
+        // A curated seed row can be born mid-lifecycle (a project already
+        // `completed`, an opportunity `closed_won`). The engine skips the
+        // `state_machine` rule for writes whose context carries `seedReplay`
+        // (set by SeedLoaderService) — otherwise a declared `initialStates`
+        // silently rejects every such row on INSERT and cascades its children.
+        const approvalObject = {
+            name: 'seed_approval',
+            fields: {
+                status: {
+                    type: 'select',
+                    options: [
+                        { value: 'draft', label: 'Draft' },
+                        { value: 'pending', label: 'Pending' },
+                        { value: 'approved', label: 'Approved' },
+                    ],
+                },
+            },
+            validations: [
+                {
+                    type: 'state_machine',
+                    name: 'approval_flow',
+                    field: 'status',
+                    message: 'A request must start as draft.',
+                    initialStates: ['draft'],
+                    transitions: { draft: ['pending'], pending: ['approved'] },
+                },
+            ],
+        };
+
+        beforeEach(async () => {
+            engine.registerDriver(mockDriver, true);
+            await engine.init();
+        });
+
+        it('rejects a mid-lifecycle INSERT under a normal context (control)', async () => {
+            vi.mocked(SchemaRegistry.getObject).mockReturnValue(approvalObject as any);
+            await expect(
+                engine.insert('seed_approval', { status: 'approved' }),
+            ).rejects.toThrow(/must start as draft/i);
+            expect(mockDriver.create).not.toHaveBeenCalled();
+        });
+
+        it('admits the same INSERT when the context carries seedReplay', async () => {
+            vi.mocked(SchemaRegistry.getObject).mockReturnValue(approvalObject as any);
+            await engine.insert('seed_approval', { status: 'approved' }, { context: { seedReplay: true } as any });
+            expect(mockDriver.create).toHaveBeenCalledTimes(1);
+        });
+
+        it('still enforces non-state_machine rules under seedReplay (scoped exemption)', async () => {
+            vi.mocked(SchemaRegistry.getObject).mockReturnValue({
+                ...approvalObject,
+                fields: { ...approvalObject.fields, email: { type: 'text' } },
+                validations: [
+                    approvalObject.validations[0],
+                    { type: 'format', name: 'email_format', message: 'email must be a valid email', field: 'email', format: 'email' },
+                ],
+            } as any);
+            await expect(
+                engine.insert('seed_approval', { status: 'approved', email: 'not-an-email' }, { context: { seedReplay: true } as any }),
+            ).rejects.toThrow(/valid email/);
+            expect(mockDriver.create).not.toHaveBeenCalled();
+        });
+    });
+
     describe('Bulk update validation enforcement (#3106)', () => {
         beforeEach(async () => {
             engine.registerDriver(mockDriver, true);
