@@ -126,6 +126,13 @@ export interface ApprovalRequestRow {
    *   it is strictly more accurate than a client-side identity guess (it already
    *   reflects position/team/manager resolution baked into `pending_approvers`).
    * - `is_submitter` — the caller submitted the request.
+   * - `can_override` (#3424) — the caller is a platform/tenant admin who may act
+   *   on a *pending* request (approve / reject / reassign / recall it) despite
+   *   holding no approver slot. The in-product recovery path for an approval
+   *   routed to an unstaffed position, or whose approvers have all since left,
+   *   which would otherwise leave the request undecidable and the record locked
+   *   forever. Clients OR it into the decision actions' `visible` gate; the
+   *   service re-checks the same privilege before applying any override.
    *
    * Absent when the row is surfaced outside a service read with a user context
    * (e.g. a raw data-API grid); a `record.viewer.*` predicate then fails closed.
@@ -133,6 +140,7 @@ export interface ApprovalRequestRow {
   viewer?: {
     can_act: boolean;
     is_submitter: boolean;
+    can_override: boolean;
   };
 }
 
