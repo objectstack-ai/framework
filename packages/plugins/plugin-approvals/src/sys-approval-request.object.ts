@@ -247,6 +247,10 @@ export const SysApprovalRequest = ObjectSchema.create({
       name: 'approval_approve',
       label: 'Approve',
       icon: 'check-circle',
+      // Primary decision — the console renders this filled/highlighted so it
+      // stands out from the secondary levers in the drawer's action bar,
+      // matching the mobile card hierarchy (objectui#2762 P1-5).
+      variant: 'primary',
       type: 'api',
       method: 'POST',
       target: '/api/v1/approvals/requests/{id}/approve',
@@ -266,6 +270,9 @@ export const SysApprovalRequest = ObjectSchema.create({
       name: 'approval_reject',
       label: 'Reject',
       icon: 'x-circle',
+      // Destructive decision — rendered in the console's danger styling so it
+      // reads as the irreversible action it is (objectui#2762 P1-5).
+      variant: 'danger',
       type: 'api',
       method: 'POST',
       target: '/api/v1/approvals/requests/{id}/reject',
