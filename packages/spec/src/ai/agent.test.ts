@@ -93,18 +93,37 @@ describe('AIToolSchema', () => {
 });
 
 describe('AIKnowledgeSchema', () => {
-  it('should accept knowledge config', () => {
+  it('should accept knowledge config (canonical sources)', () => {
     const knowledge = {
-      topics: ['product_docs', 'faq', 'troubleshooting'],
+      sources: ['product_docs', 'faq', 'troubleshooting'],
       indexes: ['vector_store_main', 'vector_store_archive'],
     };
 
     expect(() => AIKnowledgeSchema.parse(knowledge)).not.toThrow();
   });
 
+  it('folds the deprecated topics alias into sources at parse time (#1891)', () => {
+    const parsed = AIKnowledgeSchema.parse({
+      topics: ['product_docs', 'faq'],
+      indexes: ['vector_store_main'],
+    });
+    expect(parsed.sources).toEqual(['product_docs', 'faq']);
+    expect('topics' in parsed).toBe(false);
+  });
+
+  it('lets canonical sources win when both keys are present', () => {
+    const parsed = AIKnowledgeSchema.parse({
+      sources: ['canonical'],
+      topics: ['legacy'],
+      indexes: [],
+    });
+    expect(parsed.sources).toEqual(['canonical']);
+    expect('topics' in parsed).toBe(false);
+  });
+
   it('should accept empty arrays', () => {
     const knowledge = {
-      topics: [],
+      sources: [],
       indexes: [],
     };
 
@@ -214,7 +233,7 @@ describe('AgentSchema', () => {
         role: 'Documentation Assistant',
         instructions: 'Answer questions using the knowledge base.',
         knowledge: {
-          topics: ['api_docs', 'user_guide', 'faq'],
+          sources: ['api_docs', 'user_guide', 'faq'],
           indexes: ['main_index', 'legacy_index'],
         },
       };
@@ -233,7 +252,7 @@ describe('AgentSchema', () => {
           { type: 'flow', name: 'process_data' },
         ],
         knowledge: {
-          topics: ['everything'],
+          sources: ['everything'],
           indexes: ['master_index'],
         },
       };
@@ -385,7 +404,7 @@ Always be polite, empathetic, and solution-oriented.`,
           },
         ],
         knowledge: {
-          topics: ['product_docs', 'faq', 'troubleshooting', 'api_reference'],
+          sources: ['product_docs', 'faq', 'troubleshooting', 'api_reference'],
           indexes: ['support_kb_v2'],
         },
         access: ['support_team', 'customers'],
@@ -439,7 +458,7 @@ Be persuasive but honest. Focus on value creation.`,
           },
         ],
         knowledge: {
-          topics: ['sales_playbooks', 'product_features', 'case_studies', 'competitor_analysis'],
+          sources: ['sales_playbooks', 'product_features', 'case_studies', 'competitor_analysis'],
           indexes: ['sales_intelligence'],
         },
         access: ['sales_team'],
@@ -482,7 +501,7 @@ Be precise, data-driven, and clear in your explanations.`,
           },
         ],
         knowledge: {
-          topics: ['sql_guides', 'metrics_definitions'],
+          sources: ['sql_guides', 'metrics_definitions'],
           indexes: ['analytics_kb'],
         },
         access: ['analysts', 'executives'],
