@@ -174,20 +174,34 @@ export const LocationValueSchema = lazySchema(() => z.object({
 export const AddressValueSchema = AddressSchema;
 
 /**
- * Media/attachment stored value — TRANSITIONAL (pre-D3): either an opaque
- * file-id/url string, or the legacy inline metadata object. ADR-0104 D3
- * narrows this to a `sys_file` id string; new writers should prefer the
- * string form now.
+ * Declared media value (ADR-0104 D3 wave 1) — the inline metadata object the
+ * platform stores today for a `file` / `image` / `avatar` / `video` / `audio`
+ * field. `url` is the one required member; the rest are optional descriptors
+ * renderers read. Extra keys are tolerated (renderers add their own), but a
+ * value with no `url` — an empty object, a `{ name }` fragment, a number — is
+ * now rejected instead of waved through as an opaque payload.
+ *
+ * Wave 2 (file-as-reference) narrows the STORED form to an opaque `sys_file`
+ * id and makes THIS the `expanded` read shape, with `url` derived from the
+ * `/files/:fileId` resolver rather than stored.
+ */
+export const FileValueSchema = lazySchema(() => z.looseObject({
+  url: z.string(),
+  name: z.string().optional(),
+  size: z.number().optional(),
+  mimeType: z.string().optional(),
+  alt: z.string().optional(),
+  duration: z.number().optional(),
+}));
+
+/**
+ * Media/attachment STORED value — TRANSITIONAL (pre-D3-wave-2): an opaque
+ * file-id / url string, or the declared inline metadata object
+ * ({@link FileValueSchema}). Wave 2 narrows this to a `sys_file` id string.
  */
 export const FileLikeValueSchema = lazySchema(() => z.union([
   z.string().min(1),
-  z.looseObject({
-    url: z.string().optional(),
-    name: z.string().optional(),
-    size: z.number().optional(),
-    alt: z.string().optional(),
-    duration: z.number().optional(),
-  }).refine((o) => Object.keys(o).length > 0, 'empty file value'),
+  FileValueSchema,
 ]));
 
 /** Record-id string — the stored form of every reference type. */

@@ -333,6 +333,7 @@
     "FieldSchema (const)",
     "FieldType (type)",
     "FileLikeValueSchema (const)",
+    "FileValueSchema (const)",
     "Filter (type)",
     "FilterCondition (type)",
     "FilterConditionSchema (const)",
