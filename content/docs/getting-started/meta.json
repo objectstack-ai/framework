@@ -1,7 +1,5 @@
 {
   "title": "Get Started",
-  "icon": "Rocket",
-  "defaultOpen": true,
   "pages": [
     "---Start Here---",
     "index",

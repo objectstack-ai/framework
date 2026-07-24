@@ -1,6 +1,5 @@
 {
   "title": "Views & Apps",
-  "icon": "LayoutDashboard",
   "pages": [
     "index",
     "apps",

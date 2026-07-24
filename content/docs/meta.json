@@ -11,13 +11,10 @@
     "permissions",
     "ai",
     "api",
-    "---Operate---",
+    "---Platform---",
     "deployment",
-    "---Extend & Reference---",
     "plugins",
     "kernel",
-    "protocol",
-    "references",
-    "releases"
+    "protocol"
   ]
 }
