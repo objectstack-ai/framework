@@ -1,0 +1,64 @@
+{
+  "type": "report",
+  "_note": "ReportSchema (analytics report, ADR-0021 single-form). Live path: objectui ReportRenderer → DatasetReportRenderer (dataset-bound). Seeded from docs/audits/2026-06-reportschema-property-liveness.md and re-verified against objectui HEAD — the audit's `chart` = DEAD finding is superseded: DatasetReportRenderer's DatasetReportChart now plots `chart.xAxis`/`yAxis` (dataset dimension/measure) via useDatasetRows (framework#1890/#3441), so `chart` is LIVE (only its `groupBy` sub-key stays experimental, per its own describe marker). objectui paths cited as prose in `note` (not `evidence`, which resolves framework file:line). Framework provenance/lock fields (protection/_lock*) auto-classify live (ADR-0010).",
+  "props": {
+    "name": {
+      "status": "live",
+      "note": "report identity — metadata key + objectui ReportRenderer."
+    },
+    "label": {
+      "status": "live",
+      "note": "objectui: DatasetReportRenderer header + Studio ReportDefaultInspector."
+    },
+    "description": {
+      "status": "live",
+      "note": "display subtitle — objectui report header."
+    },
+    "type": {
+      "status": "live",
+      "note": "objectui: DatasetReportRenderer routes tabular/summary/matrix (cross-tab + server totals) / joined."
+    },
+    "dataset": {
+      "status": "live",
+      "note": "objectui: DatasetReportRenderer binds the semantic-layer dataset (ADR-0021); superRefine requires dataset+values for non-joined reports."
+    },
+    "rows": {
+      "status": "live",
+      "note": "objectui: dataset dimension names grouped down — DatasetReportRenderer."
+    },
+    "columns": {
+      "status": "live",
+      "note": "objectui: matrix across-dimensions (rows × columns pivot) — DatasetReportRenderer."
+    },
+    "values": {
+      "status": "live",
+      "note": "objectui: dataset measure names — DatasetReportRenderer; required (superRefine)."
+    },
+    "runtimeFilter": {
+      "status": "live",
+      "note": "objectui: render-time scope filter ANDed at query time (`?? filter`, mergeFilters) — DatasetReportRenderer."
+    },
+    "drilldown": {
+      "status": "live",
+      "note": "objectui: DatasetReportRenderer.tsx:697 — click-through to underlying records (default on; set false to disable)."
+    },
+    "chart": {
+      "status": "live",
+      "note": "objectui: DatasetReportRenderer.tsx:776 + DatasetReportChart plots `chart.xAxis` (dataset dimension) × `chart.yAxis` (measure) via useDatasetRows, honoring `type`/`title` (framework#1890/#3441). Supersedes the 2026-06 audit's DEAD finding. Sub-key `groupBy` stays experimental (its own describe marker) — the dataset renderer plots a single series and never reads it."
+    },
+    "blocks": {
+      "status": "live",
+      "note": "objectui: joined-report sub-reports, each dataset-bound (dataset/rows/columns/values/runtimeFilter/chart) — DatasetReportRenderer joined branch."
+    },
+    "aria": {
+      "status": "dead",
+      "note": "ARIA attributes — authorable (report.form.ts) but no report renderer applies them; the dataset renderer ignores `report.aria`."
+    },
+    "performance": {
+      "status": "dead",
+      "authorWarn": true,
+      "authorHint": "Report performance tuning is not implemented — this config has no runtime consumer.",
+      "note": "Perf-optimization config — authorable but no renderer/runtime reads it (audit L; re-verified — no consumer in plugin-report)."
+    }
+  }
+}

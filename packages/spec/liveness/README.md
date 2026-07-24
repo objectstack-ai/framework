@@ -203,7 +203,10 @@ EOF
 | page | 16 | – | – | 1 | fully live + one planned |
 | view | 70 | 0 | 5 | – | list/form drilled via `children` (#2998 Track B); dead = list.{responsive,performance} + form.{data,defaultSort,aria}, all but aria authorWarn'd; form.{buttons,defaults} now live — objectui ObjectForm folds them onto its flat props (framework#1894 / #2998); audit-era DEAD lines superseded by re-verification (submitBehavior, sharing.lockedBy, list ViewData providers, and the ADR-0021 chart shape — all live now); level-2 dead residue (userActions.buttons, addRecord.mode/formView, tabs[].order) noted on parents — one drill level only |
 
+| report | 20 | 0 | 2 | – | dataset-bound (ADR-0021); dead = aria + performance (perf authorWarn'd); audit-era `chart` DEAD superseded — DatasetReportChart plots `chart.xAxis`/`yAxis` via useDatasetRows (framework#1890 / #3441), `groupBy` stays experimental (describe marker) |
+| dashboard | 18 | 0 | 2 | – | ADR-0021 dataset widgets (WidgetConfigPanel + DashboardRenderer migrated #3251; DashboardWidgetSchema `.strict()`); dead = aria + performance (perf authorWarn'd); audit-era `globalFilters`/`dateRange` DEAD superseded — LIVE via framework#2501; `title`↔`label` fixed (objectui#2806) |
+
 The `dead` set across types is the enforce-or-remove worklist (ADR-0049); every
 misleading entry carries `authorWarn` so authors hear about it at compile time.
-Not yet governed (rollout): dashboard, app, report, job, datasource,
+Not yet governed (rollout): app, job, datasource,
 translation, email_template, doc, book, validation, seed.
