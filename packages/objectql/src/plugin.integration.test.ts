@@ -1695,6 +1695,26 @@ describe('ObjectQLPlugin - Metadata Service Integration', () => {
       expect(kept.label).toBe('Authored Contact');
     });
 
+    it('bridges late installs on project kernels too (`os dev` passes environmentId)', async () => {
+      // `os dev` boots the kernel with environmentId 'env_local', so the
+      // one-shot startup bridge is (correctly) skipped there — but the
+      // per-manifest bridge must still arm, or marketplace install-local
+      // (whose primary home IS `os dev`) never reaches the metadata
+      // service. Unlike the one-shot bridge, bridging one just-registered
+      // package cannot leak sibling-project objects, so the environmentId
+      // gate does not apply to it.
+      await kernel.use(new ObjectQLPlugin({ environmentId: 'env_local' }));
+      await kernel.bootstrap();
+
+      const manifest = kernel.getService('manifest') as ManifestService;
+      await manifest.register(crmManifest());
+
+      const metadata = kernel.getService('metadata') as any;
+      const bridged = await metadata.getObject('crm_contact');
+      expect(bridged).toBeDefined();
+      expect(bridged.label).toBe('Contact');
+    });
+
     it('boot-time registrations still flow through the one-shot startup bridge', async () => {
       await kernel.use(new ObjectQLPlugin());
       await kernel.use({
