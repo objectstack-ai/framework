@@ -26,6 +26,8 @@ export { datasetForm } from './dataset.form';
 export { actionForm } from './action.form';
 export { pageForm } from './page.form';
 export * from './action.zod';
+// Action-param value validation (ADR-0104 D2)
+export * from './action-params.zod';
 export * from './page.zod';
 export * from './widget.zod';
 export * from './component.zod';

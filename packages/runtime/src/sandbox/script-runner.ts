@@ -57,6 +57,14 @@ export interface ScriptOrigin {
  * actually wired up.
  */
 export interface ScriptContext {
+  /**
+   * The script input. For an action body this is the action's params bag,
+   * validated against the action's declared param contract at dispatch before
+   * the body runs (ADR-0104 D2) — so its shape conforms to the declaration.
+   * Typed `unknown` because the sandbox is a single generic seam over hooks
+   * (record) and action bodies (params); the guarantee is enforced upstream,
+   * not by this type.
+   */
   input: unknown;
   previous?: unknown;
   user?: unknown;
