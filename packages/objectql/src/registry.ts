@@ -539,6 +539,17 @@ export class SchemaRegistry {
     console.log(msg);
   }
 
+  /**
+   * Debug-only diagnostic: emitted solely when `logLevel === 'debug'`, so it
+   * stays out of the default (`'info'`) boot log. Use for expected-but-noisy
+   * housekeeping — e.g. re-registration on a metadata rebuild / HMR reload,
+   * which looks like an error (`console.warn`) but is a normal path (#3420).
+   */
+  private debug(msg: string): void {
+    if (this._logLevel !== 'debug') return;
+    console.debug(msg);
+  }
+
   // ==========================================
   // Object-specific storage (Ownership Model)
   // ==========================================
@@ -731,7 +742,10 @@ export class SchemaRegistry {
       const idx = contributors.findIndex(c => c.packageId === packageId && c.ownership === 'own');
       if (idx !== -1) {
         contributors.splice(idx, 1);
-        console.warn(`[Registry] Re-registering owned object: ${fqn} from ${packageId}`);
+        // Normal path (metadata rebuild / HMR / multi-project seed replays the
+        // same owned object), not an error — keep it at debug so a stock boot
+        // stays warning-free (#3420).
+        this.debug(`[Registry] Re-registering owned object: ${fqn} from ${packageId}`);
       }
     } else {
       // extend mode: remove existing extension from same package
@@ -1329,7 +1343,9 @@ export class SchemaRegistry {
     }
     const collection = this.metadata.get('package')!;
     if (collection.has(manifest.id)) {
-      console.warn(`[Registry] Overwriting package: ${manifest.id}`);
+      // Re-install of an already-registered package manifest (rebuild / HMR) is
+      // a normal path, not an error — keep it at debug (#3420).
+      this.debug(`[Registry] Overwriting package: ${manifest.id}`);
     }
     collection.set(manifest.id, pkg);
     this.log(`[Registry] Installed package: ${manifest.id} (${manifest.name})`);

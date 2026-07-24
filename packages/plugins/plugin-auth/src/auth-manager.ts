@@ -1849,6 +1849,16 @@ export class AuthManager {
         loginPage: this.getConsolePageUrl('/login'),
         consentPage: this.getConsolePageUrl('/oauth/consent'),
         schema: buildOauthProviderPluginSchema(),
+        // better-auth's oauth-provider cannot see the well-known documents we
+        // mount ourselves at the issuer ROOT (RFC 8414 §3 requires them there,
+        // not under the auth basePath) — registerOidcDiscoveryRoutes serves
+        // /.well-known/oauth-authorization-server AND the path-insertion variant
+        // (`…/api/v1/auth`) the notice names. Its boot-time "Please ensure …
+        // exists" reminder is therefore a false positive that fires on every
+        // stock example (twice — jwt+oauthProvider init runs it per instance);
+        // silence the one requirement we've already satisfied so an official
+        // dev boot stays warning-free (#3420).
+        silenceWarnings: { oauthAuthServerConfig: true },
         // ── MCP OAuth track (#2698) ────────────────────────────────
         // Coarse tool-family scopes for the platform's own MCP endpoint,
         // advertised alongside the standard OIDC scopes. Names are
