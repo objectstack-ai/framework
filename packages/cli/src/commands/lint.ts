@@ -9,7 +9,7 @@ import { loadConfig, BUNDLE_REQUIRE_EXTERNALS } from '../utils/config.js';
 import { computeI18nCoverage, type CoverageIssue } from '../utils/i18n-coverage.js';
 import { lintDataModel } from '../lint/data-model-rules.js';
 import { validateWidgetBindings } from '@objectstack/lint';
-import { validateRecordTitle, validateSemanticRoles, validateCapabilityReferences, validateSecurityPosture, validateApprovalApprovers, validateSeedReplaySafety } from '@objectstack/lint';
+import { validateRecordTitle, validateSemanticRoles, validateCapabilityReferences, validateSecurityPosture, validateApprovalApprovers, validateSeedReplaySafety, validateSeedStateMachine } from '@objectstack/lint';
 import { collectAndLintDocs } from '../utils/collect-docs.js';
 import { scoreMetadata } from '../lint/score.js';
 import { runMetadataEval } from '../lint/metadata-eval.js';
@@ -446,6 +446,21 @@ export function lintConfig(config: any): LintIssue[] {
   // existing-row check). Advisory: the fix-it points at `ignore`/`upsert` + an
   // `externalId` (single field, or a composite list for a join table).
   for (const t of validateSeedReplaySafety(config)) {
+    issues.push({
+      severity: t.severity,
+      rule: t.rule,
+      message: `${t.where}: ${t.message}`,
+      path: t.path,
+      fix: t.hint,
+    });
+  }
+
+  // ── Seed value vs state machine (framework#3433 follow-up) ──
+  // #3433 exempts seed writes from the `state_machine` rule, so a seeded status
+  // the FSM does not declare is no longer rejected at write time. Re-add that
+  // safety net at author time: a value outside the machine's declared states is
+  // almost certainly a typo. Advisory — the exemption itself is legitimate.
+  for (const t of validateSeedStateMachine(config)) {
     issues.push({
       severity: t.severity,
       rule: t.rule,

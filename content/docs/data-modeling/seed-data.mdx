@@ -126,6 +126,25 @@ It is almost never the right mode: reach for `upsert` (or `ignore`) with a stabl
 
 ---
 
+## Seeds and State Machines
+
+A seed is a curated snapshot of **established facts** — a project already
+`completed`, an opportunity already `closed_won` — not a record walking its
+lifecycle. So a seed write is **exempt from the object's `state_machine` rule**
+([#3433](https://github.com/objectstack-ai/objectstack/issues/3433)): it may be
+born in any state, and neither `initialStates` (the insert entry guard) nor
+`transitions` (the update guard) is enforced. Without this exemption a fixture
+that seeds a mid-lifecycle status would be silently rejected on the first boot,
+taking its lookup children down with it — the "installed but no data" trap.
+
+The exemption is scoped to the state machine **only**. Every other validation
+still runs, so a seeded value must still be a valid field option and pass
+`format`, `cross_field`, and the rest. And `os validate` warns when a seeded
+value is not a state the machine declares (`seed-value-outside-state-machine`),
+so a typo like `'complete'` for `'completed'` still surfaces before boot.
+
+---
+
 ## Environment Scoping
 
 The `env` array controls which deployment environments receive the records. The

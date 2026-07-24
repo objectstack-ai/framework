@@ -127,6 +127,12 @@ export {
 export type { SeedReplaySafetyFinding, SeedReplaySafetySeverity } from './validate-seed-replay-safety.js';
 
 export {
+  validateSeedStateMachine,
+  SEED_VALUE_OUTSIDE_STATE_MACHINE,
+} from './validate-seed-state-machine.js';
+export type { SeedStateMachineFinding, SeedStateMachineSeverity } from './validate-seed-state-machine.js';
+
+export {
   validateSecurityPosture,
   SECURITY_OWD_UNSET,
   SECURITY_OWD_ALIAS,
