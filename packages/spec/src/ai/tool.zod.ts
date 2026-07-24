@@ -82,9 +82,13 @@ export const ToolSchema = lazySchema(() => z.object({
 
   /**
    * Optional JSON Schema for the tool output.
-   * Used for structured output validation and downstream tool chaining.
+   *
+   * ⚠️ EXPERIMENTAL — NOT ENFORCED (liveness #1878/#1893). The runtime folds
+   * the top-level keys into the tool description shown to the LLM
+   * (service-ai action-tools) but performs NO output validation against this
+   * schema, and downstream tool chaining does not consume it either.
    */
-  outputSchema: z.record(z.string(), z.unknown()).optional().describe('JSON Schema for tool output'),
+  outputSchema: z.record(z.string(), z.unknown()).optional().describe('[EXPERIMENTAL — not enforced] JSON Schema for tool output. Keys are folded into the tool description only; outputs are not validated (liveness #1878/#1893).'),
 
   /**
    * Associated object name (when the tool operates on a specific data object).

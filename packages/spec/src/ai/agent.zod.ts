@@ -33,8 +33,18 @@ export const AIToolSchema = lazySchema(() => z.object({
  */
 export const AIKnowledgeSchema = lazySchema(() => z.object({
   sources: z.array(z.string()).optional().describe('Knowledge sources/tags to recruit RAG context from. Canonical key consumed by the agent renderer (objectui AgentPreview KnowledgeSummary).'),
-  topics: z.array(z.string()).optional().describe('Deprecated alias for `sources` (spec key ≠ consumed key drift, liveness audit #1878/#1891). Prefer `sources`; `topics` is retained for back-compat but the renderer reads `sources`.'),
+  topics: z.array(z.string()).optional().describe('Deprecated alias for `sources` (spec key ≠ consumed key drift, liveness audit #1878/#1891). Folded into `sources` at parse time; prefer `sources`.'),
   indexes: z.array(z.string()).describe('Vector Store Indexes'),
+}).transform((input) => {
+  // #1891: fold the deprecated `topics` alias into the canonical `sources` and
+  // drop it from the output (mirrors `normalizeVisibleWhen`, ADR-0089 D2) so
+  // authoring `topics` is no longer a silent no-op — the renderer reads
+  // `sources`. The canonical key wins when both are present.
+  const { topics, ...rest } = input;
+  if (rest.sources === undefined && topics !== undefined) {
+    return { ...rest, sources: topics };
+  }
+  return rest;
 }));
 
 /**
@@ -110,7 +120,7 @@ export type StructuredOutputConfig = z.infer<typeof StructuredOutputConfigSchema
  *   role: 'Help Desk Assistant',
  *   instructions: 'You are a helpful assistant. Always verify user identity first.',
  *   skills: ['case_management', 'knowledge_search'],
- *   knowledge: { topics: ['faq', 'policies'], indexes: ['support_docs'] },
+ *   knowledge: { sources: ['faq', 'policies'], indexes: ['support_docs'] },
  * });
  * ```
  *
@@ -138,7 +148,7 @@ export const AgentSchema = lazySchema(() => z.object({
   /** Cognition */
   instructions: z.string().describe('System Prompt / Prime Directives'),
   model: AIModelConfigSchema.optional(),
-  lifecycle: StateMachineSchema.optional().describe('State machine defining the agent conversation follow and constraints'),
+  lifecycle: StateMachineSchema.optional().describe('[EXPERIMENTAL — not enforced] State machine defining the agent conversation flow and constraints. Parsed but no runtime consumer yet (liveness #1878/#1893).'),
 
   /**
    * ADR-0063 §1 / ADR-0064 — the product surface this agent IS. The kernel
@@ -213,7 +223,7 @@ export const AgentSchema = lazySchema(() => z.object({
 
     /** Reflection interval — how often the agent reflects on past actions */
     reflectionInterval: z.number().int().min(1).optional().describe('Reflect every N interactions to improve behavior'),
-  }).optional().describe('Agent memory management'),
+  }).optional().describe('[EXPERIMENTAL — not enforced] Agent memory management. Parsed but no runtime consumer yet (liveness #1878/#1893).'),
 
   /** Guardrails */
   guardrails: z.object({
@@ -225,10 +235,10 @@ export const AgentSchema = lazySchema(() => z.object({
 
     /** Topics or actions the agent must avoid */
     blockedTopics: z.array(z.string()).optional().describe('Forbidden topics or action names'),
-  }).optional().describe('Safety guardrails for the agent'),
+  }).optional().describe('[EXPERIMENTAL — not enforced] Safety guardrails for the agent. Parsed but not enforced — real limits come from the quota service (liveness #1878/#1893).'),
 
   /** Structured Output */
-  structuredOutput: StructuredOutputConfigSchema.optional().describe('Structured output format and validation configuration'),
+  structuredOutput: StructuredOutputConfigSchema.optional().describe('[EXPERIMENTAL — not enforced] Structured output format and validation configuration. Parsed but no runtime consumer yet (liveness #1878/#1893).'),
   /**
    * ADR-0010 §3.7 — Package-level protection envelope. Package
    * authors declare lock policy here; the loader translates it
