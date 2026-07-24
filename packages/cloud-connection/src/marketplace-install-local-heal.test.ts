@@ -31,6 +31,8 @@ vi.mock('@objectstack/runtime', () => ({
     SeedLoaderService: class {
         async load(request: any) { loadCalls.push(request); return seedResult; }
     },
+    // #3430 — the heal path records a per-source outcome for the boot banner.
+    recordSeedOutcome: vi.fn(),
 }));
 vi.mock('@objectstack/spec/data', () => ({
     SeedLoaderRequestSchema: { parse: (x: any) => x },
@@ -38,6 +40,7 @@ vi.mock('@objectstack/spec/data', () => ({
 
 import { MarketplaceInstallLocalPlugin } from './marketplace-install-local-plugin.js';
 import { LocalManifestSource } from './local-manifest-source.js';
+import { recordSeedOutcome } from '@objectstack/runtime';
 
 type Handler = (c: any) => Promise<any>;
 
@@ -112,6 +115,7 @@ beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'mil-heal-'));
     seedResult = { summary: { totalInserted: 0, totalUpdated: 0, totalSkipped: 0 }, errors: [] };
     loadCalls = [];
+    vi.mocked(recordSeedOutcome).mockClear();
 });
 afterEach(() => {
     rmSync(dir, { recursive: true, force: true });
@@ -157,6 +161,13 @@ describe('rehydrate sample-data healing', () => {
         const entry = new LocalManifestSource(dir).read(MANIFEST.id)!;
         expect(entry.withSampleData).toBe(true);
         expect(entry.sampleDataPurged).toBe(false);
+
+        // #3430 — the fresh-DB heal is surfaced in the boot banner, labelled as
+        // a marketplace source and marked healed.
+        expect(recordSeedOutcome).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({ source: MANIFEST.id, marketplace: true, healed: true, inserted: 3 }),
+        );
     });
 
     it('does NOT reseed when any seeded object still has rows', async () => {
@@ -183,6 +194,12 @@ describe('rehydrate sample-data healing', () => {
         expect(entry.withSampleData).toBe(false);
         // The failure is loud, with the underlying reason.
         expect((ctx.logger.warn as any).mock.calls.some((c: any[]) => String(c[0]).includes('database is locked'))).toBe(true);
+        // #3430 — installed package, seeds declared, yet 0 rows landed: the
+        // banner escalates it as an empty install instead of staying silent.
+        expect(recordSeedOutcome).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({ source: MANIFEST.id, marketplace: true, emptyInstall: true }),
+        );
     });
 
     it('purge → restart keeps the package empty (end to end through the endpoints)', async () => {

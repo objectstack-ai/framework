@@ -23,6 +23,7 @@ import {
   printInfo,
   printServerReady,
   type AutomationReadySummary,
+  type SeedSourceSummary,
 } from '../utils/format.js';
 import {
   CONSOLE_PATH,
@@ -2427,15 +2428,18 @@ export default class Serve extends Command {
         Array.isArray((config as any)?.flows) ? (config as any).flows.length : 0,
       );
 
-      // ── Seed outcome summary (#3415) ───────────────────────────────
+      // ── Seed outcome summary (#3415/#3430) ─────────────────────────
       // Seeds run inside the boot-quiet window too, and SeedLoader's own
       // logs sit under the default warn level — a fixture could lose 90%
-      // of its rows with zero terminal signal. AppPlugin stashes the
-      // counters on the kernel; print them here, loudly when rows dropped.
-      let seedSummary: { inserted: number; updated: number; skipped: number; rejected: number } | undefined;
+      // of its rows, or a marketplace package rehydrate onto a fresh DB
+      // with zero rows, all with zero terminal signal. AppPlugin and the
+      // marketplace rehydrate/heal path stash a per-source entry on the
+      // kernel; print them here, loudly when rows dropped or an install
+      // came up empty.
+      let seedSummary: SeedSourceSummary[] | undefined;
       try {
         const s: any = kernel.getService?.('seed-summary');
-        if (s && typeof s.inserted === 'number') seedSummary = s;
+        if (Array.isArray(s) && s.length > 0) seedSummary = s;
       } catch { /* no seeds ran — nothing to show */ }
 
       // ── Clean startup summary ──────────────────────────────────────

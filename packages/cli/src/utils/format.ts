@@ -204,13 +204,15 @@ export interface ServerReadyOptions {
    */
   automation?: AutomationReadySummary;
   /**
-   * Seed outcome for this boot (#3415). Seeds run inside the boot-quiet
-   * stdout window and SeedLoader's own logs sit under the default warn
-   * level, so without this line a fixture can silently lose most of its
-   * rows (the showcase shipped 1 of 5 projects for weeks). Rejections are
-   * loud; a clean seed prints one dim line.
+   * Per-source seed outcomes for this boot (#3415/#3430). Seeds run inside the
+   * boot-quiet stdout window and SeedLoader's own logs sit under the default
+   * warn level, so without this line a fixture can silently lose most of its
+   * rows (the showcase shipped 1 of 5 projects for weeks) and a marketplace
+   * package can rehydrate onto a fresh DB with zero rows. Each config app and
+   * each rehydrated/healed marketplace package contributes one entry;
+   * rejections and empty installs are loud, a clean seed prints one dim line.
    */
-  seeds?: SeedReadySummary;
+  seeds?: SeedSourceSummary[];
   /**
    * Whether the MCP server surface (`/api/v1/mcp`) is on (#3167). Default-on
    * core capability, but nothing in the dev loop surfaces it — an AI client
@@ -221,12 +223,26 @@ export interface ServerReadyOptions {
   mcpEnabled?: boolean;
 }
 
-export interface SeedReadySummary {
+export interface SeedSourceSummary {
+  /** Display label — the config app id / marketplace manifest id that seeded. */
+  source: string;
+  /** True when the source is a marketplace package (vs a config-declared app). */
+  marketplace?: boolean;
   inserted: number;
   updated: number;
   skipped: number;
   /** Records dropped by validation/reference errors — the silent-loss case. */
   rejected: number;
+  /**
+   * Rows were (re)seeded onto a fresh/empty database during rehydrate — the
+   * "swap the DB out from under an installed package" self-heal (#3430).
+   */
+  healed?: boolean;
+  /**
+   * A marketplace package rehydrated with seed datasets declared, yet every
+   * seeded object came up empty — the "installed but 0 rows" case (#3430).
+   */
+  emptyInstall?: boolean;
 }
 
 export interface AutomationReadySummary {
@@ -330,26 +346,46 @@ function printAutomationSummary(a: AutomationReadySummary) {
 }
 
 /**
- * One-glance answer to "did my seed rows actually land?" (#3415). Follows
- * printAutomationSummary's contract: quiet when everything is fine, yellow
- * with a count when rows were dropped — a fixture contradiction (e.g. seed
- * status vs a state_machine's initialStates) must not pass silently again.
+ * One-glance answer to "did my seed rows actually land — from every source?"
+ * (#3415/#3430). Follows printAutomationSummary's contract: quiet when
+ * everything is fine, yellow with the reason when rows were dropped or a
+ * marketplace package came up empty. Both config apps (AppPlugin) and
+ * rehydrated/healed marketplace packages contribute, e.g.
+ *
+ *   Seeds:   showcase 162 rows · hotcrm(marketplace) 157 ok / 5 errors ⚠
+ *
+ * A fixture contradiction (seed status vs a state_machine's initialStates), a
+ * row-level lookup failure, or a marketplace package that healed onto a fresh
+ * DB with zero rows must never pass silently again.
  */
-function printSeedSummary(s: SeedReadySummary) {
-  const total = s.inserted + s.updated + s.skipped + s.rejected;
-  if (total === 0) return;
-  const parts = [`${s.inserted} inserted`];
-  if (s.updated > 0) parts.push(`${s.updated} updated`);
-  if (s.skipped > 0) parts.push(`${s.skipped} skipped`);
-  if (s.rejected > 0) {
-    console.log(
-      chalk.yellow(
-        `  ⚠ Seeds:   ${parts.join(' · ')} · ${s.rejected} REJECTED — run with OS_LOG_LEVEL=info to see each reason`,
-      ),
-    );
+function printSeedSummary(sources: SeedSourceSummary[]) {
+  const shown = sources.filter((s) => {
+    // Empty installs and rejections are ALWAYS shown (they're the whole point);
+    // a source that touched no rows and had no problem is noise — drop it.
+    if (s.emptyInstall || s.rejected > 0) return true;
+    return s.inserted + s.updated + s.skipped > 0;
+  });
+  if (shown.length === 0) return;
+
+  const anyProblem = shown.some((s) => s.rejected > 0 || s.emptyInstall);
+
+  const fragment = (s: SeedSourceSummary): string => {
+    const label = s.marketplace ? `${s.source}(marketplace)` : s.source;
+    if (s.emptyInstall) return `${label} installed but 0 rows ⚠`;
+    const ok = s.inserted + s.updated + s.skipped;
+    if (s.rejected > 0) {
+      return `${label} ${ok} ok / ${s.rejected} error${s.rejected === 1 ? '' : 's'} ⚠`;
+    }
+    return `${label} ${ok} rows${s.healed ? ' (healed on fresh db)' : ''}`;
+  };
+
+  const line = shown.map(fragment).join(' · ');
+  if (anyProblem) {
+    console.log(chalk.yellow(`  ⚠ Seeds:   ${line}`));
+    console.log(chalk.dim('      run with OS_LOG_LEVEL=info to see each dropped record'));
     return;
   }
-  console.log(chalk.dim(`  Seeds:   ${parts.join(' · ')}`));
+  console.log(chalk.dim(`  Seeds:   ${line}`));
 }
 
 export function printMetadataStats(stats: MetadataStats) {

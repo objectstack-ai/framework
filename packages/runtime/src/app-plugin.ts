@@ -4,6 +4,7 @@ import { Plugin, PluginContext, wireAuthoredTranslationSync } from '@objectstack
 import { assertProtocolCompat } from '@objectstack/metadata-core';
 import { resolveMultiOrgEnabled } from '@objectstack/types';
 import { SeedLoaderService } from './seed-loader.js';
+import { recordSeedOutcome } from './seed-summary.js';
 import { loadDisabledPackageIds } from './package-state-store.js';
 import type { IMetadataService, II18nService } from '@objectstack/spec/contracts';
 import { QuickJSScriptRunner } from './sandbox/quickjs-runner.js';
@@ -842,26 +843,19 @@ export class AppPlugin implements Plugin {
                       });
                       const result = await seedLoader.load(request);
                       const { totalInserted, totalUpdated, totalSkipped, totalErrored } = result.summary;
-                      // #3415: stash the outcome on the kernel so the CLI boot
-                      // banner can print a Seeds line. The logs below never
-                      // reach `os dev` output — info is under the default warn
-                      // level, and the serve boot-quiet window swallows stdout
-                      // — so without this a fixture can lose most of its rows
-                      // with no signal at all. Accumulates across apps.
-                      try {
-                          const kernelRef: any = (ctx as any).kernel;
-                          const prev = (() => {
-                              try { return kernelRef?.getService?.('seed-summary') as any; } catch { return undefined; }
-                          })();
-                          const summary = {
-                              inserted: (prev?.inserted ?? 0) + totalInserted,
-                              updated: (prev?.updated ?? 0) + totalUpdated,
-                              skipped: (prev?.skipped ?? 0) + totalSkipped,
-                              rejected: (prev?.rejected ?? 0) + totalErrored,
-                          };
-                          if (kernelRef?.registerService) kernelRef.registerService('seed-summary', summary);
-                          else if (typeof (ctx as any).registerService === 'function') (ctx as any).registerService('seed-summary', summary);
-                      } catch { /* banner summary is best-effort */ }
+                      // #3415/#3430: stash a per-source outcome on the kernel so
+                      // the CLI boot banner can print a Seeds line. The logs below
+                      // never reach `os dev` output — info is under the default
+                      // warn level, and the serve boot-quiet window swallows stdout
+                      // — so without this a fixture can lose most of its rows with
+                      // no signal at all. One labelled entry per config app.
+                      recordSeedOutcome(ctx, {
+                          source: String(appId),
+                          inserted: totalInserted,
+                          updated: totalUpdated,
+                          skipped: totalSkipped,
+                          rejected: totalErrored,
+                      });
                       if (result.success) {
                           ctx.logger.info('[Seeder] Seed loading complete', {
                               inserted: totalInserted,
