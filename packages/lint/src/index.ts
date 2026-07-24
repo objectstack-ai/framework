@@ -106,6 +106,7 @@ export {
   APPROVAL_APPROVER_TYPE_DEPRECATED,
   APPROVAL_APPROVER_TYPE_UNKNOWN,
   APPROVAL_ESCALATION_REASSIGN_NO_TARGET,
+  APPROVAL_APPROVERS_MAY_RESOLVE_EMPTY,
 } from './validate-approval-approvers.js';
 export type { ApprovalApproverFinding, ApprovalApproverSeverity } from './validate-approval-approvers.js';
 
