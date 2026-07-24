@@ -1173,6 +1173,109 @@ describe('ObjectQL Engine', () => {
         });
     });
 
+    describe('Resolve File References (ADR-0104 D3)', () => {
+        beforeEach(async () => {
+            engine.registerDriver(mockDriver, true);
+            await engine.init();
+        });
+
+        const withSchema = () => {
+            vi.mocked(SchemaRegistry.getObject).mockImplementation((name) => {
+                if (name === 'doc') return {
+                    name: 'doc',
+                    fields: {
+                        title: { type: 'text' },
+                        cover: { type: 'image' },
+                        attachments: { type: 'file', multiple: true },
+                    },
+                } as any;
+                if (name === 'sys_file') return {
+                    name: 'sys_file',
+                    fields: {
+                        name: { type: 'text' }, size: { type: 'number' },
+                        mime_type: { type: 'text' }, status: { type: 'text' },
+                    },
+                } as any;
+                return undefined;
+            });
+        };
+
+        it('resolves a stored fileId to the expanded FileValueSchema (url derived), in ONE batched query', async () => {
+            withSchema();
+            vi.mocked(mockDriver.find)
+                .mockResolvedValueOnce([
+                    { id: 'd1', title: 'Doc 1', cover: 'file_a' },
+                    { id: 'd2', title: 'Doc 2', cover: 'file_b' },
+                ])
+                .mockResolvedValueOnce([
+                    { id: 'file_a', name: 'a.png', size: 10, mime_type: 'image/png', status: 'committed' },
+                    { id: 'file_b', name: 'b.png', size: 20, mime_type: 'image/png', status: 'committed' },
+                ]);
+
+            const result = await engine.find('doc', {});
+
+            expect(result[0].cover).toEqual({ id: 'file_a', name: 'a.png', size: 10, mimeType: 'image/png', url: '/api/v1/storage/files/file_a' });
+            expect(result[1].cover).toEqual({ id: 'file_b', name: 'b.png', size: 20, mimeType: 'image/png', url: '/api/v1/storage/files/file_b' });
+
+            // No N+1: exactly one sys_file read, batched via id $in over both ids.
+            expect(mockDriver.find).toHaveBeenCalledTimes(2);
+            expect(mockDriver.find).toHaveBeenLastCalledWith(
+                'sys_file',
+                expect.objectContaining({ where: { id: { $in: ['file_a', 'file_b'] } } }),
+                expect.objectContaining({ context: { __expandRead: true } }),
+            );
+        });
+
+        it('leaves inline-blob values and non-matching strings untouched (dual-mode)', async () => {
+            withSchema();
+            vi.mocked(mockDriver.find)
+                .mockResolvedValueOnce([
+                    { id: 'd1', cover: { url: 'https://cdn/x.png', alt: 'x' }, attachments: ['file_a', 'https://cdn/ext.pdf'] },
+                ])
+                .mockResolvedValueOnce([
+                    { id: 'file_a', name: 'a.pdf', status: 'committed' },
+                ]);
+
+            const result = await engine.find('doc', {});
+
+            expect(result[0].cover).toEqual({ url: 'https://cdn/x.png', alt: 'x' }); // inline blob → untouched
+            expect(result[0].attachments[0]).toEqual({ id: 'file_a', name: 'a.pdf', url: '/api/v1/storage/files/file_a' });
+            expect(result[0].attachments[1]).toBe('https://cdn/ext.pdf'); // external url → passthrough
+        });
+
+        it('does NOT query sys_file when no file field holds a string (blob-only → zero cost)', async () => {
+            withSchema();
+            vi.mocked(mockDriver.find).mockResolvedValueOnce([
+                { id: 'd1', cover: { url: 'https://cdn/x.png' } },
+            ]);
+            await engine.find('doc', {});
+            expect(mockDriver.find).toHaveBeenCalledTimes(1); // primary read only
+        });
+
+        it('does NOT fire a sys_file query for url-shaped values (external url, /api path, data: URI)', async () => {
+            // Regression: a file field legitimately holds a URL string in the
+            // legacy/dual-mode world; only an opaque id token is a reference.
+            withSchema();
+            vi.mocked(mockDriver.find).mockResolvedValueOnce([
+                { id: 'd1', cover: 'https://cdn/a.png', attachments: ['/api/v1/storage/files/x', 'data:image/svg+xml,%3Csvg%3E'] },
+            ]);
+            const result = await engine.find('doc', {});
+            // Primary read only — no sys_file lookup for url-shaped strings.
+            expect(mockDriver.find).toHaveBeenCalledTimes(1);
+            expect(result[0].cover).toBe('https://cdn/a.png');
+            expect(result[0].attachments).toEqual(['/api/v1/storage/files/x', 'data:image/svg+xml,%3Csvg%3E']);
+        });
+
+        it('does not resolve a non-committed (pending/deleted) sys_file row', async () => {
+            withSchema();
+            vi.mocked(mockDriver.find)
+                .mockResolvedValueOnce([{ id: 'd1', cover: 'file_p' }])
+                .mockResolvedValueOnce([{ id: 'file_p', name: 'p.png', status: 'pending' }]);
+            const result = await engine.find('doc', {});
+            expect(result[0].cover).toBe('file_p'); // left as an opaque id
+        });
+    });
+
     describe('Expand Related Records', () => {
         beforeEach(async () => {
             engine.registerDriver(mockDriver, true);
