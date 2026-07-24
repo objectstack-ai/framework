@@ -135,14 +135,17 @@ export class ObjectQLPlugin implements Plugin {
   private reloadSchemaSync: Promise<void> = Promise.resolve();
   private hydrateMetadataFromDb = false;
   /**
-   * Armed once `start()` has run the one-shot
-   * {@link bridgeObjectsToMetadataService}. From that point on, every
-   * manifest registered through the `manifest` service bridges its own
-   * objects into the metadata service incrementally — the one-shot bridge
-   * never runs again, so late registrations (marketplace install /
-   * rehydrate on `kernel:ready`) would otherwise stay invisible to every
-   * IMetadataService consumer. Stays false on project kernels
-   * (`environmentId` set), matching the one-shot bridge's gate.
+   * Armed at the end of `start()` (AFTER the one-shot
+   * {@link bridgeObjectsToMetadataService}, where that runs). From that
+   * point on, every manifest registered through the `manifest` service
+   * bridges its own objects into the metadata service incrementally — the
+   * one-shot bridge never runs again, so late registrations (marketplace
+   * install / rehydrate on `kernel:ready`) would otherwise stay invisible
+   * to every IMetadataService consumer. Armed on ALL kernels, including
+   * project-scoped ones (`environmentId` set — `os dev` boots as
+   * 'env_local'): unlike the one-shot registry-wide bridge, a per-manifest
+   * bridge cannot leak sibling-project objects, and gating it would turn
+   * the fix off in marketplace install-local's primary home.
    */
   private bridgeLateManifests = false;
   /** Unsubscribe handles for metadata-event subscriptions (ADR-0008 PR-7). */
@@ -541,15 +544,24 @@ export class ObjectQLPlugin implements Plugin {
     // skip it in that case.
     if (this.environmentId === undefined) {
         await this.bridgeObjectsToMetadataService(ctx);
-        // The one-shot bridge above covered everything registered so far.
-        // Arm the incremental per-manifest bridge for everything after —
-        // marketplace install / rehydrate register through the `manifest`
-        // service on `kernel:ready`, long after this line, and without the
-        // incremental bridge their objects never reach the metadata service
-        // (AI describe_object, Studio object lists, metadata.listObjects all
-        // miss them; only the seed loader has an engine fallback, #3422).
-        this.bridgeLateManifests = true;
     }
+    // Arm the incremental per-manifest bridge for everything after start() —
+    // marketplace install / rehydrate register through the `manifest`
+    // service on `kernel:ready`, long after this line, and without the
+    // incremental bridge their objects never reach the metadata service
+    // (AI describe_object, Studio object lists, metadata.listObjects all
+    // miss them; only the seed loader has an engine fallback, #3422).
+    //
+    // Deliberately NOT inside the `environmentId === undefined` gate above:
+    // that gate exists because the one-shot bridge copies the ENTIRE
+    // process-wide SchemaRegistry (cross-project leakage on multi-env
+    // servers), whereas the per-manifest bridge only copies the objects of
+    // the one package THIS kernel just registered — nothing to leak. And
+    // `os dev` boots project-scoped (environmentId 'env_local'), which is
+    // marketplace install-local's primary home: gating on environmentId
+    // would switch the fix off exactly where it matters (caught by
+    // browser-dogfooding the install flow).
+    this.bridgeLateManifests = true;
 
     // Register built-in audit hooks
     this.registerAuditHooks(ctx);
