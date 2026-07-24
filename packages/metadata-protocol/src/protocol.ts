@@ -16,7 +16,7 @@ import type {
 } from '@objectstack/spec/api';
 import type { MetadataCacheRequest, MetadataCacheResponse, ServiceInfo, ApiRoutes, WellKnownCapabilities } from '@objectstack/spec/api';
 import { readServiceSelfInfo } from '@objectstack/spec/api';
-import { parseFilterAST, isFilterAST } from '@objectstack/spec/data';
+import { parseFilterAST, isFilterAST, type DroppedFieldsEvent } from '@objectstack/spec/data';
 import { PLURAL_TO_SINGULAR, SINGULAR_TO_PLURAL } from '@objectstack/spec/shared';
 import { type FormView, isAggregatedViewContainer } from '@objectstack/spec/ui';
 import { METADATA_FORM_REGISTRY } from '@objectstack/spec/system';
@@ -586,6 +586,34 @@ function stripReadonlyForInsert(schema: any, data: any, context: any): any {
         return out;
     };
     return Array.isArray(data) ? data.map(stripRow) : stripRow(data);
+}
+
+/**
+ * [#3431] Recover a `DroppedFieldsEvent` from a before/after write-payload diff.
+ *
+ * The UPDATE strips (static `readonly` / `readonlyWhen`) run INSIDE the engine,
+ * which reports them via the `onFieldsDropped` listener (wired in `updateData`).
+ * The CREATE `readonly` strip, however, runs at THIS protocol ingress
+ * (`stripReadonlyForInsert`, #3043) — BEFORE the engine — so the engine listener
+ * never sees it. Diffing the caller-supplied keys against the stripped payload
+ * recovers exactly which supplied fields the ingress strip removed, so the create
+ * path can surface them symmetrically with update.
+ *
+ * Returns `null` when nothing was dropped (same reference, non-object, array, or
+ * no key delta) so callers can `if (ev) dropped.push(ev)` without emitting empty
+ * events. Mirrors the engine's own before/after key-set diff (`reportDroppedFields`
+ * in objectql/engine.ts) so both channels agree on what "dropped" means.
+ */
+function diffDroppedFields(
+    object: string,
+    before: unknown,
+    after: unknown,
+    reason: DroppedFieldsEvent['reason'],
+): DroppedFieldsEvent | null {
+    if (before === after || before == null || typeof before !== 'object' || Array.isArray(before)) return null;
+    const afterObj = (after ?? {}) as Record<string, unknown>;
+    const fields = Object.keys(before as Record<string, unknown>).filter((k) => !(k in afterObj));
+    return fields.length > 0 ? { object, fields, reason } : null;
 }
 
 /**
@@ -2829,15 +2857,24 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             request.data,
             request.context,
         );
-        const result = await this.engine.insert(
-            request.object,
-            data,
-            request.context !== undefined ? { context: request.context } as any : undefined,
-        );
+        // [#3431] The #3043 ingress strip above is SILENT by contract; surface it
+        // so a REST/API caller learns which supplied fields were dropped, symmetric
+        // with `updateData`. The strip lives at THIS ingress (not the engine, which
+        // is INSERT-readonly-exempt, #3413), so recover it by diffing the supplied
+        // payload against the stripped one. The engine's `onFieldsDropped` is ALSO
+        // wired below so a FUTURE insert-side engine strip surfaces automatically
+        // through the same list instead of going silent.
+        const dropped: DroppedFieldsEvent[] = [];
+        const ingressDropped = diffDroppedFields(request.object, request.data, data, 'readonly');
+        if (ingressDropped) dropped.push(ingressDropped);
+        const opts: any = { onFieldsDropped: (e: DroppedFieldsEvent) => { dropped.push(e); } };
+        if (request.context !== undefined) opts.context = request.context;
+        const result = await this.engine.insert(request.object, data, opts);
         return {
             object: request.object,
             id: result.id,
-            record: result
+            record: result,
+            ...(dropped.length > 0 ? { droppedFields: dropped } : {}),
         };
     }
 
@@ -2928,11 +2965,20 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         await this.assertVersionMatch(request.object, request.id, request.expectedVersion, request.context);
         const opts: any = { where: { id: request.id } };
         if (request.context !== undefined) opts.context = request.context;
+        // [#3407/#3431] Capture the engine's LEGAL write strips (static `readonly`
+        // (#2948) / TRUE `readonlyWhen` (#3042)) so a REST/API caller is not left
+        // to field-by-field diff the returned row to discover a value never
+        // landed. The write still succeeds — this only makes the strip observable,
+        // mirroring service-automation's `update_record` wiring (#3413). A faulty
+        // listener never breaks the write (the engine catches + logs).
+        const dropped: DroppedFieldsEvent[] = [];
+        opts.onFieldsDropped = (e: DroppedFieldsEvent) => { dropped.push(e); };
         const result = await this.engine.update(request.object, request.data, opts);
         return {
             object: request.object,
             id: request.id,
-            record: result
+            record: result,
+            ...(dropped.length > 0 ? { droppedFields: dropped } : {}),
         };
     }
 
