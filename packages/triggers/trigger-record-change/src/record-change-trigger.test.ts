@@ -579,3 +579,96 @@ describe('RecordChangeTrigger — skipTriggers suppression', () => {
         expect(fired).toBe(1);
     });
 });
+
+// ─── Computed-field hydration guards (#3426 follow-up) ──────────────
+//
+// The hydration re-read (#3426, #3445) is gated two ways: skipped when the
+// object declares no `formula` field, and memoized so N flows on one write
+// share a single re-read. These drive a fakeEngine with findOne/getObjectConfig
+// spies and a hook ctx whose result carries a real `id` (the default hookCtx
+// uses `_id`, so hydration's `record.id` is undefined and never re-reads).
+
+describe('RecordChangeTrigger computed-field hydration guards (#3426 follow-up)', () => {
+    /** A hook ctx whose after-row has a real `id`, so hydration proceeds. */
+    function idCtx(overrides: Partial<HookContext> = {}): HookContext {
+        return hookCtx({ event: 'afterUpdate', result: { id: 't1', status: 'done' }, ...overrides });
+    }
+
+    it('skips the re-read when the object declares no formula field (schema gate)', async () => {
+        const { engine, hooks } = fakeEngine();
+        const findOne = vi.fn().mockResolvedValue({ id: 't1', full_name: 'X' });
+        const getObjectConfig = vi.fn().mockReturnValue({ fields: { title: { type: 'text' } } });
+        Object.assign(engine, { findOne, getObjectConfig });
+        const trigger = new RecordChangeTrigger(engine, silentLogger());
+
+        trigger.start(binding(), async () => {});
+        await hooks[0].handler(idCtx());
+
+        expect(getObjectConfig).toHaveBeenCalledWith('showcase_task');
+        expect(findOne).not.toHaveBeenCalled();
+    });
+
+    it('re-reads and hydrates when the object declares a formula field', async () => {
+        const { engine, hooks } = fakeEngine();
+        const findOne = vi.fn().mockResolvedValue({ id: 't1', status: 'done', full_name: 'Ada Lovelace' });
+        const getObjectConfig = vi.fn().mockReturnValue({ fields: { full_name: { type: 'formula' } } });
+        Object.assign(engine, { findOne, getObjectConfig });
+        const trigger = new RecordChangeTrigger(engine, silentLogger());
+        let seen: AutomationContext | undefined;
+
+        trigger.start(binding(), async (ctx) => { seen = ctx; });
+        await hooks[0].handler(idCtx());
+
+        expect(findOne).toHaveBeenCalledTimes(1);
+        expect(findOne).toHaveBeenCalledWith('showcase_task', expect.objectContaining({ where: { id: 't1' } }));
+        // Formula virtual is now visible to the flow; raw scalar still wins.
+        expect((seen?.record as Record<string, unknown>).full_name).toBe('Ada Lovelace');
+        expect((seen?.record as Record<string, unknown>).status).toBe('done');
+    });
+
+    it('re-reads unconditionally when the engine has no getObjectConfig (prior behavior)', async () => {
+        const { engine, hooks } = fakeEngine();
+        const findOne = vi.fn().mockResolvedValue({ id: 't1', full_name: 'X' });
+        Object.assign(engine, { findOne }); // no getObjectConfig surface
+        const trigger = new RecordChangeTrigger(engine, silentLogger());
+
+        trigger.start(binding(), async () => {});
+        await hooks[0].handler(idCtx());
+
+        expect(findOne).toHaveBeenCalledTimes(1);
+    });
+
+    it('memoizes the re-read across N flows sharing one write (single findOne)', async () => {
+        const { engine, hooks } = fakeEngine();
+        const findOne = vi.fn().mockResolvedValue({ id: 't1', full_name: 'X' });
+        const getObjectConfig = vi.fn().mockReturnValue({ fields: { full_name: { type: 'formula' } } });
+        Object.assign(engine, { findOne, getObjectConfig });
+        const trigger = new RecordChangeTrigger(engine, silentLogger());
+
+        // Two flows on the same object/event → two hooks, one trigger instance.
+        trigger.start(binding({ flowName: 'flow_a' }), async () => {});
+        trigger.start(binding({ flowName: 'flow_b' }), async () => {});
+        expect(hooks).toHaveLength(2);
+
+        // The engine passes ONE ctx ref to every handler for a single write.
+        const ctx = idCtx();
+        await hooks[0].handler(ctx);
+        await hooks[1].handler(ctx);
+
+        expect(findOne).toHaveBeenCalledTimes(1);
+    });
+
+    it('re-reads again for a DIFFERENT write (distinct ctx, not cross-write cached)', async () => {
+        const { engine, hooks } = fakeEngine();
+        const findOne = vi.fn().mockResolvedValue({ id: 't1', full_name: 'X' });
+        const getObjectConfig = vi.fn().mockReturnValue({ fields: { full_name: { type: 'formula' } } });
+        Object.assign(engine, { findOne, getObjectConfig });
+        const trigger = new RecordChangeTrigger(engine, silentLogger());
+
+        trigger.start(binding(), async () => {});
+        await hooks[0].handler(idCtx());
+        await hooks[0].handler(idCtx()); // a fresh ctx object = a new write
+
+        expect(findOne).toHaveBeenCalledTimes(2);
+    });
+});

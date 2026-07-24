@@ -65,6 +65,17 @@ export interface RecordChangeDataEngine {
         object: string,
         options: { where?: Record<string, unknown>; fields?: string[]; context?: unknown },
     ): Promise<Record<string, unknown> | null | undefined>;
+    /**
+     * Optional object-config accessor (the ObjectQL engine's `getObjectConfig`).
+     * When present, {@link RecordChangeTrigger} uses it to SKIP the hydration
+     * re-read for objects that declare no `formula` field — the only thing the
+     * re-read adds (`summary` fields are stored on write, not read-time
+     * computed). Returns the object's field map; typed loosely so this plugin
+     * keeps its zero build-time dependency on objectql. Absent (or unsure) ⇒ the
+     * trigger re-reads unconditionally (prior behavior — correctness over the
+     * optimization).
+     */
+    getObjectConfig?(object: string): { fields?: Record<string, { type?: unknown } | undefined> } | undefined;
 }
 
 /** Minimal logger surface (matches core's `ctx.logger`). */
@@ -142,6 +153,15 @@ export class RecordChangeTrigger implements FlowTrigger {
     private readonly logger: TriggerLogger;
     /** flowName → packageId used for its hook(s), so stop() can unregister it. */
     private readonly bound = new Map<string, string>();
+    /**
+     * Per-write re-read cache for computed-field hydration (#3426 follow-up).
+     * The engine passes ONE HookContext reference to every binding's handler for
+     * a single write, so keying on it lets N flows bound to the same written
+     * record share a SINGLE re-read instead of issuing N. A WeakMap, so a context
+     * GC'd after its write drops the entry automatically — no manual eviction,
+     * no unbounded growth.
+     */
+    private readonly hydrationCache = new WeakMap<object, Map<string, Promise<Record<string, unknown> | undefined>>>();
 
     constructor(engine: RecordChangeDataEngine, logger: TriggerLogger) {
         this.engine = engine;
@@ -281,7 +301,7 @@ export class RecordChangeTrigger implements FlowTrigger {
         // Hydrate read-time computed fields (formula virtuals) onto the seeded
         // record so the flow's start condition and every `{record.<field>}`
         // template resolve them — the raw hook row never carries them (#3426).
-        const hydrated = await this.hydrateComputedFields(object, ctx.event, record);
+        const hydrated = await this.hydrateComputedFields(object, ctx.event, record, ctx);
 
         return {
             record: hydrated,
@@ -333,6 +353,15 @@ export class RecordChangeTrigger implements FlowTrigger {
      *    object, breaking templates/conditions that use the bare id (e.g.
      *    #1872's `{record.target_channels.0}`). Tracked separately on #3426.
      *
+     * Two guards keep the re-read off the hot path (#3426 follow-up):
+     *  - Schema gate: skip entirely when the object declares no `formula` field —
+     *    the only thing the re-read adds. Most objects have none. Needs the
+     *    engine's optional `getObjectConfig`; when unsure, re-reads (see
+     *    {@link objectHasFormulaField}).
+     *  - Per-write memoization: N flows bound to the same written record share
+     *    one re-read, keyed on the shared HookContext (see {@link hydrationCache}
+     *    and {@link readFullRecordOnce}).
+     *
      * Any failure (no read surface, no id, a throw, an empty read) falls back to
      * the raw record — hydration must never break the flow it feeds.
      */
@@ -340,29 +369,98 @@ export class RecordChangeTrigger implements FlowTrigger {
         object: string | undefined,
         hookEvent: string | undefined,
         record: Record<string, unknown>,
+        hookCtx?: HookContext,
     ): Promise<Record<string, unknown>> {
         if (typeof this.engine.findOne !== 'function') return record;
         if (hookEvent !== 'afterInsert' && hookEvent !== 'afterUpdate') return record;
         if (!object) return record;
         const id = (record as { id?: unknown }).id;
         if (id == null || id === '') return record;
-        try {
-            const full = await this.engine.findOne(object, {
-                where: { id },
-                // Elevated read: adds computed fields without RLS/FLS masking the
-                // ones the raw row already carried.
-                context: { isSystem: true, positions: [], permissions: [] },
-            });
-            if (full && typeof full === 'object') {
-                // Raw hook fields win; the re-read only contributes keys the raw
-                // row lacks (the formula virtuals + any other read-time field).
-                return { ...(full as Record<string, unknown>), ...record };
-            }
-        } catch (err) {
-            this.logger.debug?.(
-                `[record-change] computed-field hydration skipped for '${object}': ${(err as Error)?.message ?? String(err)}`,
-            );
+
+        // Schema gate: the re-read exists ONLY to add read-time `formula`
+        // virtuals. When the object positively declares none it can add nothing
+        // the raw hook row lacks, so skip the query. Most objects have no formula
+        // field, so this removes the re-read from the common write path.
+        if (!this.objectHasFormulaField(object)) return record;
+
+        const full = await this.readFullRecordOnce(object, id, hookCtx);
+        if (full) {
+            // Raw hook fields win; the re-read only contributes keys the raw
+            // row lacks (the formula virtuals + any other read-time field).
+            return { ...full, ...record };
         }
         return record;
+    }
+
+    /**
+     * True unless the engine can POSITIVELY confirm `object` declares no
+     * read-time `formula` field — the only thing {@link hydrateComputedFields}'s
+     * re-read adds. Uses the engine's synchronous optional `getObjectConfig`;
+     * when that surface is absent, returns nothing usable, or throws, returns
+     * `true` so hydration still runs (correctness over the optimization). Not
+     * cached: `getObjectConfig` is an in-memory lookup, and skipping a cache
+     * avoids a stale answer if an object's schema is hot-registered with a
+     * formula field after first use.
+     */
+    private objectHasFormulaField(object: string): boolean {
+        const getCfg = this.engine.getObjectConfig;
+        if (typeof getCfg !== 'function') return true;
+        try {
+            const cfg = getCfg.call(this.engine, object);
+            const fields = cfg?.fields;
+            if (!fields || typeof fields !== 'object') return true;
+            for (const f of Object.values(fields)) {
+                if (f && typeof f === 'object' && (f as { type?: unknown }).type === 'formula') return true;
+            }
+            return false;
+        } catch {
+            return true;
+        }
+    }
+
+    /**
+     * Re-read the just-written record as an elevated system principal, memoized
+     * per write. Keying the cache on the shared HookContext means N flow bindings
+     * on the same written record issue ONE query, not N. Any failure resolves to
+     * `undefined` (the caller falls back to the raw record) — hydration must
+     * never break its flow. Without a HookContext key it reads directly.
+     */
+    private async readFullRecordOnce(
+        object: string,
+        id: unknown,
+        hookCtx?: HookContext,
+    ): Promise<Record<string, unknown> | undefined> {
+        const run = async (): Promise<Record<string, unknown> | undefined> => {
+            const findOne = this.engine.findOne;
+            if (typeof findOne !== 'function') return undefined;
+            try {
+                const full = await findOne.call(this.engine, object, {
+                    where: { id },
+                    // Elevated read: adds computed fields without RLS/FLS masking
+                    // the ones the raw row already carried.
+                    context: { isSystem: true, positions: [], permissions: [] },
+                });
+                return full && typeof full === 'object' ? (full as Record<string, unknown>) : undefined;
+            } catch (err) {
+                this.logger.debug?.(
+                    `[record-change] computed-field hydration skipped for '${object}': ${(err as Error)?.message ?? String(err)}`,
+                );
+                return undefined;
+            }
+        };
+
+        if (!hookCtx) return run();
+        const ctxKey = hookCtx as unknown as object;
+        let perWrite = this.hydrationCache.get(ctxKey);
+        if (!perWrite) {
+            perWrite = new Map();
+            this.hydrationCache.set(ctxKey, perWrite);
+        }
+        const cacheKey = `${object}:${String(id)}`;
+        const existing = perWrite.get(cacheKey);
+        if (existing) return existing;
+        const pending = run();
+        perWrite.set(cacheKey, pending);
+        return pending;
     }
 }

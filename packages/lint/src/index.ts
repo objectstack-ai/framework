@@ -39,6 +39,16 @@ export type {
   FlowTriggerReadinessSeverity,
 } from './validate-flow-trigger-readiness.js';
 
+export {
+  validateFlowTemplatePaths,
+  FLOW_TEMPLATE_UNKNOWN_FIELD,
+  FLOW_TEMPLATE_LOOKUP_TRAVERSAL,
+} from './validate-flow-template-paths.js';
+export type {
+  FlowTemplatePathFinding,
+  FlowTemplatePathSeverity,
+} from './validate-flow-template-paths.js';
+
 export { validateViewContainers, VIEW_CONTAINER_SHAPE } from './validate-view-containers.js';
 export type { ViewContainerFinding, ViewContainerSeverity } from './validate-view-containers.js';
 
