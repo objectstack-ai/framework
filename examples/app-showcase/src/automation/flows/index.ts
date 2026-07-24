@@ -1572,6 +1572,11 @@ export const UrgentTaskAlertFlow = defineFlow({
       label: 'Notify Assignee',
       config: {
         topic: 'task.urgent',
+        // Notify the assignee; fall back to whoever raised the priority
+        // (`{$User.Id}` = the triggering user) so an as-yet-unassigned urgent task
+        // still pings someone. Empty recipients are dropped, so the fallback only
+        // applies when `assignee` is unset.
+        recipients: ['{record.assignee}', '{$User.Id}'],
         channels: ['inbox'],
         severity: 'warning',
         title: 'Urgent task: {record.title}',
