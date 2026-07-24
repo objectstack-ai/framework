@@ -147,7 +147,7 @@ describe('SeedSchema', () => {
 
   it('should validate externalId field name', () => {
     const validExternalIds = ['name', 'code', 'external_id', 'username', 'slug'];
-    
+
     validExternalIds.forEach(externalId => {
       expect(() => SeedSchema.parse({
         object: 'test_object',
@@ -155,6 +155,26 @@ describe('SeedSchema', () => {
         records: []
       })).not.toThrow();
     });
+  });
+
+  it('should accept a composite externalId (join-table natural key, #3434)', () => {
+    const dataset = SeedSchema.parse({
+      object: 'team_project_membership',
+      externalId: ['team', 'project'],
+      mode: 'ignore',
+      records: [{ team: 'Experience', project: 'Website Relaunch' }],
+    });
+
+    expect(dataset.externalId).toEqual(['team', 'project']);
+    expect(dataset.mode).toBe('ignore');
+  });
+
+  it('should reject an empty composite externalId', () => {
+    expect(() => SeedSchema.parse({
+      object: 'test_object',
+      externalId: [],
+      records: [],
+    })).toThrow();
   });
 
   it('should handle seed data use case', () => {
