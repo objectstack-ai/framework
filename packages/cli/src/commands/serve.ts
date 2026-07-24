@@ -2427,6 +2427,17 @@ export default class Serve extends Command {
         Array.isArray((config as any)?.flows) ? (config as any).flows.length : 0,
       );
 
+      // ── Seed outcome summary (#3415) ───────────────────────────────
+      // Seeds run inside the boot-quiet window too, and SeedLoader's own
+      // logs sit under the default warn level — a fixture could lose 90%
+      // of its rows with zero terminal signal. AppPlugin stashes the
+      // counters on the kernel; print them here, loudly when rows dropped.
+      let seedSummary: { inserted: number; updated: number; skipped: number; rejected: number } | undefined;
+      try {
+        const s: any = kernel.getService?.('seed-summary');
+        if (s && typeof s.inserted === 'number') seedSummary = s;
+      } catch { /* no seeds ran — nothing to show */ }
+
       // ── Clean startup summary ──────────────────────────────────────
       printServerReady({
         port,
@@ -2441,6 +2452,7 @@ export default class Serve extends Command {
         multiTenant: resolveMultiOrgEnabled(),
         seededAdmin,
         automation: automationSummary,
+        seeds: seedSummary,
         // #3167 — surface the default-on MCP endpoint in the dev loop, where an
         // AI client can connect to operate the running app. Same decision point
         // that auto-loads the plugin + gates the route, so the banner never
